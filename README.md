@@ -132,4 +132,4 @@ Este projeto é protegido pela licença **MIT**.
 
 Isso significa que você é livre para usar, copiar, modificar, mesclar, publicar, distribuir, sublicenciar e/ou vender cópias do software, desde que mantenha os créditos aos criadores originais. Acreditamos que o conhecimento cresce quando é compartilhado.
 
-> *"A educação é a arma mais poderosa que você pode usar para mudar o mundo."*
+> *A educação não tem preço. Sua falta tem custo. - Antônio Gomes Lacerda*
