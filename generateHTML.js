@@ -1784,7 +1784,7 @@ function gerarVisualizadorPDF(args) {
                 if (!window.__isProcessing) return;
 
                 const distanceToBottom = scrollTarget.scrollHeight - (scrollTarget.scrollTop + scrollTarget.clientHeight);
-                const isAtBottom = distanceToBottom < 150; // Tolerância AUMENTADA (era 50)
+                const isAtBottom = distanceToBottom < 50; // Tolerância AUMENTADA (era 50)
 
                 if (isAtBottom) {
                     // Usuário voltou ao fundo manualmente
@@ -2208,6 +2208,7 @@ function gerarVisualizadorPDF(args) {
                 customAlert("✅ Gabarito identificado e anexado!", 3000);
                 renderizarQuestaoFinal(resposta);
                 styleviewerSidebar.remove();
+                if (document.getElementById('resumeScrollBtn')) document.getElementById('resumeScrollBtn').remove();
             } else {
                 resposta.imagens_suporte = window.__imagensLimpas.questao_suporte || [];
 
@@ -2230,6 +2231,7 @@ function gerarVisualizadorPDF(args) {
                 customAlert("✅ Questão processada com sucesso!", 3000);
                 renderizarQuestaoFinal(resposta);
                 styleviewerSidebar.remove();
+                if (document.getElementById('resumeScrollBtn')) document.getElementById('resumeScrollBtn').remove();
             }
 
             // Limpa a lista após o sucesso
