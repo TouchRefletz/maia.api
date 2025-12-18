@@ -230,3 +230,27 @@ export async function gerarConteudoEmJSONComImagemStream(
 
   throw new Error(`Todos os modelos falharam no stream JSON. Último erro: ${ultimoErro?.message}`);
 }
+
+export async function gerarEmbedding(texto) {
+  const ai = getAIClient();
+
+  try {
+    // Usar modelo atualizado e parâmetro snake_case
+    const result = await ai.models.embedContent({
+      model: "gemini-embedding-001",  // ✅ Modelo atual (GA)
+      contents: texto,
+    });
+
+    // Retornar a estrutura correta
+    if (result.embeddings && Array.isArray(result.embeddings)) {
+      return result.embeddings[0].values;
+    }
+
+    console.error("Estrutura inesperada:", result);
+    throw new Error("Formato de resposta de embedding desconhecido.");
+
+  } catch (erro) {
+    console.error("Erro ao gerar embedding:", erro);
+    throw new Error("Falha ao gerar embedding da questão.");
+  }
+}

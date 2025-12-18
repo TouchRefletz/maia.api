@@ -1,4 +1,5 @@
-import { gerarConteudoEmJSONComImagemStream } from "./gemini.js";
+import { gerarConteudoEmJSONComImagemStream, gerarEmbedding } from "./gemini.js";
+import { Pinecone } from 'https://esm.sh/@pinecone-database/pinecone';
 
 let alertTimeout;
 window.__ultimaQuestaoExtraida = null;
@@ -5275,14 +5276,22 @@ window.renderizarTelaFinal = function () {
     }, 50);
 };
 
+// Importe as dependências necessárias no topo do seu arquivo (se for módulo)
+// import { gerarEmbedding } from './gemini.js';
+// import { Pinecone } from '@pinecone-database/pinecone'; 
+
 window.enviarDadosParaFirebase = async function () {
     const btnEnviar = document.getElementById('btnConfirmarEnvioFinal');
 
     // 1. VALIDAÇÕES BÁSICAS
-    if (IMGBB_API_KEY === "SUA_CHAVE_API_DO_IMGBB_AQUI") {
+    if (typeof IMGBB_API_KEY === 'undefined' || IMGBB_API_KEY === "SUA_CHAVE_API_DO_IMGBB_AQUI") {
         customAlert("❌ Configure a API Key do ImgBB no código!");
         return;
     }
+
+    // Validação da API Key do Pinecone (Adicione sua key aqui ou use var de ambiente)
+    const PINECONE_API_KEY = import.meta.env.PINECONE_API_KEY;
+    const PINECONE_INDEX = "questoes"; // Nome do seu índice no Pinecone
 
     const q = window.__ultimaQuestaoExtraida;
     const g = window.__ultimoGabaritoExtraido;
@@ -5300,13 +5309,12 @@ window.enviarDadosParaFirebase = async function () {
 
     try {
         // --- 2. CONSTRUÇÃO DO PAYLOAD (CÓPIA EXATA DA LÓGICA DO MODAL) ---
-        // Queremos salvar EXATAMENTE o que o usuário viu no JSON de revisão
 
         const rawTitle = window.__viewerArgs?.rawTitle || "Material_Geral";
-        // Sanitiza título para ser chave do Firebase (sem ., #, $, [, ])
+        // Sanitiza título para ser chave do Firebase
         const tituloMaterial = rawTitle.replace(/[.#$/[\]]/g, "_");
 
-        // Clones limpos para manipulação
+        // Clones limpos
         const questaoFinal = JSON.parse(JSON.stringify(q));
         const gabaritoLimpo = JSON.parse(JSON.stringify(g));
 
@@ -5316,9 +5324,7 @@ window.enviarDadosParaFirebase = async function () {
             : (window.__imagensLimpas?.gabarito_original || []);
 
         if (imgsGabaritoReais.length > 0) {
-            // Define o novo padrão (Array)
             gabaritoLimpo.fotos_originais = imgsGabaritoReais;
-            // REMOVE O ANTIGO PARA NÃO SUJAR O BANCO
             delete gabaritoLimpo.foto_original;
         }
 
@@ -5328,46 +5334,162 @@ window.enviarDadosParaFirebase = async function () {
             : (window.__imagensLimpas?.questao_original || []);
 
         if (imgsQuestaoReais.length > 0) {
-            // Define o novo padrão (Array)
             questaoFinal.fotos_originais = imgsQuestaoReais;
-            // REMOVE O ANTIGO PARA NÃO SUJAR O BANCO
             delete questaoFinal.foto_original;
         }
 
-        // Limpezas de campos desnecessários do Gabarito
+        // Limpezas de campos desnecessários
         delete gabaritoLimpo.alertas_credito;
         if (gabaritoLimpo.creditos) {
             delete gabaritoLimpo.creditos.como_identificou;
             delete gabaritoLimpo.creditos.precisa_credito_generico;
             delete gabaritoLimpo.creditos.texto_credito_sugerido;
-            delete gabaritoLimpo.creditos.comoidentificou;           // garante snake/camel
+            delete gabaritoLimpo.creditos.comoidentificou;
             delete gabaritoLimpo.creditos.precisacreditogenerico;
             delete gabaritoLimpo.creditos.textocreditosugerido;
         }
 
-        // Limpeza da Questão (Remove identificação interna pois será a chave)
         delete questaoFinal.identificacao;
 
-        // Define as chaves para o caminho do banco
+        // Define as chaves para o caminho do banco (IDs)
         const chaveProva = tituloMaterial || "MATERIAL_SEM_TITULO";
-        const chaveQuestao = (q.identificacao || "QUESTAO_SEM_ID_" + Date.now()).replace(/[.#$/[\]]/g, "-");
-
-        // Monta o objeto final
-        const payloadParaSalvar = {
-            meta: {
-                timestamp: new Date().toISOString(),
-            },
-            dados_questao: questaoFinal,
-            dados_gabarito: gabaritoLimpo
+        // ID único da questão
+        const idQuestaoUnico = (q.identificacao || "QUESTAO_" + Date.now()).replace(/[.#$/[\]]/g, "-");
+        // ✅ Remove acentos, espaços e caracteres especiais
+        const sanitizarID = (texto) => {
+            return texto
+                .normalize('NFD') // Remove acentos
+                .replace(/[\u0300-\u036f]/g, '') // Remove diacríticos
+                .replace(/[^a-zA-Z0-9_-]/g, '') // Só permite alfanuméricos, undercore, hífen
+                .toLowerCase();
         };
 
-        // --- 3. SISTEMA RECURSIVO DE UPLOAD DE IMAGENS ---
+        const idPinecone = `${sanitizarID(chaveProva)}_${sanitizarID(idQuestaoUnico)}`;
 
-        // Função auxiliar de upload
+        // --- [NOVO] 2.5: EXTRAÇÃO DE TEXTO PARA INTEELIGÊNCIA (EMBEDDING) ---
+        if (btnEnviar) btnEnviar.innerText = "🧠 Criando Cérebro...";
+
+        // Função Especializada: Monta o texto seguindo o Template do Gemini
+        const construirTextoSemantico = (q, g) => {
+            let textoFinal = "";
+
+            // 1. CONTEXTO INICIAL (Matéria e Palavras-chave)
+            if (q.materias_possiveis && Array.isArray(q.materias_possiveis)) {
+                textoFinal += `MATÉRIA: ${q.materias_possiveis.join(", ")}. `;
+            }
+            if (q.palavras_chave && Array.isArray(q.palavras_chave)) {
+                textoFinal += `PALAVRAS-CHAVE: ${q.palavras_chave.join(", ")}. `;
+            }
+
+            // 2. ENUNCIADO (Percorre estrutura)
+            let textoEnunciado = "";
+            if (q.estrutura && Array.isArray(q.estrutura)) {
+                textoEnunciado = q.estrutura
+                    .map(item => item.conteudo || "")
+                    .join(" ");
+            }
+            textoFinal += `ENUNCIADO: ${textoEnunciado} `;
+
+            // 3. ALTERNATIVAS
+            if (q.alternativas && Array.isArray(q.alternativas)) {
+                const textoAlts = q.alternativas
+                    .map(alt => {
+                        // Tenta pegar de 'estrutura' ou 'texto' direto
+                        let conteudoAlt = alt.texto || "";
+                        if (alt.estrutura && Array.isArray(alt.estrutura)) {
+                            conteudoAlt = alt.estrutura.map(i => i.conteudo).join(" ");
+                        }
+                        return `${alt.letra || "?"}: ${conteudoAlt}`;
+                    })
+                    .join(" | ");
+                textoFinal += `ALTERNATIVAS: ${textoAlts} `;
+            }
+
+            // 4. GABARITO E EXPLICAÇÃO
+            if (g) {
+                // Letra correta
+                if (g.dados_gabarito?.alternativa_correta) {
+                    textoFinal += `GABARITO: Alternativa ${g.dados_gabarito.alternativa_correta}. `;
+                }
+
+                // Explicação Detalhada
+                if (g.explicacao && Array.isArray(g.explicacao)) {
+                    const textoExpl = g.explicacao
+                        .flatMap(bloco => bloco.estrutura ? bloco.estrutura.map(i => i.conteudo) : [])
+                        .join(" ");
+                    textoFinal += `EXPLICAÇÃO: ${textoExpl} `;
+                }
+
+                // Análise dos Distratores (Motivos)
+                if (g.dados_gabarito?.alternativas_analisadas && Array.isArray(g.dados_gabarito.alternativas_analisadas)) {
+                    const textoMotivos = g.dados_gabarito.alternativas_analisadas
+                        .map(analise => `(${analise.letra}) ${analise.motivo || ""}`)
+                        .join(" ");
+                    textoFinal += `ANÁLISE DOS DISTRATORES: ${textoMotivos} `;
+                }
+
+                // Justificativa Curta (se existir solta)
+                if (g.justificativa_curta) {
+                    textoFinal += `RESUMO: ${g.justificativa_curta} `;
+                }
+            }
+
+            // 5. COMPLEXIDADE
+            if (g && g.dados_gabarito?.analise_complexidade) {
+                const complex = g.dados_gabarito.analise_complexidade;
+
+                if (complex.justificativa_dificuldade) {
+                    textoFinal += `COMPLEXIDADE: ${complex.justificativa_dificuldade} `;
+                }
+
+                if (complex.fatores) {
+                    // Pega só as chaves que são true (ex: abstracao_teorica: true)
+                    const fatoresAtivos = Object.entries(complex.fatores)
+                        .filter(([key, value]) => value === true)
+                        .map(([key]) => key)
+                        .join(", ");
+
+                    if (fatoresAtivos) {
+                        textoFinal += `Fatores: ${fatoresAtivos}.`;
+                    }
+                }
+            }
+
+            return textoFinal;
+        };
+
+        // GERA O TEXTO OTIMIZADO
+        // Usa questaoFinal (q limpo) e gabaritoLimpo (g limpo)
+        let textoParaVetorizar = construirTextoSemantico(questaoFinal.dados_questao || questaoFinal, gabaritoLimpo);
+
+        // Limpeza final de formatação (remove quebras de linha e espaços duplos)
+        textoParaVetorizar = textoParaVetorizar
+            .replace(/\s+/g, ' ')
+            .trim()
+            .substring(0, 8000); // Limite de chars do modelo
+
+        console.log("📝 Texto Semântico para Embedding:", textoParaVetorizar);
+
+        let vetorEmbedding = null;
+
+        // GERA O VETOR (Chama o Gemini)
+        if (textoParaVetorizar.length > 20) { // Mínimo razoável
+            try {
+                // Assume que gerarEmbedding já está importada do gemini.js
+                vetorEmbedding = await gerarEmbedding(textoParaVetorizar);
+
+                // Salva o vetor e o texto base (para auditoria futura)
+                // questaoFinal.embedding_vector = vetorEmbedding; // REMOVIDO: Redundante com Pinecone
+                // questaoFinal.embedding_text_source = textoParaVetorizar; // REMOVIDO: Economia de espaço
+            } catch (errEmbed) {
+                console.warn("⚠️ Falha ao gerar embedding (prosseguindo sem IA):", errEmbed);
+            }
+        }
+
+        // --- 3. SISTEMA RECURSIVO DE UPLOAD DE IMAGENS ---
         const uploadToImgBB = async (base64String) => {
             const formData = new FormData();
             formData.append("image", base64String.replace(/^data:image\/\w+;base64,/, ""));
-
             const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
                 method: "POST",
                 body: formData
@@ -5376,54 +5498,85 @@ window.enviarDadosParaFirebase = async function () {
             return result.success ? result.data.url : null;
         };
 
-        // Função recursiva que varre o JSON procurando Base64
         let imagensConvertidas = 0;
-
         const processarObjetoRecursivo = async (obj) => {
             if (!obj || typeof obj !== 'object') return;
-
-            // Se for array, itera
+            // (Mesma lógica de antes para arrays e objetos...)
             if (Array.isArray(obj)) {
                 for (let i = 0; i < obj.length; i++) {
                     const val = obj[i];
                     if (typeof val === 'string' && val.startsWith('data:image')) {
                         if (btnEnviar) btnEnviar.innerText = `⏳ Subindo img ${++imagensConvertidas}...`;
                         const url = await uploadToImgBB(val);
-                        if (url) obj[i] = url; // Substitui Base64 por URL
+                        if (url) obj[i] = url;
                     } else if (typeof val === 'object') {
                         await processarObjetoRecursivo(val);
                     }
                 }
                 return;
             }
-
-            // Se for objeto, itera chaves
             for (const key in obj) {
                 if (Object.prototype.hasOwnProperty.call(obj, key)) {
                     const val = obj[key];
-
                     if (typeof val === 'string' && val.startsWith('data:image')) {
-                        // ACHOU BASE64 -> UPLOAD
                         if (btnEnviar) btnEnviar.innerText = `⏳ Subindo img ${++imagensConvertidas}...`;
                         const url = await uploadToImgBB(val);
-                        if (url) obj[key] = url; // Substitui Base64 por URL
+                        if (url) obj[key] = url;
                     } else if (typeof val === 'object') {
-                        // É um sub-objeto ou array -> MERGULHA NELE
                         await processarObjetoRecursivo(val);
                     }
                 }
             }
         };
 
-        // DISPARA O PROCESSAMENTO RECURSIVO NO PAYLOAD INTEIRO
+        // DISPARA O UPLOAD DE IMAGENS
         if (btnEnviar) btnEnviar.innerText = "⏳ Analisando imagens...";
+
+        // Monta payload final para o Firebase
+        const payloadParaSalvar = {
+            meta: { timestamp: new Date().toISOString() },
+            dados_questao: questaoFinal,
+            dados_gabarito: gabaritoLimpo
+        };
+
         await processarObjetoRecursivo(payloadParaSalvar);
 
-        // --- 4. ENVIO PARA O FIREBASE ---
+        // --- 4. ENVIO PARA O PINECONE (SE TIVER VETOR) ---
+        if (vetorEmbedding && PINECONE_API_KEY !== "SUA_CHAVE_PINECONE_AQUI") {
+            if (btnEnviar) btnEnviar.innerText = "🌲 Indexando no Pinecone...";
+
+            try {
+                // ✅ Verificar API Key antes de tentar
+                if (!PINECONE_API_KEY || PINECONE_API_KEY.trim() === "") {
+                    throw new Error("❌ API Key do Pinecone está vazia!");
+                }
+
+                console.log("✅ Conectando com API Key válida...");
+                // Instancia cliente Pinecone (Se estiver usando via CDN global 'Pinecone')
+                // Se for module, use 'new Pinecone({...})'
+                const pc = new Pinecone({ apiKey: PINECONE_API_KEY });
+                const index = pc.index(PINECONE_INDEX, "https://questoes-xaytcx5.svc.aped-4627-b74a.pinecone.io");
+
+                await index.upsert([{
+                    id: idPinecone, // ID único que liga ao Firebase
+                    values: vetorEmbedding,
+                    metadata: {
+                        prova: chaveProva,
+                        texto_preview: textoParaVetorizar.substring(0, 200) // Ajuda a debugar
+                    }
+                }]);
+                console.log("✅ Vector salvo no Pinecone:", idPinecone);
+            } catch (errPine) {
+                console.error("❌ Erro ao salvar no Pinecone:", errPine);
+                // Não damos throw aqui para não impedir o salvamento no Firebase
+                customAlert("⚠️ Aviso: Questão salva, mas busca inteligente falhou.");
+            }
+        }
+
+        // --- 5. ENVIO PARA O FIREBASE ---
         if (btnEnviar) btnEnviar.innerText = "💾 Salvando no Banco...";
 
-        // Caminho: questoes / NOME_DA_PROVA / ID_DA_QUESTAO
-        const caminhoFinal = `questoes/${chaveProva}/${chaveQuestao}`;
+        const caminhoFinal = `questoes/${chaveProva}/${idQuestaoUnico}`;
         const novaQuestaoRef = ref(db, caminhoFinal);
 
         await set(novaQuestaoRef, payloadParaSalvar);
@@ -5442,6 +5595,7 @@ window.enviarDadosParaFirebase = async function () {
         }
     }
 };
+
 
 /**
  * Limpa os dados da questão atual para permitir processar a próxima
