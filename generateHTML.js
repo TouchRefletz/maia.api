@@ -5070,7 +5070,7 @@ window.renderizarTelaFinal = function () {
         <div class="field-group" style="margin-top:15px;">
             <span class="field-label">Créditos & Fonte</span>
             <table style="width:100%; font-size:12px; border-collapse:collapse; margin-top:5px;">
-                <tr style="border-bottom:1px solid var(--color-border);"><td style="color:var(--color-text-secondary); padding:4px;">Instituição</td><td style="padding:4px;">${safe(c.autor_ou_instituicao || "—")}</td></tr>
+                <tr style="border-bottom:1px solid var(--color-border);"><td style="color:var(--color-text-secondary); padding:4px;">Instituição</td><td style="padding:4px;">${safe(c.autor_ou_instituicao || c.autorouinstituicao || "—")}</td></tr>
                 <tr style="border-bottom:1px solid var(--color-border);"><td style="color:var(--color-text-secondary); padding:4px;">Material</td><td style="padding:4px;">${safe(c.material || "—")}</td></tr>
                 <tr style="border-bottom:1px solid var(--color-border);"><td style="color:var(--color-text-secondary); padding:4px;">Ano</td><td style="padding:4px;">${safe(c.ano || "—")}</td></tr>
                 <tr><td style="color:var(--color-text-secondary); padding:4px;">Origem</td><td style="padding:4px;">${c.origem_resolucao === 'extraido_do_material' ? '📄 Extraído' : '🤖 IA'}</td></tr>
