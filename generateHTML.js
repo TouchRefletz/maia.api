@@ -876,6 +876,12 @@ function gerarVisualizadorPDF(args) {
         // Compatibilidade caso algum lugar use sem underscore
         window.modo = novoModo;
 
+        // --- CORREÇÃO DE BUG (FOTO DUPLICADA) ---
+        // Ao trocar de modo, garantimos que a memória de recortes (buffer) esteja limpa.
+        // Isso evita que recortes da 'Prova' que sobraram na memória sejam salvos como 'Gabarito'
+        window.__recortesAcumulados = [];
+        window.recortesAcumulados = [];
+
         // Atualiza a UI dos botões (Classes CSS)
         window.atualizarUIViewerModo?.();
 
@@ -1800,8 +1806,6 @@ function gerarVisualizadorPDF(args) {
                 }
             }, { passive: true });
         }
-
-
 
         // FECHA O MODAL AGORA
         document.getElementById('cropConfirmModal').classList.remove('visible');
@@ -6094,12 +6098,17 @@ function criarCardTecnico(idFirebase, fullData) {
     const renderCreditosCompleto = () => {
         if (!g.creditos) return '';
         const c = g.creditos;
+
+        // Robustness helpers
+        const inst = c.autorouinstituicao || c.autor_ou_instituicao || c.autorOuInstituicao || "—";
+        const mat = c.material || c.nomeMaterial || c.nome_material || "—";
+
         return `
             <div class="q-res-section">
                 <span class="q-res-label">Metadados & Créditos</span>
                 <table class="credits-table">
-                    <tr><td>Instituição</td><td>${c.autorouinstituicao || "—"}</td></tr>
-                    <tr><td>Material</td><td>${c.material || "—"}</td></tr>
+                    <tr><td>Instituição</td><td>${inst}</td></tr>
+                    <tr><td>Material</td><td>${mat}</td></tr>
                     <tr><td>Ano</td><td>${c.ano || "—"}</td></tr>
                     <tr><td>Confiança</td><td>${c.confiancaidentificacao ? Math.round(c.confiancaidentificacao * 100) + '%' : "—"}</td></tr>
                 </table>

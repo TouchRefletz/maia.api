@@ -6381,9 +6381,12 @@ label[for="gabaritoFileInput"]:hover {
   transform: translateY(10px);
   z-index: 100;
   /* ADICIONE ISSO: */
-  flex-shrink: 0;  /* Impede o botão de ser esmagado */
-  flex-grow: 0;    /* Impede o botão de esticar para preencher espaço vazio */
-  min-width: 45px; /* Força bruta para garantir a largura */
+  flex-shrink: 0;
+  /* Impede o botão de ser esmagado */
+  flex-grow: 0;
+  /* Impede o botão de esticar para preencher espaço vazio */
+  min-width: 45px;
+  /* Força bruta para garantir a largura */
 }
 
 #resumeScrollBtn.visible {
