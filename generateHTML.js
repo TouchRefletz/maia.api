@@ -5356,15 +5356,16 @@ window.enviarDadosParaFirebase = async function () {
         // ID único da questão
         const idQuestaoUnico = (q.identificacao || "QUESTAO_" + Date.now()).replace(/[.#$/[\]]/g, "-");
         // ✅ Remove acentos, espaços e caracteres especiais
+        // ✅ Codifica para Base64URL (reversível, só usa [A-Za-z0-9_-])
         const sanitizarID = (texto) => {
-            return texto
-                .normalize('NFD') // Remove acentos
-                .replace(/[\u0300-\u036f]/g, '') // Remove diacríticos
-                .replace(/[^a-zA-Z0-9_-]/g, '') // Só permite alfanuméricos, undercore, hífen
-                .toLowerCase();
+            const encoded = btoa(unescape(encodeURIComponent(texto))); // UTF-8 → Base64
+            return encoded
+                .replace(/\+/g, "-")    // RFC 4648 Base64URL
+                .replace(/\//g, "_")
+                .replace(/=/g, "");     // Remove padding
         };
 
-        const idPinecone = `${sanitizarID(chaveProva)}_${sanitizarID(idQuestaoUnico)}`;
+        const idPinecone = `${sanitizarID(chaveProva)}--${sanitizarID(idQuestaoUnico)}`;
 
         // --- [NOVO] 2.5: EXTRAÇÃO DE TEXTO PARA INTEELIGÊNCIA (EMBEDDING) ---
         if (btnEnviar) btnEnviar.innerText = "🧠 Criando Cérebro...";
