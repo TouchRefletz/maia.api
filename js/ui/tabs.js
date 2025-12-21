@@ -1,6 +1,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { TabsManager } from './TabsManager'; // Ajuste o caminho conforme necessário
+import { TabsManager } from './Tabs.tsx'; // Ajuste o caminho conforme necessário
 
 export function configurarTabs(container, gabarito) {
   // Verifica segurança básica
