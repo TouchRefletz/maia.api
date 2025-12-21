@@ -1,0 +1,21 @@
+.review-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-20);
+  margin-bottom: var(--space-32);
+}
+
+/* Ajuste no Grid para ficar bonito no modal */
+.review-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 25px;
+  margin-bottom: 25px;
+}
+
+.review-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  padding-bottom: 40px;
+}

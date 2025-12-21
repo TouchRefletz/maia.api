@@ -1,0 +1,34 @@
+/* --- O SCROLL MÁGICO AQUI --- */
+#canvasContainer {
+  flex: 1;
+  overflow: auto;
+  padding: 30px;
+  display: flex;
+  /* justify-content: center;  <-- REMOVA ESTA LINHA */
+  align-items: flex-start;
+  position: relative;
+}
+
+#the-canvas {
+  display: block;
+  margin: 0 auto;
+  /* Isso garante o centro seguro */
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  /* Opcional: fica bonito */
+}
+
+/* Container que envolve o canvas */
+.canvas-wrapper {
+  overflow: auto !important;
+  /* Sempre permitir scroll */
+  position: relative;
+  /* Removemos flex/align-items center para evitar centralização forçada no modo crop */
+  display: block;
+}
+
+/* Quando a imagem temporária do cropper entra */
+#temp-cropper-img {
+  max-width: none !important;
+  /* CRÍTICO: Permite que a imagem exploda o container */
+  display: block;
+}

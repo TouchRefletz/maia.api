@@ -1,0 +1,9 @@
+/* --- Badges e Botões Pequenos --- */
+.badge {
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}

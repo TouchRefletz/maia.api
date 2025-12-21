@@ -1,0 +1,22 @@
+/* Utility classes */
+.flex {
+  display: flex;
+}
+
+.block {
+  display: block;
+}
+
+.hidden {
+  display: none;
+}
+
+:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: 2px;
+}
+
+/* Classes utilitárias */
+.hidden {
+  display: none !important;
+}

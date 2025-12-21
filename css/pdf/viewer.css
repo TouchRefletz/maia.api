@@ -1,0 +1,93 @@
+#viewerHeader .header-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+/* Ajuste do Viewer para tela cheia inicial */
+#viewerBody {
+  display: flex;
+  height: calc(100vh - 60px);
+  width: 100%;
+  overflow: hidden;
+}
+
+#viewerMain {
+  flex: 1;
+  transition: flex 0.3s;
+}
+
+/* Botões de Ação Final */
+.result-actions {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* --- LAYOUT GERAL DO VISUALIZADOR (Fixo na tela) --- */
+#pdfViewerContainer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: var(--color-background);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  /* Organiza Header em cima do Corpo */
+  overflow: hidden;
+  /* Impede scroll na janela principal do navegador */
+}
+
+/* --- CABEÇALHO (Fixo no topo) --- */
+#viewerHeader {
+  height: 60px;
+  /* Altura fixa */
+  flex-shrink: 0;
+  /* Impede de encolher */
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  z-index: 10;
+}
+
+/* --- CORPO (Onde fica Sidebar + Prova) --- */
+#viewerBody {
+  display: flex;
+  flex: 1;
+  /* Ocupa todo o espaço restante abaixo do header */
+  overflow: hidden;
+  /* O scroll será interno aos filhos */
+  height: calc(100vh - 60px);
+  /* Garante altura exata */
+}
+
+/* --- ÁREA PRINCIPAL (Onde fica a prova) --- */
+#viewerMain {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* Importante para conter os filhos */
+  position: relative;
+  background-color: rgba(var(--color-primary-rgb), 0.05);
+}
+
+/* Sidebar colapsada (não remove do DOM) */
+#viewerBody.sidebar-collapsed #viewerSidebar {
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  padding: 0 !important;
+  border-right: 0 !important;
+  overflow: hidden !important;
+}
+
+#viewerBody.sidebar-collapsed #sidebarResizer {
+  display: none !important;
+}

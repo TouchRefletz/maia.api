@@ -1,0 +1,39 @@
+/* Matriz de Complexidade (Grid de Fatores) */
+.complexity-matrix {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+  background: rgba(0, 0, 0, 0.02);
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px dashed var(--color-border);
+}
+
+.comp-factor {
+  font-size: 0.7rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-secondary);
+  opacity: 0.6;
+}
+
+.comp-factor.active {
+  opacity: 1;
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+.comp-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-border);
+}
+
+.comp-factor.active .comp-dot {
+  background: var(--color-warning);
+  /* Laranja para destaque */
+  box-shadow: 0 0 5px var(--color-warning);
+}

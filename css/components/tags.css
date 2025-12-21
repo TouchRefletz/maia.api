@@ -1,0 +1,30 @@
+/* Itens Filhos */
+.tag-subject {
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+  display: inline-flex;
+  /* Melhor que flex para itens que agem como texto/botão */
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  border-radius: 10px;
+
+  /* IMPORTANTE: Remova ou zere o margin antigo */
+  margin: 0;
+
+  /* Garante que o tamanho seja apenas o necessário para o texto */
+  width: auto;
+  max-width: 100%;
+}
+
+/* Tags (Matérias e Palavras-chave) */
+.tags-wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag-keyword {
+  background: var(--color-secondary);
+  color: var(--color-text-secondary);
+}

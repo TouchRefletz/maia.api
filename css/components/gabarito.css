@@ -1,0 +1,138 @@
+/* Gabarito com cara da questão antiga, mas compacto na sidebar */
+.gabarito-card.question {
+  max-width: 100%;
+  padding: var(--space-16);
+}
+
+.gabarito-options.answerOptions {
+  width: 100%;
+  padding: var(--space-12);
+}
+
+.gabarito-options .answerOption {
+  cursor: default;
+  /* sidebar não precisa parecer clicável */
+}
+
+.gabarito-options .option-letter {
+  min-width: 28px;
+  font-weight: var(--font-weight-bold);
+  color: var(--color-primary);
+}
+
+.gabarito-options .option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.gabarito-options .option-reason {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-mono);
+  white-space: pre-wrap;
+}
+
+/* bloco “Detalhes técnicos” recolhível */
+.gabarito-extra {
+  margin-top: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  background: var(--color-surface);
+  padding: 10px;
+}
+
+.gabarito-extra > summary {
+  cursor: pointer;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-primary);
+}
+
+/* Meta do gabarito: chips + barra de confiança */
+.gabarito-meta {
+  width: 100%;
+  padding: 10px 0 0 0;
+}
+
+.gabarito-meta__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+
+.gabarito-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-family: var(--font-family-mono);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.gabarito-chip__k {
+  color: var(--color-text-secondary);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.gabarito-chip__v {
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+.gabarito-chip--info {
+  background: rgba(var(--color-info-rgb), 0.12);
+  border-color: rgba(var(--color-info-rgb), 0.25);
+  color: var(--color-info);
+}
+
+.gabarito-chip--muted {
+  background: var(--color-secondary);
+  border-color: var(--color-border);
+}
+
+/* Barra de confiança reaproveitando a ideia do --fill-width do teu CSS */
+.gabarito-confbar {
+  margin-top: 10px;
+  border: 1px solid rgba(var(--color-primary-rgb), 0.15);
+  background: rgba(var(--color-primary-rgb), 0.04);
+  border-radius: var(--radius-base);
+  padding: 10px;
+}
+
+.gabarito-confbar__label {
+  font-family: var(--font-family-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-primary);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.gabarito-confbar__track {
+  width: 100%;
+  height: 8px;
+  background: rgba(var(--color-bg-1), 0.12);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.gabarito-confbar__fill {
+  height: 100%;
+  width: var(--fill-width, 0%);
+  background-color: var(--color-primary);
+  border-radius: var(--radius-full);
+  transition: width 0.35s var(--ease-standard);
+}
+
+.gabarito-steps {
+  height: auto;
+}

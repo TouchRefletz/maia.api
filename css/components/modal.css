@@ -1,0 +1,297 @@
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;
+  transition: all var(--duration-normal) var(--ease-standard);
+}
+
+.modal-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.modal-content {
+  background-color: var(--color-surface);
+  width: 90%;
+  max-width: 480px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-card-border);
+  box-shadow:
+    var(--shadow-lg),
+    0 0 0 1px var(--color-card-border-inner);
+  padding: var(--space-32);
+  transform: scale(1);
+  transition: transform var(--duration-normal) var(--ease-standard);
+  animation: modalSlideUp 0.4s var(--ease-standard);
+}
+
+.modal-overlay.hidden .modal-content {
+  transform: scale(0.95);
+}
+
+.modal-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-bottom: var(--space-24);
+}
+
+.modal-header h2 {
+  font-size: var(--font-size-2xl);
+  color: var(--color-text);
+}
+
+.modal-body p {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-base);
+  text-align: center;
+  line-height: 1.6;
+  margin-bottom: var(--space-20);
+}
+
+.modal-footer {
+  margin-top: var(--space-24);
+}
+
+/* Modal de Confirmação Customizado */
+.custom-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.85);
+  z-index: 2000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+
+.custom-modal-overlay.visible {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.custom-modal-content {
+  background: var(--color-background);
+  padding: 20px;
+  border-radius: 12px;
+  max-width: 95%;
+  max-height: 95vh;
+  display: flex;
+  justify-content: center;
+  flex-direction: column;
+  gap: 15px;
+  box-shadow: 0 10px 30px var(--color-shadow);
+  width: auto;
+  height: auto;
+}
+
+/* --- MODAL FINAL DE REVISÃO (POPUP) --- */
+.final-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.85);
+  /* Fundo escuro focado */
+  z-index: 99999;
+  /* Acima de tudo */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  backdrop-filter: blur(5px);
+}
+
+.final-modal-overlay.visible {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.final-modal-content {
+  background: var(--color-background);
+  width: 95%;
+  max-width: 1200px;
+  height: 90vh;
+  /* Ocupa 90% da altura da tela */
+  border-radius: var(--radius-lg);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* O scroll é interno no body do modal */
+  border: 1px solid var(--color-border);
+}
+
+.final-modal-header {
+  padding: 20px;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--color-surface);
+}
+
+#modalScanContent {
+  overflow-y: auto;
+  flex: 1;
+  text-align: center;
+  padding: 10px;
+  background: var(--color-background);
+}
+
+/* Modal Scan Original */
+#modalScanContent img {
+  box-shadow: 0 4px 20px var(--color-shadow);
+}
+
+#modalScanOriginal {
+  opacity: 1;
+  pointer-events: all;
+}
+
+#finalModal .btn-trocar-img,
+#finalModal .btn-delete-block,
+#finalModal .structure-image-placeholder strong,
+#finalModal .structure-image-placeholder .icon {
+  display: none !important;
+}
+
+#finalModal .structure-image-placeholder {
+  pointer-events: none;
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
+#finalModal .structure-img {
+  cursor: default !important;
+}
+
+#finalModal .q-opt-btn {
+  pointer-events: none;
+}
+
+.api-modal-content {
+  max-width: 800px;
+  display: flex;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  background: var(--color-surface);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.modal-form-col {
+  flex: 1;
+  padding: 30px;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-benefits-col {
+  width: 300px;
+  background: var(--color-bg-2);
+  /* Fallback if var not defined */
+  border-left: 1px solid var(--color-border);
+  padding: 30px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* Container Fixo (Overlay) */
+.img-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--color-background-0-8);
+  z-index: 999999;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+/* Botão Fechar */
+.img-close-container {
+  position: absolute;
+  top: 15px;
+  right: 20px;
+  z-index: 1000000;
+}
+
+/* Corpo do Modal (Flexbox) */
+.img-modal-body {
+  display: flex;
+  flex-direction: row;
+  /* Lado a lado no PC */
+  gap: 20px;
+  width: 100%;
+  height: 100%;
+  margin-top: 30px;
+  /* Espaço pro botão fechar */
+}
+
+/* Colunas (Questão e Gabarito) */
+.img-col {
+  flex: 1;
+  /* Ocupam espaço igual */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-y: auto;
+  /* Scroll individual */
+  background: var(--color-background-0-8);
+  padding: 10px;
+  border-radius: 8px;
+  border: 3px dotted var(--color-border);
+}
+
+/* Divisor visual no PC */
+.img-divider {
+  width: 1px;
+  background: var(--color-primary);
+}
+
+/* Imagens */
+.img-content {
+  max-width: 100%;
+  margin-bottom: 10px;
+  border: 1px dotted var(--color-border);
+  display: block;
+  width: auto;
+  /* No PC mantém natural até bater 100% */
+}
+
+/* Títulos Fixos no Topo ao Scrollar */
+.img-title {
+  margin-bottom: 10px;
+  position: sticky;
+  top: 0;
+  background: var(--color-background);
+  padding: 5px;
+  width: 100%;
+  text-align: center;
+  font-weight: bold;
+  border-bottom: 1px solid #333;
+  z-index: 10;
+}

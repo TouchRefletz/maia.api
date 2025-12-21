@@ -1,0 +1,25 @@
+#customAlert {
+  position: fixed;
+  top: var(--space-20);
+  left: 50%;
+  transform: translateX(-50%) translateY(-20px);
+  opacity: 0;
+  background-color: var(--color-primary);
+  color: var(--color-btn-primary-text);
+  padding: var(--space-16) var(--space-32);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  box-shadow: var(--shadow-lg);
+  z-index: 1000000;
+  transition: all 0.5s var(--ease-standard);
+}
+
+#customAlert.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+#customAlert:hover {
+  opacity: 0.4 !important;
+}

@@ -1,0 +1,15 @@
+/* Campos Individuais */
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0px;
+}
+
+.field-label {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}

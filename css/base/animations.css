@@ -1,0 +1,155 @@
+@keyframes fadeOutPromptContainer {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+    transition: all 1s ease-in-out;
+  }
+
+  to {
+    opacity: 0;
+    transform: translate(-50%, -75%);
+    transition: all 1s ease-in-out;
+  }
+}
+
+@keyframes fadeInCentralized {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -25%);
+    transition: all 1s ease-in-out;
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+    transition: all 1s ease-in-out;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Animação para o erro (tremida negativa) */
+@keyframes shakeError {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  15% {
+    transform: translateX(-6px) rotate(-1deg);
+  }
+
+  30% {
+    transform: translateX(5px) rotate(1deg);
+  }
+
+  45% {
+    transform: translateX(-3px);
+  }
+
+  60% {
+    transform: translateX(2px);
+  }
+
+  75% {
+    transform: translateX(-1px);
+  }
+}
+
+/* Animação para o acerto (pulso afirmativo) */
+@keyframes popSuccess {
+  0% {
+    transform: scale(1);
+  }
+
+  40% {
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(var(--color-success-rgb), 0.2);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes modalSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* --- SKELETON LOADING --- */
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* A sidebar só aparece depois */
+@keyframes slideInRight {
+  from {
+    width: 0;
+    opacity: 0;
+  }
+
+  to {
+    width: 400px;
+    opacity: 1;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Glow Effect for Reopen Button / Closed State */
+@keyframes pulse-glow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(var(--color-primary-rgb, 33, 128, 141), 0.7);
+    border-color: var(--color-primary);
+  }
+
+  70% {
+    box-shadow: 0 0 0 10px rgba(var(--color-primary-rgb, 33, 128, 141), 0);
+    border-color: var(--color-primary-active);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(var(--color-primary-rgb, 33, 128, 141), 0);
+    border-color: var(--color-primary);
+  }
+}

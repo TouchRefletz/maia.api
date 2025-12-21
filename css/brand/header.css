@@ -1,0 +1,76 @@
+/* Container para alinhar logo e texto */
+#brandHeader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  flex-wrap: wrap;
+  /* Espaço entre a logo e o texto */
+  margin-bottom: 40px;
+  /* Espaço entre o branding e a pergunta "O que vamos..." */
+}
+
+/* Estilo da Imagem da Logo */
+#brandLogo {
+  width: 60px;
+  /* Ajuste o tamanho conforme necessário */
+  height: auto;
+  object-fit: contain;
+}
+
+/* Estilo do Texto "Maia" */
+#brandName {
+  font-family: inherit;
+  /* Usa a fonte do seu site */
+  font-size: 3.5rem;
+  /* Tamanho grande e imponente */
+  font-weight: 800;
+  /* Extra bold para ficar "gordo" como na ref */
+  font-style: italic;
+  /* O itálico solicitado */
+  color: var(--color-text);
+  /* Branco (ajuste se seu fundo for claro) */
+  line-height: 1;
+  letter-spacing: -0.02em;
+  /* Leve ajuste para ficar mais compacto */
+}
+
+/* Ajuste Opcional para Mobile */
+@media (max-width: 768px) {
+  #brandHeader {
+    gap: 10px;
+    margin-bottom: 30px;
+  }
+
+  #brandLogo {
+    width: 45px;
+  }
+
+  #brandName {
+    font-size: 2.5rem;
+  }
+}
+
+.header-logo {
+  height: 24px;
+  width: auto;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+}
+
+.header-logo {
+  height: 24px;
+}
+
+.header-title {
+  font-weight: bold;
+  font-size: var(--font-size-md);
+}
+
+#brandName > strong {
+  color: var(--color-primary);
+}

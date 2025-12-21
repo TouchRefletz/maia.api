@@ -1,0 +1,19 @@
+/* Tabela de Créditos Compacta */
+.credits-table {
+  width: 100%;
+  font-size: 0.8rem;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+
+.credits-table td {
+  padding: 6px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+}
+
+.credits-table td:last-child {
+  color: var(--color-text);
+  font-weight: 600;
+  text-align: right;
+}

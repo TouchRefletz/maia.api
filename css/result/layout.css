@@ -1,0 +1,454 @@
+/* --- LAYOUT BANCO DE QUESTÕES (Dark/Academic Style) --- */
+.bank-layout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background-color: var(--color-background);
+  min-height: 100vh;
+  font-family: var(--font-family-base);
+  width: 80%;
+}
+
+/* --- ESTRUTURA SEQUENCIAL (NOVO) --- */
+.structure-container {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  width: 100%;
+}
+
+.structure-block {
+  width: 100%;
+  display: flex;
+  align-items: center;
+}
+
+/* Bloco de Texto */
+.structure-text {
+  font-size: 1.05rem;
+  line-height: 1.6;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  /* Respeita quebras de linha */
+}
+
+/* Bloco de Citação */
+.structure-citacao {
+  font-family: serif;
+  font-style: italic;
+  background: rgba(var(--color-primary-rgb), 0.05);
+  border-left: 3px solid var(--color-primary);
+  padding: 15px;
+  margin: 5px 0;
+  color: var(--color-text-secondary);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+/* Bloco de Imagem */
+.structure-image-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 10px 0;
+  background: rgba(0, 0, 0, 0.02);
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+}
+
+.structure-img {
+  max-width: 100%;
+  max-height: 400px;
+  border-radius: 4px;
+  object-fit: contain;
+  cursor: zoom-in;
+}
+
+.structure-caption {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-mono);
+  text-align: center;
+  border-top: 1px solid var(--color-border);
+  padding-top: 5px;
+  width: 100%;
+}
+
+/* --- ESTRUTURA SEQUENCIAL (VISUALIZADOR) --- */
+
+.structure-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+/* Bloco de Texto */
+.structure-text {
+  font-size: 1.05rem;
+  line-height: 1.6;
+  color: var(--color-text);
+  white-space: pre-wrap;
+}
+
+/* Bloco de Citação */
+.structure-citacao {
+  font-family: serif;
+  font-style: italic;
+  background: rgba(var(--color-primary-rgb), 0.05);
+  border-left: 4px solid var(--color-primary);
+  padding: 12px 20px;
+  margin: 5px 0;
+  color: var(--color-text-secondary);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+/* Container da Imagem */
+.structure-image-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--color-surface);
+  padding: 12px;
+  border-radius: var(--radius-base);
+  border: 1px solid var(--color-border);
+  margin: 8px 0;
+  transition: box-shadow 0.2s ease;
+}
+
+.structure-image-wrapper:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.structure-img {
+  max-width: 100%;
+  max-height: 450px;
+  border-radius: 4px;
+  object-fit: contain;
+  cursor: zoom-in;
+  background-color: white;
+  /* Garante contraste se a img for PNG transparente */
+}
+
+/* Legenda da IA */
+.structure-caption {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-mono);
+  text-align: center;
+  border-top: 1px solid var(--color-border);
+  padding-top: 8px;
+  width: 100%;
+  opacity: 0.8;
+}
+
+/* Placeholder de Imagem Interativo */
+.structure-image-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 30px;
+  border: 2px dashed var(--color-border);
+  border-radius: 8px;
+  background-color: var(--color-surface);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+  margin: 10px 0;
+  width: 100%;
+}
+
+.structure-image-placeholder:hover {
+  border-color: var(--color-primary);
+  background-color: rgba(var(--color-primary-rgb), 0.05);
+  transform: translateY(-2px);
+}
+
+.structure-image-placeholder .icon {
+  font-size: 24px;
+  margin-bottom: 10px;
+  color: var(--color-text-secondary);
+}
+
+.structure-image-placeholder:hover .icon {
+  color: var(--color-primary);
+}
+
+.structure-image-placeholder strong {
+  font-size: 12px;
+  color: var(--color-primary);
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.structure-image-placeholder span {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  max-width: 80%;
+}
+
+/* --- EDITOR ESTRUTURAL (Drag & Drop) --- */
+
+.structure-editor-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  background: var(--color-bg-1);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  min-height: 100px;
+}
+
+.structure-item {
+  display: flex;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  box-shadow: var(--shadow-sm);
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
+  overflow: hidden;
+}
+
+/* Estado enquanto arrasta */
+.structure-item.dragging {
+  opacity: 0.5;
+  border: 2px dashed var(--color-primary);
+  background: var(--color-background);
+}
+
+.structure-item-content {
+  flex: 1;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.structure-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.structure-type-badge {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--color-primary);
+  color: white;
+}
+
+.structure-type-badge.texto {
+  background: var(--color-info);
+}
+
+.structure-type-badge.imagem {
+  background: var(--color-warning);
+  color: #fff;
+}
+
+.structure-type-badge.citacao {
+  background: #9333ea;
+}
+
+.structure-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--color-border);
+}
+
+.structure-titulo {
+  font-weight: 800;
+  font-size: 14px;
+  margin: 10px 0 6px;
+  color: var(--color-text);
+}
+
+.structure-subtitulo {
+  font-weight: 700;
+  font-size: 12px;
+  margin: 8px 0 6px;
+  color: var(--color-text);
+  opacity: 0.9;
+}
+
+.structure-lista {
+  margin: 8px 0;
+  padding-left: 18px;
+  color: var(--color-text);
+  display: flex;
+  flex-direction: column;
+}
+
+.structure-lista > ul,
+.structure-lista > li,
+.structure-lista > strong {
+  text-align: left;
+}
+
+.structure-equacao,
+.structure-codigo {
+  margin: 10px 0;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  background: var(--color-background);
+  overflow-x: auto;
+}
+
+.structure-destaque {
+  margin: 10px 0;
+  padding: 10px;
+  border-left: 3px solid var(--color-warning);
+  background: rgba(245, 158, 11, 0.08);
+  border-radius: var(--radius-base);
+}
+
+.structure-separador {
+  border: none;
+  border-top: 1px dashed var(--color-border);
+  margin: 12px 0;
+}
+
+/* Bloco de Fonte (créditos) */
+.structure-fonte {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  font-style: italic;
+  font-family: var(--font-family-mono);
+  background: rgba(var(--color-info-rgb), 0.06);
+  border: 1px dashed var(--color-border);
+  padding: 10px 12px;
+  border-radius: var(--radius-base);
+}
+
+.structure-type-badge.fonte {
+  background: var(--color-info);
+}
+
+/* Toolbar do editor com menu */
+.structure-toolbar--addmenu {
+  position: relative;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.markdown-content strong {
+  font-weight: 800 !important;
+  /* Peso Extra-Pesado */
+  font-style: normal !important;
+  /* Remove itálico */
+  color: var(--color-text-shine) !important;
+  /* Muda a cor para o Verde/Laranja do tema */
+  letter-spacing: 0.5px;
+  /* Espaçamento leve para destacar mais */
+}
+
+/* Design dos Blocos de Conteúdo */
+.structure-block {
+  margin-bottom: 12px;
+  line-height: 1.6;
+  color: var(--color-text);
+}
+
+.structure-titulo {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--color-primary);
+  margin-top: 20px;
+  margin-bottom: 10px;
+}
+
+.structure-subtitulo {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-text);
+  opacity: 0.9;
+  margin-top: 15px;
+}
+
+.structure-fonte {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  text-align: right;
+  font-style: italic;
+  border-top: 1px solid var(--color-border);
+  padding-top: 4px;
+  margin-top: 4px;
+}
+
+.structure-citacao {
+  border-left: 3px solid var(--color-primary);
+  padding-left: 15px;
+  margin-left: 5px;
+  font-style: italic;
+  background: rgba(0, 0, 0, 0.02);
+  padding: 10px;
+  border-radius: 0 4px 4px 0;
+}
+
+.structure-separador {
+  border: 0;
+  border-top: 1px dashed var(--color-border);
+  margin: 20px 0;
+}
+
+.structure-codigo {
+  padding: 10px;
+  border-radius: 6px;
+  font-family: monospace;
+  overflow-x: auto;
+}
+
+/* Ajuste fino para imagens na questão */
+.structure-image-wrapper {
+  text-align: center;
+  margin: 15px 0;
+  background: var(--color-surface);
+  padding: 5px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.structure-caption {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  margin-top: 5px;
+}
+
+.q-opt-content {
+  flex: 1;
+  /* Ocupa o resto do espaço */
+  width: 100%;
+}
+
+/* Ajuste para o markdown dentro do botão não quebrar o layout */
+.q-opt-content .structure-block {
+  margin-bottom: 5px;
+}
+
+.q-opt-content p {
+  margin: 0;
+}
+
+/* Fix for long URLs in citations/references */
+.structure-block,
+.structure-fonte {
+  word-break: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+  max-width: 100%;
+}

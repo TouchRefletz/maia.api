@@ -1,0 +1,39 @@
+/* Área de Resolução Completa */
+.q-resolution {
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-2);
+  padding: 25px 30px;
+  animation: slideDown 0.4s ease-out;
+}
+
+.q-res-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.q-res-badge {
+  background: var(--color-success);
+  color: white;
+  font-weight: bold;
+  padding: 5px 12px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+.q-res-section {
+  margin-bottom: 20px;
+}
+
+.q-res-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  font-weight: 700;
+  margin-bottom: 8px;
+  display: block;
+}

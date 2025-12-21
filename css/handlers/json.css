@@ -1,0 +1,47 @@
+.json-dump {
+  background: var(--color-background-json);
+  /* Fundo escuro para código */
+  color: #a5b4fc;
+  /* Cor de código estilo IDE */
+  padding: 15px;
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  font-family: var(--font-family-mono);
+  font-size: 11px;
+  max-height: 500px;
+  margin-top: 10px;
+  white-space: pre-wrap;
+  /* Quebra linha */
+}
+
+/* Debug JSON area */
+.json-debug-area {
+  background: var(--color-charcoal-800);
+  border-radius: 8px;
+  margin-top: 20px;
+  overflow: hidden;
+}
+
+.json-debug-header {
+  font-size: 0.8rem;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  background: var(--color-background-0-8);
+  color: var(--color-primary);
+  font-family: monospace;
+  font-weight: bold;
+  font-weight: 700;
+}
+
+.json-dump {
+  padding: 15px;
+  color: var(--color-teal-300);
+  font-family: monospace;
+  font-size: 0.8rem;
+  margin: 0;
+  max-height: 200px;
+  overflow: auto;
+}

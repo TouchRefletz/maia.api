@@ -1,0 +1,108 @@
+.answerOption {
+  transition: all var(--duration-fast) var(--ease-standard);
+}
+
+.answerOption {
+  background-color: var(--color-secondary-hover);
+  background-size: 200% 100%;
+  padding: var(--space-10);
+  border-radius: var(--radius-base);
+  height: auto;
+  border: 1px solid var(--color-border);
+}
+
+.answerOption {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-6);
+  min-height: 60px;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.answerOption:hover {
+  background-color: var(--color-secondary-active);
+}
+
+.answerOption > span {
+  color: var(--color-primary);
+}
+
+/* Estilo para a resposta CORRETA */
+.answerOption.correct {
+  background-color: rgba(var(--color-success-rgb), 0.12);
+  /* Fundo verde suave */
+  border-color: var(--color-success);
+  /* Borda sólida */
+  box-shadow:
+    0 0 0 1px var(--color-success),
+    inset 0 0 0 1px rgba(var(--color-success-rgb), 0.1);
+  /* Glow interno e externo */
+  animation: popSuccess 0.5s var(--ease-standard) forwards;
+  z-index: 1;
+  /* Traz para frente levemente */
+}
+
+/* Garante que o texto/letra dentro fique verde */
+.answerOption.correct > span,
+.answerOption.correct .option-letter,
+.answerOption.correct strong {
+  color: var(--color-success) !important;
+  font-weight: var(--font-weight-bold);
+}
+
+/* Hover na correta (mantém o feedback positivo) */
+.answerOption.correct:hover {
+  background-color: rgba(var(--color-success-rgb), 0.2);
+  transform: none;
+  /* Evita conflito com a animação de hover padrão */
+}
+
+/* Estilo para a resposta ERRADA */
+.answerOption.wrong {
+  background-color: rgba(var(--color-error-rgb), 0.12);
+  /* Fundo vermelho suave */
+  border-color: var(--color-error);
+  animation: shakeError 0.5s var(--ease-standard);
+}
+
+/* Garante que o texto/letra dentro fique vermelho */
+.answerOption.wrong > span,
+.answerOption.wrong .option-letter,
+.answerOption.wrong strong {
+  color: var(--color-error) !important;
+  font-weight: var(--font-weight-bold);
+}
+
+/* Hover na errada */
+.answerOption.wrong:hover {
+  background-color: rgba(var(--color-error-rgb), 0.2);
+}
+
+/* Ajuste fino para Ícones se você usar (opcional) */
+.answerOption.correct::after {
+  /* Você pode adicionar um checkmark via CSS se quiser, ou deixar limpo */
+  content: '✓';
+  margin-left: auto;
+  color: var(--color-success);
+  font-weight: bold;
+  font-size: 1.2em;
+  opacity: 0;
+  animation: fadeIn 0.3s ease-out 0.2s forwards;
+}
+
+.answerOption.wrong::after {
+  content: '✕';
+  margin-left: auto;
+  color: var(--color-error);
+  font-weight: bold;
+  font-size: 1.2em;
+  opacity: 0;
+  animation: fadeIn 0.3s ease-out 0.2s forwards;
+}
+
+.answerOptions {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}

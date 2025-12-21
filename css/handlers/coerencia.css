@@ -1,0 +1,90 @@
+.coerencia-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.coerencia-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-family: var(--font-family-mono);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.coerencia-chip-k {
+  color: var(--color-text-secondary);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.coerencia-chip-v {
+  font-weight: 800;
+  color: var(--color-text);
+}
+
+.coerencia-chip--ok {
+  background: rgba(var(--color-success-rgb), 0.12);
+  border-color: rgba(var(--color-success-rgb), 0.25);
+}
+
+.coerencia-chip--ok .coerencia-chip-v {
+  color: var(--color-success);
+}
+
+.coerencia-chip--bad {
+  background: rgba(var(--color-warning-rgb), 0.12);
+  border-color: rgba(var(--color-warning-rgb), 0.25);
+}
+
+.coerencia-chip--bad .coerencia-chip-v {
+  color: var(--color-warning);
+}
+
+.coerencia-obs {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: var(--radius-base);
+  border: 1px dashed var(--color-border);
+  background: rgba(var(--color-primary-rgb), 0.04);
+}
+
+.coerencia-obs-title {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--color-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.coerencia-obs ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.coerencia-obs li {
+  margin-bottom: 6px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.coerencia-obs--empty {
+  font-family: var(--font-family-mono);
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
+.coerencia-chip {
+  max-width: 100%;
+}
+
+.coerencia-chip-v {
+  word-break: break-word;
+}

@@ -1,0 +1,21 @@
+#btnRecortarHeader > img {
+  width: 16px;
+  height: 16px;
+  filter: var(--icon-filter);
+}
+
+#btnRecortarHeader {
+  background: none;
+  border: 1px solid var(--color-border-button);
+  color: var(--color-text);
+  padding: 5px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+#btnRecortarHeader:hover {
+  background: var(--color-background);
+}

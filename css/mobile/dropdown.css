@@ -1,0 +1,11 @@
+/* Menu dropdown */
+.add-menu {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}

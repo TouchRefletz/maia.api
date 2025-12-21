@@ -1,0 +1,11 @@
+.input-wrapper {
+  position: relative;
+}
+
+.input-wrapper input {
+  padding-left: var(--space-16);
+  padding-right: var(--space-16);
+  text-align: center;
+  letter-spacing: 1px;
+  font-family: var(--font-family-mono);
+}

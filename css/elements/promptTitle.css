@@ -1,0 +1,12 @@
+#promptTitle {
+  font-size: var(--font-size-4xl);
+  font-weight: var(--font-weight-bold);
+  text-align: center;
+  width: 100%;
+  letter-spacing: var(--letter-spacing-tight);
+}
+
+#promptTitle > strong {
+  color: var(--color-primary);
+  font-style: italic;
+}

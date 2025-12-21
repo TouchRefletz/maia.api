@@ -1,0 +1,33 @@
+/* --- PAINEL DA PROVA (Wrapper do Canvas) --- */
+.pdf-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  /* Ocupa toda altura do viewerMain */
+  background: var(--color-surface);
+  border-radius: 0;
+  /* Remove bordas arredondadas em tela cheia se preferir */
+  overflow: hidden;
+}
+
+/* Barra de controles fixa no topo do painel da prova (ex: Paginação/Zoom) */
+.pdf-controls-box {
+  flex-shrink: 0;
+  /* Não encolhe */
+  background: var(--color-gray-100);
+  border-bottom: 1px solid var(--color-border);
+  padding: 8px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 15px;
+  z-index: 5;
+}
+
+.panel-label {
+  color: var(--color-primary);
+}
+
+.pdf-controls-box {
+  color: var(--color-text-secondary);
+}

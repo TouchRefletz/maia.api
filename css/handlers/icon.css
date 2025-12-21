@@ -1,0 +1,12 @@
+.icon-wrapper {
+  width: 48px;
+  height: 48px;
+  background-color: rgba(var(--color-primary-rgb), 0.1);
+  color: var(--color-primary);
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-16);
+  box-shadow: 0 0 0 4px rgba(var(--color-primary-rgb), 0.05);
+}

@@ -1,0 +1,11 @@
+.error-message {
+  color: var(--color-error);
+  font-size: var(--font-size-sm);
+  margin-top: var(--space-8);
+  display: block;
+  text-align: center;
+}
+
+.error-message.hidden {
+  display: none;
+}

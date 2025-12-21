@@ -1,0 +1,63 @@
+/* Container Pai */
+.data-box {
+  background: var(--color-bg-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  padding: 10px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  line-height: 1.5;
+
+  /* PARTE IMPORTANTE DA CORREÇÃO: */
+  display: flex;
+  flex-direction: row;
+  /* Alinha em linha */
+  flex-wrap: wrap;
+  /* Permite quebrar para baixo se faltar espaço */
+  gap: 8px;
+  /* Espaçamento inteligente entre as tags */
+  align-items: center;
+  /* Centraliza verticalmente se tiver alturas diferentes */
+}
+
+.data-tag {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.data-box.scrollable {
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
+/* Garante que a lista dentro da caixa de dados tenha o recuo correto */
+.data-box ul {
+  margin: 0;
+  padding-left: 20px;
+  /* Espaço para a bolinha aparecer dentro */
+  list-style-position: outside;
+  /* Mantém a bolinha alinhada à esquerda do texto */
+}
+
+/* Estilo de cada item da lista (Fonte) */
+.data-box li {
+  margin-bottom: 6px;
+  /* Espacinho entre cada fonte */
+  font-size: var(--font-size-sm);
+  /* Texto um pouco menor que o corpo */
+  color: var(--color-text-secondary);
+  /* Cor cinza suave para não brigar com o conteúdo */
+  font-style: italic;
+  /* Itálico para indicar referência */
+  word-break: break-word;
+  /* Quebra links longos para não estourar a caixa */
+  line-height: 1.4;
+}
+
+/* Opcional: Efeito hover no link/texto da fonte */
+.data-box li:hover {
+  color: var(--color-primary);
+  cursor: default;
+}

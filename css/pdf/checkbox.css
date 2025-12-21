@@ -1,0 +1,25 @@
+/* --- Estilos para Checkbox e Grupo Condicional --- */
+
+.checkbox-group {
+  display: flex;
+  flex-direction: row;
+  /* Checkbox ao lado do texto */
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-4) 0;
+}
+
+.checkbox-group input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-primary);
+  /* Usa a cor primária do tema */
+  cursor: pointer;
+}
+
+.checkbox-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  cursor: pointer;
+  user-select: none;
+}

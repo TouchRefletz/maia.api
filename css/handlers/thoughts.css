@@ -1,0 +1,97 @@
+/* ---- Maia Thoughts (novo design) ---- */
+.maia-thoughts {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+  margin-bottom: 18px;
+}
+
+.maia-thought-card {
+  display: flex;
+  gap: 10px;
+  padding: 0px 12px 0px 12px;
+  border-radius: var(--radius-md);
+  background: rgba(var(--color-primary-rgb), 0.04);
+}
+
+.maia-thought-logo {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.maia-thought-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.maia-thought-title {
+  font-family: var(--font-family-mono);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-primary);
+  line-height: 1.2;
+  font-style: italic;
+}
+
+.maia-thought-body {
+  margin-top: 6px;
+  font-family: var(--font-family-mono);
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  white-space: pre-wrap;
+  overflow: auto;
+}
+
+/* skeleton dentro do card (placeholder) */
+.maia-thought-title-skel {
+  height: 12px;
+  width: 42%;
+  margin-bottom: 10px;
+}
+
+.maia-thought-line-skel {
+  height: 10px;
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.maia-thought-line-skel.short {
+  width: 78%;
+  margin-bottom: 0;
+}
+
+/* 1) Use só gap (não misture gap + margin-bottom) */
+.maia-thoughts {
+  --thought-gap: 20px;
+  gap: var(--thought-gap);
+}
+
+.maia-thought-card {
+  margin-bottom: 0;
+  /* remove o margin-bottom: 20px antigo */
+}
+
+/* 2) Linha conectando as estrelas (inclui skeleton e cards reais) */
+.maia-thought-logo-wrap {
+  position: relative;
+  width: 18px;
+  flex-shrink: 0;
+}
+
+.maia-thought-card:not(:last-child) .maia-thought-logo-wrap::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 20px;
+  /* abaixo da estrela */
+  transform: translateX(-50%);
+  width: 2px;
+  height: calc(100% + var(--thought-gap) - 20px);
+  background: rgba(33, 128, 141, 0.35);
+  /* ou use sua var de cor primária */
+  border-radius: 2px;
+}

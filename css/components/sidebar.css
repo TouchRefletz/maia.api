@@ -1,0 +1,66 @@
+/* --- Sidebar Lateral --- */
+#viewerSidebar {
+  position: relative;
+  /* Added to anchor absolute children like the resume button */
+  width: 250px;
+  /* Largura fixa */
+  background-color: var(--color-background);
+  border-right: 1px solid var(--color-border);
+  padding: var(--space-20);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-32);
+  z-index: 2;
+  box-shadow: var(--shadow-sm);
+  overflow: scroll;
+}
+
+.sidebar-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+.panel-label {
+  background: var(--color-surface);
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: bold;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+/* O divisor arrastável */
+#sidebarResizer {
+  width: 5px;
+  background-color: var(--color-border);
+  cursor: col-resize;
+  /* Cursor de redimensionamento */
+  transition: background-color 0.2s;
+  z-index: 10;
+  flex-shrink: 0;
+  /* Impede que ele suma */
+}
+
+#sidebarResizer:hover,
+#sidebarResizer.resizing {
+  background-color: var(--color-primary);
+  /* Destaca ao passar o mouse */
+}
+
+/* Ajustes para garantir que funcionem com o redimensionamento */
+#viewerSidebar {
+  /* Removemos width fixa se houver conflito, mas o JS vai controlar via inline styles */
+  flex-shrink: 0;
+  min-width: 500px;
+  /* Limite Mínimo (segurança via CSS também) */
+  max-width: 50vw;
+  /* Limite Máximo relativo à tela */
+}

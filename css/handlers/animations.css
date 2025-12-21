@@ -1,0 +1,20 @@
+/* Adicione isso se quiser transição suave ao esconder/mostrar o input de gabarito */
+#gabaritoInputGroup {
+  transition: all var(--duration-fast) var(--ease-standard);
+}
+
+/* Animação de entrada suave */
+.fade-in {
+  animation: fadeIn 0.4s var(--ease-standard);
+}
+
+/* Animação de entrada suave */
+.fade-in-centralized {
+  animation: fadeInCentralized 0.4s var(--ease-standard);
+}
+
+.glow-effect {
+  animation: pulse-glow 2s infinite;
+  z-index: 100000 !important;
+  /* Ensure visibility */
+}

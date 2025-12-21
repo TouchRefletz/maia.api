@@ -1,0 +1,96 @@
+/* --- Container Principal de Upload --- */
+#pdfUploadContainer {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 75%;
+  height: auto;
+
+  /* ADICIONE ISSO AQUI: */
+  max-height: 90vh;
+  /* Limita a altura a 90% da tela */
+  overflow-y: auto;
+  /* Cria barra de rolagem DENTRO do container se necessário */
+  overflow-x: hidden;
+
+  padding: var(--space-32);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  z-index: 10;
+  transition: all 0.5s var(--ease-standard);
+  background: transparent;
+}
+
+/* --- Efeito de Brilho de Fundo (Glow) --- */
+#pdfUploadContainerBackground {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 140%;
+  /* Um pouco maior que o container */
+  height: 140%;
+  background: radial-gradient(
+    circle,
+    rgba(var(--color-teal-500-rgb), 0.15) 0%,
+    rgba(var(--color-teal-500-rgb), 0.05) 40%,
+    transparent 70%
+  );
+  /* Garante que fique atrás de tudo */
+  pointer-events: none;
+  /* Não interfere nos cliques */
+  filter: blur(40px);
+  /* Suaviza o brilho */
+  border-radius: 50%;
+}
+
+/* --- Estilização do Formulário --- */
+#pdfUploadForm {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-20);
+  background-color: var(--color-surface);
+  padding: var(--space-32);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-card-border);
+  box-shadow: var(--shadow-lg);
+  /* Garante que o formulário tenha fundo sólido sobre o brilho */
+  position: relative;
+  z-index: 1;
+}
+
+/* --- Cabeçalho e Títulos (Reaproveitados mas ajustados) --- */
+#pdfUploadContainer #brandHeader {
+  margin-bottom: var(--space-32);
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+#pdfUploadContainer #promptTitle {
+  text-align: center;
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-normal);
+  color: var(--color-text);
+  margin-bottom: var(--space-32);
+  letter-spacing: var(--letter-spacing-tight);
+}
+
+#pdfUploadContainer #promptTitle strong {
+  font-weight: var(--font-weight-bold);
+  color: var(--color-primary);
+}
+
+/* Ajuste para o botão de upload parecer clicável */
+.file-upload-btn {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-8);
+}

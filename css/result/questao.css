@@ -1,0 +1,154 @@
+/* Stream de Questões */
+.bank-stream {
+  width: 100%;
+  padding: 20px 0px;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+/* Card da Questão (Estilo Prova) */
+.q-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Header da Questão: ID e Origem */
+.q-header {
+  background: rgba(var(--color-primary-rgb), 0.05);
+  border-bottom: 1px solid var(--color-border);
+  padding: 12px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.q-id-badge {
+  font-family: var(--font-family-mono);
+  font-weight: 700;
+  color: var(--color-primary);
+  background: rgba(var(--color-primary-rgb), 0.1);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.q-tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 20px 20px 20px 20px;
+  width: 80%;
+}
+
+.q-tag {
+  font-size: 10.5px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: var(--color-secondary);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+}
+
+.q-tag.highlight {
+  background: rgba(var(--color-info-rgb), 0.1);
+  color: var(--color-info);
+  border-color: rgba(var(--color-info-rgb), 0.3);
+}
+
+/* Corpo da Questão */
+.q-body {
+  padding: 25px 30px;
+  font-size: 1.05rem;
+  line-height: 1.6;
+  color: var(--color-text);
+}
+
+.q-support-img {
+  max-width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  margin: 15px 0;
+  display: block;
+}
+
+/* Alternativas */
+.q-options {
+  padding: 0 30px 20px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.q-opt-btn {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+  color: var(--color-text);
+}
+
+.q-opt-btn:hover {
+  background: var(--color-secondary);
+}
+
+.q-opt-letter {
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  min-width: 24px;
+  padding-top: 2px;
+  /* Ajuste fino ótico */
+}
+
+/* Estados de Resposta */
+.q-opt-btn.correct {
+  border-color: var(--color-success);
+  background: rgba(var(--color-success-rgb), 0.1);
+}
+
+.q-opt-btn.correct .q-opt-letter {
+  color: var(--color-success);
+}
+
+.q-opt-btn.wrong {
+  border-color: var(--color-error);
+  background: rgba(var(--color-error-rgb), 0.1);
+}
+
+.q-opt-btn.wrong .q-opt-letter {
+  color: var(--color-error);
+}
+
+/* Rodapé do Card (Ações) */
+.q-footer {
+  padding: 10px 20px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-1);
+  display: flex;
+  justify-content: flex-end;
+  gap: 15px;
+}
+
+.q-action-link {
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-decoration: underline;
+  opacity: 0.8;
+}
+
+.q-action-link:hover {
+  opacity: 1;
+  color: var(--color-primary);
+}

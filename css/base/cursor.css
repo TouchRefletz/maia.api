@@ -1,0 +1,12 @@
+textarea,
+input[type='text'] {
+  cursor: text;
+}
+
+button,
+a,
+.answerOption,
+input[type='range'],
+.btn {
+  cursor: pointer;
+}
