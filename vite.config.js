@@ -1,7 +1,10 @@
+import react from '@vitejs/plugin-react'; // <--- Nova importação
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  // Basic configuration
+  plugins: [react()], // <--- Ativa o React
+  
+  // Configuração básica existente
   build: {
     target: 'esnext',
   },
