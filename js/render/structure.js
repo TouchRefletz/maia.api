@@ -3,7 +3,7 @@ import { TIPOS_ESTRUTURA_VALIDOS } from '../main.js';
 import {
   generateAlternativeHtmlString,
   generateHtmlString
-} from './Structure.tsx';
+} from './StructureRender.tsx';
 
 /**
  * 1. FUNÇÃO PRINCIPAL (Orquestradora)
@@ -66,7 +66,7 @@ export function renderizarBlocoImagem(
   // Se esta função for usada isoladamente em outro lugar, considere migrar quem a chama.
   // Por enquanto, mantemos a lógica antiga aqui apenas como backup seguro, 
   // já que renderizarEstruturaHTML não passa mais por aqui.
-  
+
   let src = bloco.imagem_base64 || bloco.imagem_url || bloco.url || imagensExternas?.[imgIndex];
   const currentIndex = imgIndex;
 
@@ -127,18 +127,18 @@ export function renderizarBlocoImagemAlternativa(
   conteudoRawAttr,
   temConteudo
 ) {
-    // Implementação legacy de backup
-    const src = bloco.imagem_base64 || bloco.imagem_url || imgsFallback[currentImgIdx];
+  // Implementação legacy de backup
+  const src = bloco.imagem_base64 || bloco.imagem_url || imgsFallback[currentImgIdx];
 
-    if (src) {
-        if (isReadOnly) {
-            return `
+  if (src) {
+    if (isReadOnly) {
+      return `
             <div class="structure-block structure-image-wrapper">
                 <img src="${src}" class="structure-img" onclick="window.expandirImagem(this.src)" style="cursor:zoom-in" />
                 ${temConteudo ? `<div class="structure-caption markdown-content" data-raw="${conteudoRawAttr}" style="font-size:0.9em; margin-top:5px; color:#555;">${conteudo}</div>` : ''}
             </div>`;
-        } else {
-            return `
+    } else {
+      return `
             <div class="structure-block structure-image-wrapper">
                 <img src="${src}" class="structure-img" onclick="window.expandirImagem(this.src)" />
                 ${temConteudo ? `<div class="structure-caption markdown-content" data-raw="${conteudoRawAttr}" style="font-size:11px; margin-top:4px; color:var(--color-text-secondary);">IA: ${conteudo}</div>` : ''}
@@ -146,15 +146,15 @@ export function renderizarBlocoImagemAlternativa(
                     <span class="btn-ico">🔄</span>
                 </button>
             </div>`;
-        }
-    } else if (!isReadOnly) {
-        return `
+    }
+  } else if (!isReadOnly) {
+    return `
         <div class="structure-block structure-image-placeholder" onclick="window.iniciar_captura_para_slot_alternativa('${letra}', ${currentImgIdx})">
             <div class="icon">📷</div>
             ${temConteudo ? `<div class="markdown-content" data-raw="${conteudoRawAttr}" style="font-size:10px; color:gray; margin-top:4px; max-width:100%; overflow:hidden; text-overflow:ellipsis;">IA: ${conteudo}</div>` : ''}
         </div>`;
-    }
-    return '';
+  }
+  return '';
 }
 
 /**
@@ -163,22 +163,22 @@ export function renderizarBlocoImagemAlternativa(
  * localmente se necessário para garantir a regra da constante importada do main.js.
  */
 export function normalizarBlocoEstrutura(bloco) {
-    // Usamos a versão do TS para limpar strings, mas aplicamos a regra de validação do main.js aqui
-    // para garantir fidelidade ao arquivo original que importava TIPOS_ESTRUTURA_VALIDOS
-    
-    const rawTipo = bloco?.tipo ?? 'imagem';
-    let tipo = String(rawTipo).toLowerCase().trim();
+  // Usamos a versão do TS para limpar strings, mas aplicamos a regra de validação do main.js aqui
+  // para garantir fidelidade ao arquivo original que importava TIPOS_ESTRUTURA_VALIDOS
 
-    if (!TIPOS_ESTRUTURA_VALIDOS.has(tipo)) {
-        tipo = 'imagem';
-    }
+  const rawTipo = bloco?.tipo ?? 'imagem';
+  let tipo = String(rawTipo).toLowerCase().trim();
 
-    let conteudo = bloco?.conteudo ?? '';
-    conteudo = String(conteudo);
+  if (!TIPOS_ESTRUTURA_VALIDOS.has(tipo)) {
+    tipo = 'imagem';
+  }
 
-    if (tipo === 'separador') conteudo = conteudo.trim();
+  let conteudo = bloco?.conteudo ?? '';
+  conteudo = String(conteudo);
 
-    return { tipo, conteudo };
+  if (tipo === 'separador') conteudo = conteudo.trim();
+
+  return { tipo, conteudo };
 }
 
 export function normalizarEstrutura(estruturaLike) {
