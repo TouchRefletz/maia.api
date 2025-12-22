@@ -1,20 +1,19 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js';
+import {
+  getAuth,
+  signInAnonymously
+} from 'https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js';
 import { getDatabase } from 'https://www.gstatic.com/firebasejs/12.6.0/firebase-database.js';
 import { gerarTelaInicial, iniciarFluxoExtracao, iniciarModoEstudante } from './app/telas.js';
 import { aplicarFiltrosBanco, limparFiltros } from './banco/filtros-ui.js';
 import { abrirScanOriginal, toggleGabarito, verificarRespostaBanco } from './banco/interacoes.js';
 import { ativarModoRecorte, iniciarCapturaParaSlot, onClickImagemFinal, removerImagemFinal } from './cropper/mode.js';
 import { enviarDadosParaFirebase } from './firebase/envio.js';
-import { verImagensOriginais } from './render/final/originais-modal.js';
+import { exibirModalOriginais } from './render/final/OriginaisModal.tsx';
 import { mountApiKeyModal } from './ui/ApiKeyModal.tsx';
 import { setupDragAndDrop } from './upload/drag-drop.js';
 import { setupFormLogic } from './upload/form-logic.js';
 import { getUploadInterfaceHTML } from './upload/upload-template.js';
-
-import {
-  getAuth,
-  signInAnonymously,
-} from 'https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js';
 
 export const TIPOS_ESTRUTURA_VALIDOS = new Set([
   'texto',
@@ -121,7 +120,7 @@ if (!window.__globalListenerRegistered) {
     // --- CASO 4: BotÃ£o Ver Originais ---
     const gatilhoOriginais = e.target.closest('.js-ver-originais');
     if (gatilhoOriginais) {
-      verImagensOriginais();
+      exibirModalOriginais();
       return;
     }
 
