@@ -1,9 +1,6 @@
-// --- Alternativas.tsx ---
+// --- AlternativasRender.tsx ---
 import React from 'react';
-// Importamos a função legada. O TS pode reclamar se não houver tipagem, 
-// mas funcionará no build se o bundler permitir JS + TS.
-// @ts-ignore
-import { renderizar_estrutura_alternativa } from './structure.js';
+import { AlternativeStructure } from './StructureRender';
 
 interface EstruturaItem {
   tipo: string;
@@ -17,7 +14,7 @@ interface Alternativa {
 }
 
 interface AlternativasProps {
-  alts: Alternativa[];
+  alts?: Alternativa[];
 }
 
 export const Alternativas: React.FC<AlternativasProps> = ({ alts }) => {
@@ -36,18 +33,17 @@ export const Alternativas: React.FC<AlternativasProps> = ({ alts }) => {
           ? a.estrutura
           : [{ tipo: 'texto', conteudo: String(a?.texto ?? '') }];
 
-        // Mantém a chamada da função original que gera o HTML interno
-        // e acessa window.__imagensLimpas conforme descrito
-        const htmlEstr = renderizar_estrutura_alternativa(estrutura, letra);
-
         return (
           <div className="alt-row" key={`${letra}-${index}`}>
             <span className="alt-letter">{letra}</span>
-            {/* Injetamos o HTML gerado pela função legada dentro da div */}
-            <div 
-              className="alt-content" 
-              dangerouslySetInnerHTML={{ __html: htmlEstr }} 
-            />
+            <div className="alt-content">
+              <AlternativeStructure
+                estrutura={estrutura}
+                letra={letra}
+                imagensExternas={[]}
+                contexto="questao"
+              />
+            </div>
           </div>
         );
       })}

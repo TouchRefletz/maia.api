@@ -36,17 +36,22 @@ const sanitizeContent = (content: string) => {
     .replace(/>/g, '&gt;');
 };
 
-// --- COMPONENTE: BLOCO DE TEXTO ---
-const TextBlock: React.FC<{ bloco: EstruturaBloco }> = ({ bloco }) => {
+// --- COMPONENTE: BLOCO DE TEXTO (REUTILIZÁVEL) ---
+// Adaptado para aceitar atributos extras se necessário
+const StructureTextBlock: React.FC<{
+  bloco: EstruturaBloco;
+  className?: string;
+  dataRaw?: string;
+}> = ({ bloco, className = '', dataRaw }) => {
   const tipo = (bloco.tipo || 'texto').toLowerCase();
   const conteudoRaw = bloco.conteudo ? String(bloco.conteudo) : '';
-  const conteudoSafe = sanitizeContent(conteudoRaw);
+  const conteudoSafe = dataRaw || sanitizeContent(conteudoRaw);
 
   const criarMarkdown = (classeExtra: string) => (
     <div
-      className={`structure-block ${classeExtra} markdown-content`}
+      className={`structure-block ${classeExtra} markdown-content ${className}`}
       data-raw={conteudoSafe}
-      dangerouslySetInnerHTML={{ __html: conteudoRaw }} // React escapa por padrão, mas o legacy usava innerHTML
+      dangerouslySetInnerHTML={{ __html: conteudoRaw }}
     />
   );
 
@@ -57,22 +62,30 @@ const TextBlock: React.FC<{ bloco: EstruturaBloco }> = ({ bloco }) => {
     case 'titulo': return criarMarkdown('structure-titulo');
     case 'subtitulo': return criarMarkdown('structure-subtitulo');
     case 'fonte': return criarMarkdown('structure-fonte');
-    case 'lista': return (
-      <div
-        className="structure-block structure-lista markdown-content"
-        data-raw={conteudoSafe}
-        dangerouslySetInnerHTML={{ __html: conteudoRaw }}
-      />
-    );
+    case 'lista':
+      // Adiciona 2 espaços antes da quebra de linha para forçar quebra no Markdown (Hard Line Break)
+      const conteudoListaMarkdown = conteudoRaw.replace(/\n/g, '  \n');
+      const conteudoListaSafe = sanitizeContent(conteudoListaMarkdown);
+
+      // Também mantemos o HTML direto com <br> para caso o Markdown não seja aplicado
+      const htmlLista = conteudoRaw.replace(/\n/g, '<br>');
+
+      return (
+        <div
+          className={`structure-block structure-lista markdown-content ${className}`}
+          data-raw={conteudoListaSafe}
+          dangerouslySetInnerHTML={{ __html: htmlLista }}
+        />
+      );
     case 'equacao': return (
-      <div className="structure-block structure-equacao">{`\\[${conteudoRaw}\\]`}</div>
+      <div className={`structure-block structure-equacao ${className}`}>{`\\[${conteudoRaw}\\]`}</div>
     );
     case 'codigo': return (
-      <pre className="structure-block structure-codigo">
+      <pre className={`structure-block structure-codigo ${className}`}>
         <code>{conteudoRaw}</code>
       </pre>
     );
-    case 'separador': return <hr className="structure-block structure-separador" />;
+    case 'separador': return <hr className={`structure-block structure-separador ${className}`} />;
     default: return null;
   }
 };
@@ -87,15 +100,15 @@ const ImageBlock: React.FC<{
   conteudoRaw: string;
   conteudoSafe: string;
 }> = ({ bloco, imgIndex, src, contexto, isReadOnly, conteudoRaw, conteudoSafe }) => {
-  
+
   // Renderiza legenda se houver conteúdo
   const renderCaption = (prefixo = '') => {
     if (!conteudoRaw) return null;
     return (
-      <div 
-        className="structure-caption markdown-content" 
+      <div
+        className="structure-caption markdown-content"
         data-raw={conteudoSafe}
-        dangerouslySetInnerHTML={{__html: `${prefixo}${conteudoRaw}`}}
+        dangerouslySetInnerHTML={{ __html: `${prefixo}${conteudoRaw}` }}
       />
     );
   };
@@ -104,17 +117,16 @@ const ImageBlock: React.FC<{
     // CENÁRIO A: IMAGEM EXISTE
     return (
       <div className="structure-block structure-image-wrapper">
-        {/* Usamos atributos HTML diretos para manter compatibilidade com onclick="window..." */}
         <img
           src={src}
           className="structure-img"
-          {...{ onclick: "window.expandirImagem(this.src)" } as any}
+          onClick={() => window.expandirImagem?.(src!)}
           title={isReadOnly ? "Clique para ampliar" : undefined}
           style={isReadOnly ? { cursor: 'zoom-in' } : undefined}
           alt=""
         />
         {renderCaption(isReadOnly ? '' : 'IA: ')}
-        
+
         {!isReadOnly && (
           <button
             className="btn-trocar-img js-captura-trigger"
@@ -143,13 +155,13 @@ const ImageBlock: React.FC<{
         >
           <div className="icon">📷</div><strong>Adicionar Imagem Aqui</strong>
           {conteudoRaw && (
-             <div 
-               className="markdown-content" 
-               data-raw={conteudoSafe} 
-               style={{fontSize: '11px', color:'var(--color-text-secondary)', marginTop:'4px'}}
-             >
-                IA: {conteudoRaw}
-             </div>
+            <div
+              className="markdown-content"
+              data-raw={conteudoSafe}
+              style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '4px' }}
+            >
+              IA: {conteudoRaw}
+            </div>
           )}
         </div>
       );
@@ -194,7 +206,7 @@ export const MainStructure: React.FC<{
             />
           );
         } else {
-          return <TextBlock key={idx} bloco={bloco} />;
+          return <StructureTextBlock key={idx} bloco={bloco} />;
         }
       })}
     </div>
@@ -212,14 +224,14 @@ const AlternativeImageBlock: React.FC<{
   conteudoRawAttr: string;
   temConteudo: boolean;
 }> = ({ bloco, letra, imgIndex, src, isReadOnly, conteudo, conteudoRawAttr, temConteudo }) => {
-  
+
   if (src) {
     return (
       <div className="structure-block structure-image-wrapper">
         <img
           src={src}
           className="structure-img"
-          {...{ onclick: "window.expandirImagem(this.src)" } as any}
+          onClick={() => window.expandirImagem?.(src!)}
           style={isReadOnly ? { cursor: 'zoom-in' } : undefined}
           alt=""
         />
@@ -227,18 +239,18 @@ const AlternativeImageBlock: React.FC<{
           <div
             className="structure-caption markdown-content"
             data-raw={conteudoRawAttr}
-            style={isReadOnly 
+            style={isReadOnly
               ? { fontSize: '0.9em', marginTop: '5px', color: '#555' }
               : { fontSize: '11px', marginTop: '4px', color: 'var(--color-text-secondary)' }
             }
           >
-             {isReadOnly ? conteudo : `IA: ${conteudo}`}
+            {isReadOnly ? conteudo : `IA: ${conteudo}`}
           </div>
         )}
         {!isReadOnly && (
           <button
             className="btn-trocar-img"
-            {...{ onclick: `window.iniciar_captura_para_slot_alternativa('${letra}', ${imgIndex})` } as any}
+            onClick={() => window.iniciar_captura_para_slot_alternativa?.(letra, imgIndex)}
           >
             <span className="btn-ico">🔄</span>
           </button>
@@ -249,7 +261,7 @@ const AlternativeImageBlock: React.FC<{
     return (
       <div
         className="structure-block structure-image-placeholder"
-        {...{ onclick: `window.iniciar_captura_para_slot_alternativa('${letra}', ${imgIndex})` } as any}
+        onClick={() => window.iniciar_captura_para_slot_alternativa?.(letra, imgIndex)}
       >
         <div className="icon">📷</div>
         {temConteudo && (
@@ -277,7 +289,7 @@ export const AlternativeStructure: React.FC<{
   if (!Array.isArray(estrutura) || estrutura.length === 0) return null;
 
   const isReadOnly = contexto === 'banco';
-  
+
   // Lógica de Fallback de imagens
   const imgsFallback = (imagensExternas && imagensExternas.length > 0)
     ? imagensExternas
@@ -289,33 +301,17 @@ export const AlternativeStructure: React.FC<{
     <div className="alt-estrutura">
       {estrutura.map((bloco, idx) => {
         const tipo = String(bloco?.tipo || 'texto').toLowerCase();
-        const conteudo = String(bloco?.conteudo || '');
-        const conteudoSanitized = sanitizeContent(conteudo); // Para exibição segura
-        const conteudoRawAttr = conteudo.replace(/"/g, '&quot;'); // Para data-raw
-        const temConteudo = !!(bloco?.conteudo && String(bloco.conteudo).trim().length > 0);
 
-        if (tipo === 'texto') {
-          return (
-            <div
-              key={idx}
-              className="structure-block structure-text markdown-content"
-              data-raw={conteudoRawAttr}
-              dangerouslySetInnerHTML={{ __html: conteudoSanitized }}
-            />
-          );
-        }
-        
-        if (tipo === 'equacao') {
-           return (
-             <div key={idx} className="structure-block structure-equacao">
-               {`\\[${conteudo}\\]`}
-             </div>
-           );
+        if (tipo !== 'imagem' && tipo !== '') {
+          return <StructureTextBlock key={idx} bloco={bloco} />;
         }
 
         // Tipo Complexo (Imagem)
         const currentImgIdx = globalImgCounter++;
         const src = bloco.imagem_base64 || bloco.imagem_url || imgsFallback[currentImgIdx];
+        const conteudo = String(bloco?.conteudo || '');
+        const conteudoRawAttr = conteudo.replace(/"/g, '&quot;');
+        const temConteudo = !!(bloco?.conteudo && String(bloco.conteudo).trim().length > 0);
 
         return (
           <AlternativeImageBlock
@@ -371,16 +367,16 @@ export const generateAlternativeHtmlString = (
 export const normalizeStructureBlock = (bloco: any) => {
   const rawTipo = bloco?.tipo ?? 'imagem';
   let tipo = String(rawTipo).toLowerCase().trim();
-  
+
   // Importante: TIPOS_ESTRUTURA_VALIDOS deve ser verificado fora ou passado, 
   // mas aqui seguimos a lógica de fallback 'imagem' se desconhecido.
   // Como não temos acesso direto à constante do main.js aqui, assumimos a lógica local.
   // Se quiser importar, precisaria mover a constante para um arquivo de tipos compartilhado.
   // Vou assumir a lógica padrão: se não for texto/lista/etc conhecido, é imagem.
-  
+
   const knownTypes = new Set(['texto', 'citacao', 'destaque', 'titulo', 'subtitulo', 'fonte', 'lista', 'equacao', 'codigo', 'separador']);
   if (!knownTypes.has(tipo) && tipo !== 'imagem') {
-      tipo = 'imagem';
+    tipo = 'imagem';
   }
 
   let conteudo = bloco?.conteudo ?? '';

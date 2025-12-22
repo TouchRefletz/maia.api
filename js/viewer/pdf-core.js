@@ -144,7 +144,7 @@ export async function trocarModo(novoModo) {
 
   // 1. Pergunta para o "Guarda" se pode passar
   const permitido = await verificarBloqueiosTroca(novoModo);
-  if (!permitido) return;
+  if (!permitido) return false;
 
   // Atualiza estados globais
   window.__modo = novoModo;
@@ -180,8 +180,10 @@ export async function trocarModo(novoModo) {
     viewerState.pageNum = 1;
 
     await renderPage(viewerState.pageNum);
+    return true;
   } catch (err) {
     console.error('Erro ao carregar PDF do modo ' + novoModo, err);
     customAlert('Erro ao carregar o PDF.', 2000);
+    return false;
   }
 }
