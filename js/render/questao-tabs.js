@@ -1,54 +1,92 @@
 import React from 'react';
-import { createRoot } from 'react-dom/client';
+import ReactDOM from 'react-dom/client';
+import ReactDOMServer from 'react-dom/server';
+import {
+  AcoesGabaritoView,
+  DetalhesTecnicos,
+  GabaritoCardView,
+  GabaritoEditorView,
+  MetaGabarito,
+  OpcoesGabarito,
+  PassosExplicacao,
+  prepararDadosGabarito as prepararDadosGabaritoTSX
+} from './GabaritoCard.tsx';
 import QuestaoTabs from './QuestaoTabs.tsx';
 
+export function mountQuestaoTabs(container, questao, gabarito) {
+  if (!container) return;
+  const root = ReactDOM.createRoot(container);
+  root.render(React.createElement(QuestaoTabs, { questao, gabarito, containerRef: container }));
+  return root;
+}
+
 /**
- * Finaliza o processo: Renderiza o Componente React na Sidebar.
- * Esta função é chamada pelos módulos externos (ex: main.js, loader.js).
+ * Centraliza toda a extração e normalização de dados do gabarito.
+ * Redireciona para a implementação TypeScript.
  */
-export function aplicarAlteracoesNaTela(
-  sidebar,
-  container,
-  questao,
-  gabarito,
-  // Os argumentos abaixo (htmlAbas, etc) são ignorados pois o React gera tudo do zero
-  htmlAbas,
-  htmlQuestao,
-  displayGabarito
-) {
-  // 1. Limpeza da área anterior
-  const oldResult = sidebar.querySelector('.extraction-result');
-  if (oldResult) oldResult.remove();
+export function prepararDadosGabarito(gabarito, questao) {
+  return prepararDadosGabaritoTSX(gabarito, questao);
+}
 
-  // 2. Adiciona o container limpo à Sidebar
-  // O container deve estar na DOM antes do React renderizar para que useEffects funcionem
-  sidebar.appendChild(container);
-
-  // 3. Renderiza o Componente React
-  // Passamos o próprio container como ref para que o React possa passar 
-  // para os scripts legados que precisam de um elemento raiz.
-  const root = createRoot(container);
-  root.render(
-    React.createElement(QuestaoTabs, {
-      questao,
-      gabarito,
-      containerRef: container
-    })
+/**
+ * Renderiza o cartão principal do gabarito.
+ * Usa ReactDOMServer para converter o componente React em string HTML estática,
+ * mantendo a compatibilidade com o sistema legado que espera innerHTML.
+ */
+export function renderCartaoGabarito(dados) {
+  return ReactDOMServer.renderToStaticMarkup(
+    React.createElement(GabaritoCardView, { dados })
   );
 }
 
-// Funções exportadas mas que agora são "no-op" (sem operação) ou proxies,
-// caso algum arquivo externo tente importá-las diretamente.
-// Se seu projeto não importa essas funções em outros lugares além daqui mesmo,
-// você pode removê-las.
-export const _gerarHtmlAbas = () => ({ htmlAbas: '', displayQuestao: '', displayGabarito: '' });
-export const _gerarHtmlQuestao = () => ({ htmlEstruturaVisual: '', blocosHtml: '' });
-export const _gerarHtmlEditorEstrutura = () => '';
-export const _gerarHtmlVisualizacaoQuestao = () => '';
-export const _gerarHtmlEdicaoQuestao = () => '';
-export const _gerarHtmlAbaQuestao = () => '';
-export const atualizarInterfaceQuestao = () => { };
-export const configurarEventosAuxiliares = () => { };
-export const configurarInteratividadeGeral = () => { };
-export const initBotaoAdicionarAlternativa = () => { };
-export const adicionarNovaAlternativa = () => { };
+/**
+ * Renderiza os botões de ação (Editar/Finalizar).
+ */
+export function renderAcoesGabarito() {
+  return ReactDOMServer.renderToStaticMarkup(
+    React.createElement(AcoesGabaritoView)
+  );
+}
+
+/**
+ * Renderiza o formulário de edição completo.
+ */
+export function renderFormularioEditor(dados) {
+  return ReactDOMServer.renderToStaticMarkup(
+    React.createElement(GabaritoEditorView, { dados })
+  );
+}
+
+// --- Sub-funções de Renderização Visual (Legado) ---
+// Mantidas exportadas caso algum outro arquivo as chame diretamente,
+// mas agora usando os sub-componentes React internamente.
+
+export function _renderMetaGabarito(confianca, creditos) {
+  return ReactDOMServer.renderToStaticMarkup(
+    React.createElement(MetaGabarito, { confianca, creditos })
+  );
+}
+
+export function _renderOpcoesGabarito(questao, respostaLetra, alternativasAnalisadas) {
+  return ReactDOMServer.renderToStaticMarkup(
+    React.createElement(OpcoesGabarito, { questao, respostaLetra, alternativasAnalisadas })
+  );
+}
+
+export function _renderPassosExplicacao(explicacaoArray) {
+  return ReactDOMServer.renderToStaticMarkup(
+    React.createElement(PassosExplicacao, { explicacaoArray })
+  );
+}
+
+export function _renderDetalhesTecnicos(dados) {
+  return ReactDOMServer.renderToStaticMarkup(
+    React.createElement(DetalhesTecnicos, { dados })
+  );
+}
+
+// As sub-funções do editor (_renderEditorPassos, etc) eram usadas apenas internamente 
+// pelo renderFormularioEditor no original. Como renderFormularioEditor agora renderiza 
+// o componente React completo <GabaritoEditorView>, não é estritamente necessário 
+// exportar as sub-partes do editor, a menos que haja código externo dependendo especificamente delas.
+// Se necessário, seguiria o mesmo padrão: renderToStaticMarkup(<EditorPassos ... />).

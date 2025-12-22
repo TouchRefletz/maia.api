@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { processarSalvamentoGabarito } from '../editor/gabarito-save.js';
 
 // Importações originais mantidas para garantir a mesma lógica de negócio e templates
 import { configurarEventosNovaAlternativa, gerarHtmlTemplateAlternativa } from '../editor/alternativas.js';
@@ -15,10 +16,10 @@ import { validarProgressoImagens } from '../validation/metricas-imagens.js';
 import { trocarModo } from '../viewer/pdf-core.js';
 import { esconderPainel } from '../viewer/sidebar.js';
 import { Alternativas } from './AlternativasRender';
-import { MainStructure } from './StructureRender';
 import { renderizarTelaFinal } from './final/json-e-modal.js';
 import { renderTags } from './final/render-components.js';
-import { prepararDadosGabarito, renderAcoesGabarito, renderCartaoGabarito, renderFormularioEditor } from './gabarito-card.js';
+import { AcoesGabaritoView, GabaritoCardView, GabaritoEditorView, prepararDadosGabarito } from './GabaritoCard.js';
+import { MainStructure } from './StructureRender';
 
 // Interfaces básicas para Tipagem (adaptar conforme seus objetos reais)
 interface Bloco {
@@ -55,6 +56,9 @@ const QuestaoTabs: React.FC<Props> = ({ questao, gabarito, containerRef }) => {
   // Estado para controlar modo de edição da questão
   const [isEditing, setIsEditing] = useState(false);
 
+  // Estado para controlar modo de edição do gabarito
+  const [isGabaritoEditing, setIsGabaritoEditing] = useState(false);
+
   // Referência para verificar se é a primeira renderização
   const isFirstRender = useRef(true);
 
@@ -65,7 +69,7 @@ const QuestaoTabs: React.FC<Props> = ({ questao, gabarito, containerRef }) => {
         renderLatexIn(containerRef);
       }
     }, 50); // Pequeno delay igual ao original
-  }, [activeTab, isEditing, containerRef]);
+  }, [activeTab, isEditing, isGabaritoEditing, containerRef]);
 
   // --- EFEITO: Inicializar Scripts Legados do Editor (Drag & Drop, etc) ---
   useLayoutEffect(() => {
@@ -80,7 +84,7 @@ const QuestaoTabs: React.FC<Props> = ({ questao, gabarito, containerRef }) => {
 
   // --- EFEITO: Inicializar Scripts Legados do Gabarito ---
   useLayoutEffect(() => {
-    if (activeTab === 'gabarito' && gabarito) {
+    if (activeTab === 'gabarito' && gabarito && isGabaritoEditing) {
       // Inicializa botões de passos e editores de passos
       initBotaoAdicionarPasso(containerRef);
       initStepEditors(containerRef);
@@ -94,7 +98,7 @@ const QuestaoTabs: React.FC<Props> = ({ questao, gabarito, containerRef }) => {
         );
       }, 0);
     }
-  }, [activeTab, gabarito, containerRef]);
+  }, [activeTab, gabarito, containerRef, isGabaritoEditing]);
 
 
   // --- HELPERS (Lógica Original) ---
@@ -185,7 +189,6 @@ const QuestaoTabs: React.FC<Props> = ({ questao, gabarito, containerRef }) => {
 
   // HTML Visual da Questão
   const imagensLocaisQuestao = (window as any).__imagensLimpas?.questao_original || [];
-  // const htmlEstruturaVisual = renderizarEstruturaHTML(questao.estrutura, imagensLocaisQuestao, 'questao'); // REMOVIDO
 
   // HTML Editor da Questão (Blocos)
   const estruturaAtual = questao.estrutura || [];
@@ -193,19 +196,27 @@ const QuestaoTabs: React.FC<Props> = ({ questao, gabarito, containerRef }) => {
     .map((bloco) => criarHtmlBlocoEditor(bloco.tipo, bloco.conteudo))
     .join('');
 
-  // HTML Gabarito
-  let htmlGabaritoView = '';
-  let htmlGabaritoEdit = '';
-  if (gabarito) {
-    const dadosGabarito = prepararDadosGabarito(gabarito, questao);
-    htmlGabaritoView = renderCartaoGabarito(dadosGabarito) + renderAcoesGabarito();
-    htmlGabaritoEdit = renderFormularioEditor(dadosGabarito);
-  }
+  // Preparação de dados do gabarito
+  const dadosGabarito = gabarito ? prepararDadosGabarito(gabarito, questao) : null;
+
+  const handleSalvarGabarito = () => {
+    // Passamos o formulário (ou o container geral) para a função de salvamento
+    const container = document.getElementById('gabaritoEdit');
+    if (container) {
+      processarSalvamentoGabarito(container.parentElement, questao);
+      setIsGabaritoEditing(false); // Sai do modo de edição após salvar
+    }
+  };
+
+  const handleCancelarGabarito = () => {
+    setIsGabaritoEditing(false);
+  };
 
   return (
     <div className="questao-tabs-react-root">
 
       {/* TABS HEADER */}
+      {/* ... (Header mantido igual, não precisa alterar aqui, apenas no final) ... */}
       <div className="tabs-header" style={{ display: 'flex', borderBottom: '1px solid var(--color-border)', marginBottom: '15px' }}>
         <button
           className={`tab-btn ${activeTab === 'questao' ? 'active' : ''}`}
@@ -234,7 +245,7 @@ const QuestaoTabs: React.FC<Props> = ({ questao, gabarito, containerRef }) => {
             fontWeight: activeTab === 'gabarito' ? '600' : '400',
             borderBottom: activeTab === 'gabarito' ? '2px solid var(--color-primary)' : 'transparent',
             color: activeTab === 'gabarito' ? 'var(--color-primary)' : 'var(--color-text)',
-            opacity: (gabarito || activeTab === 'gabarito') ? 1 : 0.6
+            opacity: (dadosGabarito || activeTab === 'gabarito') ? 1 : 0.6
           }}
           onClick={() => setActiveTab('gabarito')}
         >
@@ -245,10 +256,12 @@ const QuestaoTabs: React.FC<Props> = ({ questao, gabarito, containerRef }) => {
       {/* 2. Conteúdo da Aba Questão */}
       <div id="tabContentQuestao" style={{ display: activeTab === 'questao' ? 'block' : 'none' }}>
         <div className="result-header">
+          {/* ... (Header Conteúdo Questão) ... */}
           <h3>Questão Extraída</h3>
           <span className="badge-success">Sucesso</span>
         </div>
 
+        {/* ... (Resto do conteúdo da Questão - abreviado para focar na mudança do Gabarito) ... */}
         {/* MODO LEITURA */}
         <div id="questaoView" className={isEditing ? 'hidden' : ''}>
           <div className="field-group">
@@ -289,7 +302,6 @@ const QuestaoTabs: React.FC<Props> = ({ questao, gabarito, containerRef }) => {
 
 
         {/* MODO EDIÇÃO */}
-        {/* Renderizamos o HTML do formulário apenas se estiver editando para garantir que os IDs existam para os scripts legados */}
         {isEditing && (
           <form id="questaoEdit">
             <div className="field-group">
@@ -400,20 +412,24 @@ const QuestaoTabs: React.FC<Props> = ({ questao, gabarito, containerRef }) => {
 
       {/* 3. Conteúdo da Aba Gabarito */}
       <div id="tabContentGabarito" style={{ display: activeTab === 'gabarito' ? 'block' : 'none' }}>
-        {gabarito ? (
+        {dadosGabarito ? (
           <>
-            <div id="gabaritoView">
-              <div dangerouslySetInnerHTML={{ __html: htmlGabaritoView }} />
+            <div id="gabaritoView" className={isGabaritoEditing ? 'hidden' : ''}>
+              <GabaritoCardView dados={dadosGabarito} />
+              <AcoesGabaritoView
+                onEdit={() => setIsGabaritoEditing(true)}
+                onFinish={handleFinalizarTudo}
+              />
             </div>
 
             {/* O formulário do editor do gabarito é complexo e gerado externamente. 
                   Injetamos HTML e deixamos os scripts de steps-ui.js assumirem o controle. */}
-            <div dangerouslySetInnerHTML={{ __html: htmlGabaritoEdit }} />
-
-            <div style={{ marginTop: '20px', borderTop: '1px solid #ccc', paddingTop: '10px' }}>
-              <button type="button" className="btn btn--success btn--full-width" id="btnFinalizarTudo" onClick={handleFinalizarTudo}>
-                ✅ Finalizar e Salvar
-              </button>
+            <div className={!isGabaritoEditing ? 'hidden' : ''}>
+              <GabaritoEditorView
+                dados={dadosGabarito}
+                onSave={handleSalvarGabarito}
+                onCancel={handleCancelarGabarito}
+              />
             </div>
           </>
         ) : (
