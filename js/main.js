@@ -6,7 +6,7 @@ import { abrirScanOriginal, toggleGabarito, verificarRespostaBanco } from './ban
 import { ativarModoRecorte, iniciarCapturaParaSlot, onClickImagemFinal, removerImagemFinal } from './cropper/mode.js';
 import { enviarDadosParaFirebase } from './firebase/envio.js';
 import { verImagensOriginais } from './render/final/originais-modal.js';
-import { generateAPIKeyPopUp } from './ui/api-key-modal.js';
+import { mountApiKeyModal } from './ui/ApiKeyModal.tsx';
 import { setupDragAndDrop } from './upload/drag-drop.js';
 import { setupFormLogic } from './upload/form-logic.js';
 import { getUploadInterfaceHTML } from './upload/upload-template.js';
@@ -199,7 +199,7 @@ if (!window.__globalListenerRegistered) {
     // --- NOVO CASO 14: Configurar API Key ---
     const gatilhoApi = e.target.closest('.js-config-api');
     if (gatilhoApi) {
-      generateAPIKeyPopUp();
+      mountApiKeyModal();
       return;
     }
   });
@@ -322,4 +322,4 @@ window.expandirImagem = function (src) {
 };
 
 gerarTelaInicial(); // Chama inicial ao carregar
-window.setTimeout(() => generateAPIKeyPopUp(false), 500); // Tenta abrir (se nÃ£o tiver chave)
+window.setTimeout(() => mountApiKeyModal(false), 500); // Tenta abrir (se nÃ£o tiver chave)

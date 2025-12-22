@@ -248,7 +248,7 @@ const ApiKeyModalComponent: React.FC<ModalProps> = ({ onClose }) => {
 
 // --- Função de Montagem (Exportada para o arquivo JS original usar) ---
 
-export function mountApiKeyModal(forceShow: boolean) {
+export function mountApiKeyModal(forceShow: boolean = true) {
   if (!forceShow) return;
 
   const rootId = 'react-api-key-modal-root';
