@@ -1,4 +1,4 @@
-import { pick } from '../utils/pick.js';
+import { pick } from '../utils/pick.tsx';
 
 /**
  * Função Principal: Normaliza Alternativas Analisadas

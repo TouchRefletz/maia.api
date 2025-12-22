@@ -4,7 +4,7 @@ import { normalizeAlternativasAnalisadas } from '../normalize/alternativas.js';
 import { normCreditos } from '../normalize/creditos.js';
 import { normalizeExplicacao } from '../normalize/explicacao.js';
 import { asStringArray, safe } from '../normalize/primitives.js';
-import { pick } from '../utils/pick.js';
+import { pick } from '../utils/pick';
 // @ts-ignore - Importação legado pode não ter tipos
 import { renderComplexidade as renderComplexidadeLegado } from './complexidade.js';
 import { renderizarEstruturaHTML } from './structure.js';

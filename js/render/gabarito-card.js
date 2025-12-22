@@ -1,12 +1,11 @@
-import { asStringArray } from '../normalize/primitives.js';
 import { criarHtmlBlocoEditor } from '../editor/structure-editor.js';
-import { normCreditos } from '../normalize/creditos.js';
 import { normalizeAlternativasAnalisadas } from '../normalize/alternativas.js';
+import { normCreditos } from '../normalize/creditos.js';
 import { normalizeExplicacao } from '../normalize/explicacao.js';
-import { pick } from '../utils/pick.js';
+import { asStringArray, safe } from '../normalize/primitives.js';
+import { pick } from '../utils/pick.tsx';
 import { renderComplexidade } from './complexidade.js';
 import { renderizarEstruturaHTML } from './structure.js';
-import { safe } from '../normalize/primitives.js';
 
 /**
  * Centraliza toda a extração e normalização de dados do gabarito.

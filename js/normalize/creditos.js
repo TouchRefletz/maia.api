@@ -1,4 +1,4 @@
-import { pick } from '../utils/pick.js';
+import { pick } from '../utils/pick.tsx';
 
 /**
  * 1. FUNÇÃO PRINCIPAL

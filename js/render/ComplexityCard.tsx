@@ -1,5 +1,5 @@
 import React from 'react';
-import { pick } from '../utils/pick.js';
+import { pick } from '../utils/pick';
 
 // --- DEFINIÇÕES E TIPOS ---
 

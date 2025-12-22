@@ -1,10 +1,8 @@
-import { asArray } from './primitives.js';
-import { asStringArray } from './primitives.js';
-import { normCreditos } from './creditos.js';
+import { pick } from '../utils/pick.tsx';
 import { normalizeAlternativasAnalisadas } from './alternativas.js';
+import { normCreditos } from './creditos.js';
 import { normalizeExplicacao } from './explicacao.js';
-import { pick } from '../utils/pick.js';
-import { safeClone } from './primitives.js';
+import { asArray, asStringArray, safeClone } from './primitives.js';
 
 /**
  * PREPARAÇÃO DE DADOS INICIAIS
