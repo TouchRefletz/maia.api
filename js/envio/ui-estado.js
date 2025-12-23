@@ -221,7 +221,11 @@ export async function confirmarEnvioIA() {
     // 4. Limpa a bagunça e avisa o usuário
     finalizarInterfacePosSucesso(styleviewerSidebar, uiState, window.__modo);
   } catch (error) {
-    tratarErroEnvio(error, uiState, refsLoader);
+    if (error.message === 'RECITATION_ERROR') {
+      handleRecitationError(uiState, window.__modo, refsLoader, dadosIniciais.styleviewerSidebar);
+    } else {
+      tratarErroEnvio(error, uiState, refsLoader);
+    }
   }
 }
 
@@ -257,4 +261,42 @@ export function salvarResultadoNoGlobal(resposta, modo) {
 
   // Limpa a lista de recortes temporários
   window.__recortesAcumulados = [];
+}
+
+export function handleRecitationError(uiState, modo, refsLoader, styleviewerSidebar) {
+  // 1. Limpa Estado de Processamento
+  window.__isProcessing = false;
+  if (refsLoader && refsLoader.loadingContainer) {
+    refsLoader.loadingContainer.remove();
+  }
+  if (styleviewerSidebar) styleviewerSidebar.remove();
+
+  // 2. Feedback
+  customAlert('⚠️ Conteúdo identificado, mas não estruturado (Recitation). Por favor, edite manualmente.', 5000);
+
+  // 3. Cria Skeleton
+  const recitationSkeleton = {
+    identificacao: "⚠️ Questão não extraída",
+    conteudo: "", // Deixa vazio para não aparecer texto feio no card
+    estrutura: [
+      { tipo: 'texto', conteudo: '⚠️ HOUVE UM ERRO DE RECITATION. Clique em "Editar Conteúdo" para transcrever a questão manualmente.' }
+    ],
+    alternativas: [],
+    materias_possiveis: [],
+    palavras_chave: [],
+    isRecitation: true
+  };
+
+  // 4. Salva e Renderiza (como se fosse sucesso)
+  enriquecerRespostaComImagensLocais(recitationSkeleton, modo);
+  salvarResultadoNoGlobal(recitationSkeleton, modo);
+  renderizarQuestaoFinal(recitationSkeleton);
+
+  // 5. Finalização Visual
+  finalizarProcessamentoVisual();
+  restaurarEstadoBotoes(uiState);
+
+  // Fecha o modal de crop se estiver aberto (já que fomos para a tela de edição)
+  const modal = document.getElementById('cropConfirmModal');
+  if (modal) modal.classList.remove('visible');
 }

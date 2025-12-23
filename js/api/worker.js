@@ -125,6 +125,9 @@ export async function gerarConteudoEmJSONComImagemStream(
             console.log("🛠️ WORKER DEBUG:", msg.text);
           } else if (msg.type === "error") {
             console.error("Erro do worker stream:", msg.text);
+            if (msg.code === 'RECITATION') {
+              throw new Error('RECITATION_ERROR');
+            }
             handlers?.onStatus?.(`Erro: ${msg.text}`);
           } else if (msg.type === "status") {
             handlers?.onStatus?.(msg.text);
@@ -134,6 +137,7 @@ export async function gerarConteudoEmJSONComImagemStream(
             handlers?.onStatus?.("Recitation detectado. Tentando novamente...");
           }
         } catch (e) {
+          if (e.message === 'RECITATION_ERROR') throw e;
           console.warn("Erro ao parsear chunk do worker:", line, e);
         }
       }
@@ -158,6 +162,7 @@ export async function gerarConteudoEmJSONComImagemStream(
 
     return JSON.parse(answerText);
   } catch (error) {
+    if (error.message === 'RECITATION_ERROR') throw error;
     console.error("Erro no Worker stream:", error);
     throw new Error(`Falha no Worker: ${error.message}`);
   }

@@ -39,6 +39,7 @@ interface QuestaoData {
   materias_possiveis: string[];
   palavras_chave: string[];
   alternativas: Alternativa[];
+  isRecitation?: boolean;
 }
 
 interface Props {
@@ -54,7 +55,7 @@ const QuestaoTabs: React.FC<Props> = ({ questao, gabarito, containerRef }) => {
   );
 
   // Estado para controlar modo de edição da questão
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(!!questao.isRecitation);
 
   // Estado para controlar modo de edição do gabarito
   const [isGabaritoEditing, setIsGabaritoEditing] = useState(false);
@@ -258,7 +259,13 @@ const QuestaoTabs: React.FC<Props> = ({ questao, gabarito, containerRef }) => {
         <div className="result-header">
           {/* ... (Header Conteúdo Questão) ... */}
           <h3>Questão Extraída</h3>
-          <span className="badge-success">Sucesso</span>
+          {questao.isRecitation ? (
+            <span className="badge-warning" style={{ backgroundColor: '#ff9800', color: '#fff', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}>
+              Recitation / Manual
+            </span>
+          ) : (
+            <span className="badge-success">Sucesso</span>
+          )}
         </div>
 
         {/* ... (Resto do conteúdo da Questão - abreviado para focar na mudança do Gabarito) ... */}
@@ -385,7 +392,7 @@ const QuestaoTabs: React.FC<Props> = ({ questao, gabarito, containerRef }) => {
         <div className="result-actions" id="actionsLeitura" style={{ marginTop: '15px' }}>
           {!isEditing ? (
             <button type="button" className="btn btn--secondary btn--full-width" id="btnEditar" onClick={() => setIsEditing(true)}>
-              ✏️ Editar Conteúdo
+              {questao.isRecitation ? '✏️ Transcrever Manualmente' : '✏️ Editar Conteúdo'}
             </button>
           ) : (
             <div id="questaoEditActions">

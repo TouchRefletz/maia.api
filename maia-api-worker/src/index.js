@@ -10,6 +10,13 @@ const DEFAULT_MODELS = [
 	'models/gemini-2.0-flash-lite',
 ];
 
+const safetySettings = [
+	{ category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+	{ category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+	{ category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+	{ category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+];
+
 // Helper to get CORS headers
 const corsHeaders = {
 	'Access-Control-Allow-Origin': '*',
@@ -147,6 +154,7 @@ async function handleGeminiGenerate(request, env) {
 						thinkingConfig: { includeThoughts: true },
 						responseMimeType: 'application/json',
 						responseJsonSchema: schema || undefined,
+						safetySettings,
 					},
 				});
 

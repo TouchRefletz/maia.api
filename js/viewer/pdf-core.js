@@ -165,6 +165,13 @@ export async function verificarBloqueiosTroca(novoModo) {
       customAlert('⚠️ Capture e processe a Questão (Prova) primeiro!', 3000);
       return false;
     }
+
+    // Validação: Questão em modo Recitation/Manual
+    // (Pede confirmação extra pois tecnicamente ela não foi "extraída")
+    if (window.questaoAtual && window.questaoAtual.isRecitation) {
+      const confirm = window.confirm("A QUESTÃO NÃO FOI EXTRAÍDA.\n\nVocê está prosseguindo para o Gabarito com a questão em modo manual. Deseja continuar?");
+      if (!confirm) return false;
+    }
   }
 
   // Validação de input inválido
