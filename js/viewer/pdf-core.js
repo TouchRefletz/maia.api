@@ -30,6 +30,13 @@ export function renderPage(num) {
       transform: transform,
     };
 
+    // --- AJUSTE DINÂMICO DE LIBERDADE (Dividido por 2) ---
+    // Define o padding do container como metade do tamanho da página
+    const container = document.getElementById('canvasContainer');
+    if (container) {
+      container.style.padding = `${Math.floor(viewport.height / 2)}px ${Math.floor(viewport.width / 2)}px`;
+    }
+
     // Usa a variável global cropper
     if (typeof viewerState.cropper !== 'undefined' && viewerState.cropper) {
       viewerState.cropper.destroy();
@@ -66,33 +73,59 @@ export function renderPage(num) {
  * Não afeta o canvas visível na tela (render off-screen).
  * Retorna uma Promise que resolve com o DataURL da imagem gerada.
  */
-export function renderPageHighRes(num) {
-  if (!viewerState.pdfDoc) return Promise.resolve(null);
+/**
+ * Renderiza a página com a melhor qualidade possível (tentando 300 DPI).
+ * Reduz a qualidade dinamicamente se o dispositivo não aguentar.
+ * Retorna uma Promise que resolve com o DataURL da imagem gerada.
+ */
+export async function renderPageHighRes(num) {
+  if (!viewerState.pdfDoc) return null;
 
-  return viewerState.pdfDoc.getPage(num).then(function (page) {
-    // 1. Cria um canvas off-screen
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
+  try {
+    const page = await viewerState.pdfDoc.getPage(num);
 
-    // 2. Calcula escala para 300 DPI
-    // PDF padrão é 72 DPI. 300 / 72 = 4.1666...
-    const scale300Dpi = 300 / 72;
-    const viewport = page.getViewport({ scale: scale300Dpi });
+    // Lista de qualidades para tentar (DPIs)
+    // 300 é o alvo. Se falhar (memória/canvas limit), tenta menores.
+    const attemptDpis = [300, 250, 200, 150, 100, 72];
 
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
+    for (const dpi of attemptDpis) {
+      try {
+        console.log(`[HighRes] Tentando renderizar com ${dpi} DPI...`);
+        const scale = dpi / 72;
+        const viewport = page.getViewport({ scale: scale });
 
-    const renderContext = {
-      canvasContext: ctx,
-      viewport: viewport,
-    };
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
 
-    // 3. Renderiza
-    return page.render(renderContext).promise.then(function () {
-      // 4. Retorna a imagem em Base64 (PNG para qualidade)
-      return canvas.toDataURL('image/png');
-    });
-  });
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+
+        const renderContext = {
+          canvasContext: ctx,
+          viewport: viewport,
+        };
+
+        // Renderiza
+        await page.render(renderContext).promise;
+
+        // Tenta gerar o DataURL (pode falhar se canvas for gigante)
+        const dataUrl = canvas.toDataURL('image/png');
+        console.log(`[HighRes] Sucesso com ${dpi} DPI`);
+        return dataUrl;
+
+      } catch (innerErr) {
+        console.warn(`[HighRes] Falha com ${dpi} DPI. Tentando menor...`, innerErr);
+        // Continua para o próximo DPI do loop
+        continue;
+      }
+    }
+
+    throw new Error('Não foi possível renderizar a página em nenhuma qualidade aceitável.');
+
+  } catch (err) {
+    console.error('Erro geral em renderPageHighRes:', err);
+    return null;
+  }
 }
 
 export function carregarDocumentoPDF(url) {
@@ -101,7 +134,18 @@ export function carregarDocumentoPDF(url) {
   loadingTask.promise.then(function (pdf) {
     viewerState.pdfDoc = pdf;
     viewerState.pageNum = 1;
-    renderPage(viewerState.pageNum);
+    viewerState.pdfScale = 1.0; // Resetar zoom para 100%
+
+    // Renderiza a página e DEPOIS centraliza
+    renderPage(viewerState.pageNum).then(() => {
+      const container = document.getElementById('canvasContainer');
+      if (container) {
+        // Centraliza o scroll
+        // ScrollTop = (ContentHeight - ViewportHeight) / 2
+        container.scrollTop = (container.scrollHeight - container.clientHeight) / 2;
+        container.scrollLeft = (container.scrollWidth - container.clientWidth) / 2;
+      }
+    });
   });
 }
 
@@ -226,5 +270,24 @@ export async function trocarModo(novoModo) {
     console.error('Erro ao carregar PDF do modo ' + novoModo, err);
     customAlert('Erro ao carregar o PDF.', 2000);
     return false;
+  }
+}
+
+export function mudarPagina(dir) {
+  if (!viewerState.pdfDoc) return;
+  const newPage = viewerState.pageNum + dir;
+  if (newPage >= 1 && newPage <= viewerState.pdfDoc.numPages) {
+    viewerState.pageNum = newPage;
+    renderPage(viewerState.pageNum);
+  }
+}
+
+export function mudarZoom(delta) {
+  const newScale = viewerState.pdfScale + delta;
+  // Limites expandidos: 10% até 500% (0.1 a 5.0)
+  // Usamos 0.05 como margem de segurança para erros de ponto flutuante
+  if (newScale >= 0.05 && newScale <= 5.0001) {
+    viewerState.pdfScale = newScale;
+    renderPage(viewerState.pageNum);
   }
 }

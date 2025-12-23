@@ -69,8 +69,8 @@ export function instanciarCropper(imageElement) {
     highlight: true,
     background: false,
     autoCrop: false,
-    movable: false, // Não mover a imagem
-    zoomable: false, // Não dar zoom na imagem
+    movable: false, // Permitir mover a imagem
+    zoomable: false, // Permitir zoom na imagem
     rotatable: false,
     scalable: false,
     ready: function () {
@@ -192,7 +192,7 @@ export function mudarPagina(dir) {
 
 export function mudarZoom(delta) {
   const newScale = viewerState.pdfScale + delta;
-  if (newScale >= 0.5 && newScale <= 3.0) {
+  if (newScale >= 0.5 && newScale <= 5.0) {
     // Limites de zoom
     viewerState.pdfScale = newScale;
     renderPage(viewerState.pageNum);

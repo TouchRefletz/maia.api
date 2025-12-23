@@ -2,7 +2,7 @@
 #canvasContainer {
   flex: 1;
   overflow: auto;
-  padding: 30px;
+  padding: 300px;
   display: flex;
   /* justify-content: center;  <-- REMOVA ESTA LINHA */
   align-items: flex-start;

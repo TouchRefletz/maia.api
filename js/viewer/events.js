@@ -31,8 +31,8 @@ export function configurarEventosViewer() {
   aoClicar('btn-next', () => mudarPagina(1));
 
   // --- Zoom ---
-  aoClicar('btnZoomOut', () => mudarZoom(-0.2));
-  aoClicar('btnZoomIn', () => mudarZoom(0.2));
+  aoClicar('btnZoomOut', () => mudarZoom(-0.1));
+  aoClicar('btnZoomIn', () => mudarZoom(0.1));
 
   // --- Modos de Visualização ---
   aoClicar('btnModoProva', () => trocarModo('prova'));
