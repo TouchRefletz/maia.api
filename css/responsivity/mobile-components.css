@@ -1,0 +1,329 @@
+/* --- OTIMIZAÇÃO COMPACTA PARA TOPO (MOBILE) --- */
+@media (max-width: 600px) {
+
+    /* 2. LINHA 1: Toggle (Prova/Gabarito) ocupa toda a largura */
+    .mode-toggle {
+        width: 100%;
+        display: flex;
+        margin-bottom: 2px;
+    }
+
+    .mode-toggle__btn {
+        flex: 1;
+        /* Botões dividem o espaço igualmente (50% cada) */
+        padding: 8px 0;
+        /* Área de toque confortável */
+        justify-content: center;
+    }
+
+    /* 3. Esconder os textos "Navegação" e "Zoom" para economizar espaço */
+    .control-label {
+        font-size: 6px;
+    }
+
+    /* 4. LINHA 2: Criar uma barra de ferramentas única horizontal */
+    /* Usamos um truque aqui: forçamos os itens a se alinharem */
+
+    /* Removemos as bordas e paddings dos containers individuais */
+    .pdf-controls-box {
+        display: flex;
+        align-items: center;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+        background: transparent !important;
+    }
+
+    /* A linha interna de botões */
+    .control-row {
+        margin: 0 !important;
+        background: var(--color-background);
+        /* Um fundo leve para agrupar */
+        border-radius: 6px;
+        height: 36px;
+        /* Altura fixa para alinhar tudo */
+        padding: 16px;
+    }
+
+    /* 5. Ajuste fino dos grupos para caberem lado a lado */
+
+    /* Grupo Navegação (< 1/30 >) */
+    .pdf-controls-box:nth-of-type(2) {
+        /* O primeiro .pdf-controls-box */
+        flex: 1;
+        /* Ganha mais espaço */
+    }
+
+    /* Grupo Zoom (- 100% +) */
+    .pdf-controls-box:nth-of-type(3) {
+        /* O segundo .pdf-controls-box */
+        flex: 1;
+        margin-right: 5px !important;
+    }
+
+    /* Ajuste para o texto de paginação e zoom ficarem pequenos */
+    #page_num,
+    #zoom_level {
+        font-size: 10px !important;
+    }
+
+    #zoom_level {
+        min-width: 40px !important;
+    }
+
+    .control-row:has(> #zoom_level) {
+        gap: 0 !important;
+    }
+
+    /* 6. Botão de Recorte (Camera) */
+    #btnRecortarHeader {
+        height: 36px;
+        width: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--color-primary);
+        /* Destaque visual */
+        border-radius: 6px;
+        border: none;
+    }
+
+    #btnRecortarHeader img {
+        width: 18px;
+        height: 18px;
+        filter: var(--icon-filter);
+        /* Deixa o ícone branco */
+    }
+
+    /* Wrapper para organizar a linha de baixo (Nav + Zoom + Crop) */
+    /* Como o HTML original não tem um wrapper em volta desses 3, 
+       vamos usar flex-wrap no pai para simular */
+    .panel-label {
+        flex-direction: row !important;
+        /* Volta para row */
+        flex-wrap: wrap !important;
+    }
+
+    /* Força o Toggle a ser 100% (quebra linha) */
+    .mode-toggle {
+        flex-basis: 100%;
+    }
+
+    /* Força os outros a caberem na mesma linha */
+    .pdf-controls-box,
+    #btnRecortarHeader {
+        flex-basis: auto;
+    }
+}
+
+/* --- NEW: Floating Mobile Header & Dropdown --- */
+
+@media (max-width: 900px) {
+
+    /* Ensure mobile elements are visible */
+    .mobile-only {
+        display: block !important;
+    }
+
+    /* Floating Menu Button Container - TOP LEFT NOW */
+    #mobileHeaderContainer {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        /* Moved to Left */
+        z-index: 99999;
+    }
+
+    /* The Hamburger/FAB Button */
+    .mobile-fab-menu {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        /* Circle */
+        background-color: var(--color-surface);
+        border: 1px solid var(--color-border);
+        box-shadow: var(--shadow-md);
+        font-size: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        color: var(--color-text);
+        transition: transform 0.2s ease, box-shadow 0.2s;
+    }
+
+    .mobile-fab-menu:active {
+        transform: scale(0.95);
+    }
+
+    /* The Dropdown Menu Wrapper - TOP LEFT ALIGNMENT */
+    #mobileMenuOptions {
+        position: fixed;
+        top: 75px;
+        left: 20px;
+        /* Aligned with button */
+        background-color: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-lg);
+        padding: 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        z-index: 99999;
+        min-width: 180px;
+        transform-origin: top left;
+        transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    #mobileMenuOptions.hidden {
+        display: none !important;
+    }
+
+    /* Dropdown Items */
+    .mobile-menu-item {
+        background: none;
+        border: none;
+        text-align: left;
+        padding: 12px 16px;
+        font-size: var(--font-size-md);
+        color: var(--color-text);
+        border-radius: var(--radius-base);
+        cursor: pointer;
+        transition: background-color 0.2s;
+        font-weight: var(--font-weight-medium);
+    }
+
+    .mobile-menu-item:hover,
+    .mobile-menu-item:active {
+        background-color: var(--color-bg-2);
+    }
+
+    /* --- Floating Panels (Generated by Options) --- */
+    /* Positioned at TOP CENTER, Simple Design */
+
+    .floating-glass-panel {
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        /* Simplified Design: Not glassmorphism anymore, but clean floating panel */
+        background-color: var(--color-surface);
+        padding: 8px 12px;
+        border-radius: var(--radius-full);
+        /* Pill shape */
+        box-shadow: var(--shadow-lg);
+        border: 1px solid var(--color-border);
+        z-index: 100000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        width: max-content;
+        max-width: 90vw;
+        animation: slideDownFade 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .floating-glass-panel.hidden {
+        display: none !important;
+    }
+
+    /* Animations */
+    @keyframes slideDownFade {
+        from {
+            opacity: 0;
+            transform: translate(-50%, -10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translate(-50%, 0);
+        }
+    }
+
+    /* Close Button for Panel */
+    .panel-close-btn {
+        background: transparent;
+        border: none;
+        color: var(--color-text-secondary);
+        font-size: 16px;
+        cursor: pointer;
+        margin-left: 8px;
+        padding-left: 8px;
+        border-left: 1px solid var(--color-border);
+        display: flex;
+        align-items: center;
+        height: 100%;
+    }
+
+    /* Panel Specific Styles relative to children */
+
+    /* Mode Switcher */
+    .mobile-mode-toggle {
+        display: flex;
+        background: var(--color-bg-1);
+        border-radius: 24px;
+        padding: 3px;
+        gap: 2px;
+    }
+
+    .mobile-mode-toggle .mode-toggle__btn {
+        padding: 6px 14px;
+        border-radius: 20px;
+        border: none;
+        background: transparent;
+        font-size: var(--font-size-sm);
+        font-weight: var(--font-weight-bold);
+        color: var(--color-text-secondary);
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .mobile-mode-toggle .mode-toggle__btn.is-active {
+        background: var(--color-surface);
+        color: var(--color-primary);
+        box-shadow: var(--shadow-sm);
+    }
+
+    /* Nav Controls */
+    .mobile-control-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .mobile-control-row .btn-icon {
+        background: transparent;
+        border: 1px solid transparent;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        color: var(--color-text);
+    }
+
+    .mobile-control-row .btn-icon:hover {
+        background: var(--color-bg-1);
+    }
+
+    .mobile-control-row span {
+        font-variant-numeric: tabular-nums;
+        font-weight: var(--font-weight-medium);
+        margin: 0 4px;
+        color: var(--color-text);
+    }
+}
+
+/* Ensure mobile-only elements are hidden on desktop */
+@media (min-width: 900px) {
+
+    .mobile-only,
+    .mobile-dropdown,
+    .floating-glass-panel {
+        display: none !important;
+    }
+}

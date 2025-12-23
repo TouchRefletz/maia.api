@@ -18,6 +18,52 @@ export function montarTemplateViewer(args) {
             </div>
         </header>
 
+        <!-- MOBILE MENU BUTTON (Visible only on <= 900px) -->
+        <div id="mobileHeaderContainer" class="mobile-only">
+             <button id="btnMobileMenu" class="mobile-fab-menu">☰</button>
+        </div>
+
+        <!-- MOBILE DROPDOWN OPTIONS -->
+        <div id="mobileMenuOptions" class="mobile-dropdown hidden">
+            <button class="mobile-menu-item" id="optMobileModo">Alternar Modo</button>
+            <button class="mobile-menu-item" id="optMobileNav">Navegação</button>
+            <button class="mobile-menu-item" id="optMobileZoom">Zoom</button>
+            <button class="mobile-menu-item" id="optMobileRecortar">Recortar</button>
+            <button class="mobile-menu-item" id="optMobileFechar">✕ Fechar PDF</button>
+        </div>
+
+        <!-- FLOATING CONTROL PANELS (Initially Hidden) -->
+        
+        <!-- 1. MODE TOGGLE PANEL -->
+        <div id="mobileModePanel" class="floating-glass-panel hidden">
+            <div class="mode-toggle mobile-mode-toggle">
+                <button type="button" id="btnModoProvaMobile" class="mode-toggle__btn is-active">Prova</button>
+                <button type="button" id="btnModoGabaritoMobile" class="mode-toggle__btn">Gabarito</button>
+            </div>
+            <button class="panel-close-btn" onclick="this.parentElement.classList.add('hidden')">✕</button>
+        </div>
+
+        <!-- 2. NAVIGATION PANEL -->
+        <div id="mobileNavPanel" class="floating-glass-panel hidden">
+             <div class="control-row mobile-control-row">
+                <button id="btnPrevMobile" class="btn-icon">◀</button>
+                <span id="pageNumMobile">Pag 1</span>
+                <button id="btnNextMobile" class="btn-icon">▶</button>
+             </div>
+             <button class="panel-close-btn" onclick="this.parentElement.classList.add('hidden')">✕</button>
+        </div>
+
+        <!-- 3. ZOOM PANEL (Separated) -->
+        <div id="mobileZoomPanel" class="floating-glass-panel hidden">
+             <div class="control-row mobile-control-row">
+                <button id="btnZoomOutMobile" class="btn-icon">-</button>
+                <span id="zoomLevelMobile">100%</span>
+                <button id="btnZoomInMobile" class="btn-icon">+</button>
+             </div>
+             <button class="panel-close-btn" onclick="this.parentElement.classList.add('hidden')">✕</button>
+        </div>
+
+
         <div id="viewerBody">
             <main id="viewerMain">
                 <section class="pdf-panel" id="panelProva">
@@ -93,6 +139,10 @@ export function atualizarUIViewerModo() {
     document
         .getElementById('btnModoGabarito')
         ?.classList.toggle('is-active', isGabaritoMode);
+
+    // Mobile Sync
+    document.getElementById('btnModoProvaMobile')?.classList.toggle('is-active', !isGabaritoMode);
+    document.getElementById('btnModoGabaritoMobile')?.classList.toggle('is-active', isGabaritoMode);
 
     // 2. Controle dos Botões de Imagem
     const btnQuestao = document.getElementById('btnImgQuestao');

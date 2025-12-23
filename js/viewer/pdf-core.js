@@ -92,8 +92,12 @@ function handleIntersection(entries) {
 
 function updateNavigationUI(pageNum) {
   const pageLabel = document.getElementById('page_num');
-  if (pageLabel && viewerState.pdfDoc) {
-    pageLabel.textContent = `Pag ${pageNum} / ${viewerState.pdfDoc.numPages}`;
+  const pageLabelMobile = document.getElementById('pageNumMobile'); // Mobile Sync
+
+  if (viewerState.pdfDoc) {
+    const text = `Pag ${pageNum} / ${viewerState.pdfDoc.numPages}`;
+    if (pageLabel) pageLabel.textContent = text;
+    if (pageLabelMobile) pageLabelMobile.textContent = text;
   }
 }
 
@@ -239,6 +243,9 @@ export async function renderAllPages() {
   const zoomLabel = document.getElementById('zoom_level');
   if (zoomLabel) zoomLabel.textContent = `${Math.round(viewerState.pdfScale * 100)}%`;
 
+  const zoomLabelMobile = document.getElementById('zoomLevelMobile');
+  if (zoomLabelMobile) zoomLabelMobile.textContent = `${Math.round(viewerState.pdfScale * 100)}%`;
+
   // Renderiza visíveis
   // Prioridade de render
   const initialPage = scrollRestoration ? scrollRestoration.pageNum : viewerState.pageNum;
@@ -322,9 +329,25 @@ export function carregarDocumentoPDF(url) {
   const loadingTask = pdfjsLib.getDocument(url);
   loadingTask.promise.then(function (pdf) {
     viewerState.pdfDoc = pdf;
-    viewerState.pageNum = 1;
-    viewerState.pdfScale = 1.0;
-    renderAllPages();
+
+    // Auto-Fit Zoom Implementation
+    pdf.getPage(1).then(page => {
+      const container = document.getElementById('canvasContainer');
+      if (container) {
+        const viewport = page.getViewport({ scale: 1.0 });
+        // Get container width minus some padding (e.g. 24px total)
+        const availableWidth = container.clientWidth - 24;
+        const scale = availableWidth / viewport.width;
+
+        // Set scale but constrain it to reasonable limits
+        viewerState.pdfScale = Math.max(0.5, Math.min(scale, 3.0));
+      } else {
+        viewerState.pdfScale = 1.0;
+      }
+
+      viewerState.pageNum = 1;
+      renderAllPages();
+    });
   });
 }
 

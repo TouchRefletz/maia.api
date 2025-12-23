@@ -39,6 +39,41 @@ export function configurarEventosViewer() {
   aoClicar('btnModoProva', () => trocarModo('prova'));
   aoClicar('btnModoGabarito', () => trocarModo('gabarito'));
 
+  // --- Mobile Menu & Controls ---
+  aoClicar('btnMobileMenu', () => {
+    const menu = document.getElementById('mobileMenuOptions');
+    menu.classList.toggle('hidden');
+  });
+
+  // Helper to toggle panels
+  const toggleMobilePanel = (id) => {
+    document.querySelectorAll('.floating-glass-panel').forEach(p => p.classList.add('hidden'));
+    document.getElementById('mobileMenuOptions').classList.add('hidden'); // Close menu
+    const target = document.getElementById(id);
+    if (target) target.classList.remove('hidden');
+  };
+
+  aoClicar('optMobileModo', () => toggleMobilePanel('mobileModePanel'));
+  aoClicar('optMobileNav', () => toggleMobilePanel('mobileNavPanel'));
+  aoClicar('optMobileZoom', () => toggleMobilePanel('mobileZoomPanel'));
+
+  // Direct Action for Crop
+  aoClicar('optMobileRecortar', () => {
+    document.getElementById('mobileMenuOptions').classList.add('hidden'); // Close menu
+    ativarModoRecorte();
+  });
+
+  aoClicar('optMobileFechar', fecharVisualizador);
+
+  // Mobile Control binding
+  aoClicar('btnModoProvaMobile', () => trocarModo('prova'));
+  aoClicar('btnModoGabaritoMobile', () => trocarModo('gabarito'));
+  aoClicar('btnPrevMobile', () => mudarPagina(-1));
+  aoClicar('btnNextMobile', () => mudarPagina(1));
+  aoClicar('btnZoomOutMobile', () => mudarZoom(-0.1));
+  aoClicar('btnZoomInMobile', () => mudarZoom(0.1));
+
+
   // --- Ferramenta de Recorte (Header) ---
   aoClicar('btnRecortarHeader', ativarModoRecorte);
 
