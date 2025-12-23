@@ -126,19 +126,28 @@ async function handleGeminiGenerate(request, env) {
 				});
 
 				for await (const chunk of stream) {
-					const partsResp = chunk?.candidates?.[0]?.content?.parts || [];
+					const cand = chunk?.candidates?.[0];
+					const partsResp = cand?.content?.parts || [];
+
+					// 1) Sempre escreva os parts (não depende do finishReason)
 					for (const part of partsResp) {
-						// await writer.write(encoder.encode(JSON.stringify({ type: 'debug', text: JSON.stringify(part) }) + "\n"));
-
 						if (!part?.text) continue;
+						const type = part.thought ? 'thought' : 'answer';
+						await writer.write(encoder.encode(JSON.stringify({ type, text: part.text }) + '\n'));
+					}
 
-						if (part.thought) {
-							const data = JSON.stringify({ type: 'thought', text: part.text });
-							await writer.write(encoder.encode(data + '\n'));
-						} else {
-							const data = JSON.stringify({ type: 'answer', text: part.text });
-							await writer.write(encoder.encode(data + '\n'));
+					// 2) Só finalize quando o modelo terminar
+					const finishReason = cand?.finishReason;
+					if (finishReason) {
+						await writer.write(encoder.encode(JSON.stringify({ type: 'debug', text: `Finish Reason: ${finishReason}` }) + '\n'));
+
+						if (finishReason === 'STOP') {
+							success = true;
+							break;
 						}
+
+						// opcional, mas recomendado: não deixa o front tentar parsear JSON truncado
+						throw new Error(`Stream finalizado com finishReason=${finishReason}`);
 					}
 				}
 				success = true;

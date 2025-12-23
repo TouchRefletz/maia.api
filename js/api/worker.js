@@ -141,9 +141,39 @@ export async function gerarConteudoEmJSONComImagemStream(
       } catch (e) {}
     }
 
-    // Parse final JSON
-    const textoLimpo = answerText.replace(/``````/g, "").trim();
-    return JSON.parse(textoLimpo);
+    // Apenas garantimos que não está vazio antes de parsear
+    if (!answerText || !answerText.trim()) {
+      throw new Error(
+        "A API retornou vazio. Verifique se o modelo está sobrecarregado."
+      );
+    }
+
+    console.log(answerText);
+
+    // Clean up potential Markdown code blocks
+    let finalJson = answerText.trim();
+    if (finalJson.startsWith("```json")) {
+      finalJson = finalJson
+        .replace(/^```json/, "")
+        .replace(/```$/, "")
+        .trim();
+    } else if (finalJson.startsWith("```")) {
+      finalJson = finalJson.replace(/^```/, "").replace(/```$/, "").trim();
+    }
+
+    try {
+      return JSON.parse(finalJson);
+    } catch (e) {
+      console.error(
+        "Erro ao parsear JSON final. Conteúdo recebido (início):",
+        finalJson.substring(0, 200)
+      );
+      console.error(
+        "Conteúdo recebido (fim):",
+        finalJson.substring(finalJson.length - 200)
+      );
+      throw e;
+    }
   } catch (error) {
     console.error("Erro no Worker stream:", error);
     throw new Error(`Falha no Worker: ${error.message}`);
