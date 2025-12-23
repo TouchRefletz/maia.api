@@ -1,3 +1,4 @@
+import { refreshOverlayPosition } from '../cropper/selection-overlay.js';
 import { esconderPainel } from './sidebar.js';
 
 export function configurarResizerSidebar() {
@@ -33,6 +34,9 @@ export function configurarResizerSidebar() {
     if (newWidth > MAX_WIDTH) newWidth = MAX_WIDTH;
 
     sidebar.style.width = `${newWidth}px`;
+
+    // SYNC CROPPER
+    refreshOverlayPosition();
   });
 
   document.addEventListener('mouseup', () => {
@@ -129,6 +133,9 @@ export const _garantirEstruturaSidebar = (
 
         // Nota: acessa a variável 'sidebar' definida no escopo desta função
         if (sidebar) sidebar.style.width = `${w}px`;
+
+        // SYNC CROPPER
+        refreshOverlayPosition();
       });
 
       document.addEventListener('mouseup', () => {

@@ -1,4 +1,6 @@
 // --- HELPER: Detecta o container correto de scroll (Mobile vs Desktop) ---
+import { refreshOverlayPosition } from '../cropper/selection-overlay.js';
+
 export function getScrollContainer() {
   const sidebar = document.getElementById('viewerSidebar');
   if (!sidebar) return null;
@@ -44,6 +46,10 @@ export function esconderPainel() {
   document.body.style.overflow = '';
 
   mostrarBotaoReabrirPainel();
+
+  // ATUALIZA O CROPPER IMEDIATAMENTE E DEPOIS DA ANIMAÇÃO
+  refreshOverlayPosition();
+  setTimeout(refreshOverlayPosition, 305); // 300ms é o transition do CSS comumente
 }
 
 export function mostrarPainel() {
@@ -76,6 +82,10 @@ export function mostrarPainel() {
   if (btnReabrir) {
     btnReabrir.remove();
   }
+
+  // ATUALIZA O CROPPER IMEDIATAMENTE E DEPOIS DA ANIMAÇÃO
+  refreshOverlayPosition();
+  setTimeout(refreshOverlayPosition, 305);
 }
 
 export function mostrarBotaoReabrirPainel() {
@@ -144,6 +154,9 @@ export function configurarResizer(resizer) {
 
     const sb = document.getElementById('viewerSidebar');
     if (sb) sb.style.width = `${newWidth}px`;
+
+    // SYNC CROPPER
+    refreshOverlayPosition();
   });
 
   // 3. Fim do arraste

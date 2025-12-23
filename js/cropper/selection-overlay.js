@@ -11,6 +11,10 @@ let selectionBox = null;
 let currentSelectionRect = null; // { top, left, width, height } em PIXELS RELATIVOS AO OVERLAY
 let storedSelectionData = null;  // Persistence
 
+// Listeners
+let resizeObserver = null;
+let scrollListener = null;
+
 // Enum
 const DragType = {
     NONE: 'none',
@@ -35,8 +39,21 @@ export function initSelectionOverlay() {
         createOverlayDOM(container);
     }
 
-    // Atualiza altura total
-    overlayElement.style.height = `${container.scrollHeight}px`;
+    // Atualiza altura e largura total (fix overflow horizontal)
+    updateOverlayDimensions();
+
+    // Listeners Robustos (Scroll e Resize)
+    scrollListener = () => {
+        updateOverlayDimensions();
+    };
+    container.addEventListener('scroll', scrollListener);
+
+    if (window.ResizeObserver) {
+        resizeObserver = new ResizeObserver(() => {
+            updateOverlayDimensions();
+        });
+        resizeObserver.observe(container);
+    }
 
     // RESET STATE
     selectionBox.style.display = 'none';
@@ -45,6 +62,19 @@ export function initSelectionOverlay() {
     // Limpa seleção anterior
     currentSelectionRect = null;
     storedSelectionData = null;
+}
+
+function updateOverlayDimensions() {
+    const container = document.getElementById("canvasContainer");
+    if (!container || !overlayElement) return;
+
+    const nav = document.getElementById('viewerSidebar');
+    // Pequeno hack: garante que pegamos o maior valor possível para cobrir tudo
+    const w = Math.max(container.scrollWidth, container.clientWidth);
+    const h = Math.max(container.scrollHeight, container.clientHeight);
+
+    overlayElement.style.width = `${w}px`;
+    overlayElement.style.height = `${h}px`;
 }
 
 function createOverlayDOM(container) {
@@ -113,6 +143,14 @@ export function removeSelectionOverlay() {
 
     document.removeEventListener('pointermove', handlePointerMove);
     document.removeEventListener('pointerup', handlePointerUp);
+
+    if (container && scrollListener) {
+        container.removeEventListener('scroll', scrollListener);
+    }
+    if (resizeObserver) {
+        resizeObserver.disconnect();
+        resizeObserver = null;
+    }
 }
 
 // --- LÓGICA DE DRAG E RESIZE ---
@@ -309,7 +347,7 @@ export function refreshOverlayPosition() {
         }
     }
 
-    overlayElement.style.height = `${container.scrollHeight}px`;
+    updateOverlayDimensions(); // Usa a nova função centralizada
 
     if (!storedSelectionData || selectionBox.style.display === 'none') return;
 

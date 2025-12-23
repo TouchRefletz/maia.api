@@ -272,14 +272,14 @@ export function handleRecitationError(uiState, modo, refsLoader, styleviewerSide
   if (styleviewerSidebar) styleviewerSidebar.remove();
 
   // 2. Feedback
-  customAlert('⚠️ Conteúdo identificado, mas não estruturado (Recitation). Por favor, edite manualmente.', 5000);
+  customAlert('⚠️ Conteúdo identificado, mas não estruturado (RECITAÇÃO). Por favor, edite manualmente.', 5000);
 
   // 3. Cria Skeleton
   const recitationSkeleton = {
     identificacao: "⚠️ Questão não extraída",
     conteudo: "", // Deixa vazio para não aparecer texto feio no card
     estrutura: [
-      { tipo: 'texto', conteudo: '⚠️ HOUVE UM ERRO DE RECITATION. Clique em "Editar Conteúdo" para transcrever a questão manualmente.' }
+      { tipo: 'texto', conteudo: '⚠️ HOUVE UM ERRO DE RECITAÇÃo. Clique em "Editar Conteúdo" para transcrever a questão manualmente.' }
     ],
     alternativas: [],
     materias_possiveis: [],

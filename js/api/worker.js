@@ -124,10 +124,11 @@ export async function gerarConteudoEmJSONComImagemStream(
           } else if (msg.type === "debug") {
             console.log("🛠️ WORKER DEBUG:", msg.text);
           } else if (msg.type === "error") {
-            console.error("Erro do worker stream:", msg.text);
             if (msg.code === 'RECITATION') {
+              console.warn("⚠️ Não foi possível responder por conta de recitação.");
               throw new Error('RECITATION_ERROR');
             }
+            console.error("Erro do worker stream:", msg.text);
             handlers?.onStatus?.(`Erro: ${msg.text}`);
           } else if (msg.type === "status") {
             handlers?.onStatus?.(msg.text);

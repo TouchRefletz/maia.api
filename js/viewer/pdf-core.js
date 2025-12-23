@@ -221,7 +221,14 @@ export async function renderAllPages() {
       container.scrollTo({ top: scrollTarget, behavior: 'auto' }); // auto/instant para não animar a correção de zoom
     }
   } else {
-    if (!currentWrappers.length) container.scrollTop = 0;
+    // FIX: Assegura alinhamento exato ao topo da página atual (geralmente 1) no load inicial.
+    // Isso evita que o "Smart Align" (na mudarPagina) detecte desalinhamento por poucos pixels (ex: margin) e consuma o primeiro clique.
+    const targetWrapper = document.getElementById(`page-wrapper-${viewerState.pageNum}`);
+    if (targetWrapper) {
+      container.scrollTop = targetWrapper.offsetTop;
+    } else {
+      container.scrollTop = 0;
+    }
   }
 
   // --- SYNC CRÍTICO: ATUALIZA OVERLAY AGORA ---
