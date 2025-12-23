@@ -1,28 +1,45 @@
 /* --- O SCROLL MÁGICO AQUI --- */
 #canvasContainer {
   flex: 1;
-  overflow: auto;
-  padding: 300px;
+  /* Scroll vertical principal */
+  overflow-y: auto;
+  overflow-x: auto;
+
   display: flex;
-  /* justify-content: center;  <-- REMOVA ESTA LINHA */
-  align-items: flex-start;
+  flex-direction: column;
+  align-items: center;
+  /* Centraliza as páginas */
+
+  position: relative;
+  flex-wrap: nowrap;
+
+  padding: 20px;
+  /* Smooth scroll nativo para o botão de página */
+  scroll-behavior: smooth;
+}
+
+/* Estilo para as páginas geradas dinamicamente */
+.pdf-page {
+  display: block;
+  margin: 0 auto 20px auto;
+  /* Centraliza e dá margem inferior */
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
+  /* Impede que a página encolha */
+  background-color: white;
+  /* Garante fundo branco enquanto carrega */
   position: relative;
 }
 
 #the-canvas {
+  /* Deprecado, mas mantido por segurança se algo injetar */
   display: block;
   margin: 0 auto;
-  /* Isso garante o centro seguro */
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  /* Opcional: fica bonito */
 }
 
 /* Container que envolve o canvas */
 .canvas-wrapper {
-  overflow: auto !important;
-  /* Sempre permitir scroll */
   position: relative;
-  /* Removemos flex/align-items center para evitar centralização forçada no modo crop */
   display: block;
 }
 

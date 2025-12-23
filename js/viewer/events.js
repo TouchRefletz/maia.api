@@ -1,16 +1,17 @@
-import { cancelarRecorte, mudarPagina, mudarZoom } from '../cropper/cropper-core.js';
+import { cancelarRecorte } from '../cropper/cropper-core.js';
 import { fecharModalConfirmacao } from '../cropper/gallery.js';
 import { ativarModoRecorte } from '../cropper/mode.js';
 import { salvarQuestao } from '../cropper/save-handlers.js';
 import { confirmarEnvioIA } from '../envio/ui-estado.js';
 import { viewerState } from '../main.js';
 import { inicializarContextoViewer } from './contexto.js';
-import { carregarDocumentoPDF, trocarModo } from './pdf-core.js';
+import { carregarDocumentoPDF, mudarPagina, mudarZoom, trocarModo } from './pdf-core.js';
 import { configurarResizerSidebar } from './resizer.js';
 import { atualizarUIViewerModo, montarTemplateViewer } from './viewer-template.js';
 
 /**
  * Configura todos os listeners de clique da interface do visualizador.
+ * (Atualizado para garantir importações corretas)
  */
 export function configurarEventosViewer() {
   // Helper para encurtar o código e evitar erros se o botão não existir
@@ -51,8 +52,14 @@ export function configurarEventosViewer() {
   aoClicar('btnModalCancelarTudo', fecharModalConfirmacao);
 }
 
-export function realizarLimpezaCompleta() {
-  // 1. Encerra cropper com segurança
+export function realizarlimpezaCompleta() {
+  // 1. Encerra cropper com segurança (Se houver resquício)
+  try {
+    import('../cropper/selection-overlay.js').then(module => {
+      module.removeSelectionOverlay();
+    });
+  } catch (_) { }
+
   try {
     if (typeof viewerState.cropper !== 'undefined' && viewerState.cropper) {
       viewerState.cropper.destroy();

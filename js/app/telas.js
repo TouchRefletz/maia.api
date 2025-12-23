@@ -13,7 +13,7 @@ export function gerarTelaInicial() {
   bancoState.todasQuestoesCache = [];
 
   const html = `
-    <div class="container fade-in" style="max-width: 900px; margin-top: 10vh; text-align: center;">
+    <div class="container fade-in" style="max-width: 900px; margin-top: 10vh; text-align: center; overflow-y: scroll">
         <div id="brandHeader" style="justify-content: center; margin-bottom: 40px;">
             <img src="logo.png" alt="Logo Maia" id="brandLogo" style="width: 80px;">
             <span id="brandName" style="font-size: 4rem;">Maia<strong style="color:var(--color-primary)">.edu</strong></span>
