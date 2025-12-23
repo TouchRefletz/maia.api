@@ -1,7 +1,8 @@
 import { viewerState } from '../main.js';
-import { renderPage } from '../viewer/pdf-core.js';
+import { customAlert } from '../ui/GlobalAlertsLogic.tsx';
+import { renderPage, renderPageHighRes } from '../viewer/pdf-core.js';
 
-export function prepararImagemParaCropper() {
+export async function prepararImagemParaCropper() {
   const container = document.getElementById('canvasContainer');
   const sourceCanvas = document.getElementById('the-canvas');
 
@@ -14,18 +15,27 @@ export function prepararImagemParaCropper() {
   const currentWidth = sourceCanvas.style.width || sourceCanvas.width + 'px';
   const currentHeight = sourceCanvas.style.height || sourceCanvas.height + 'px';
 
-  // 2. Cria a imagem temporária
+  // 2. Gera a imagem em ALTA RESOLUÇÃO (Async)
+  // Mostra um feedback visual rápido se necessário, mas o await já segura
+  const highResDataUrl = await renderPageHighRes(viewerState.pageNum);
+
+  if (!highResDataUrl) {
+    console.error('Falha ao renderizar imagem HR');
+    return null;
+  }
+
+  // 3. Cria a imagem temporária
   const imageForCropper = document.createElement('img');
   imageForCropper.id = 'temp-cropper-img';
-  imageForCropper.src = sourceCanvas.toDataURL('image/png');
+  imageForCropper.src = highResDataUrl;
 
-  // Estilos Críticos
+  // Estilos Críticos -> Força o tamanho VISUAL a ser igual ao do canvas anterior
   imageForCropper.style.width = currentWidth;
   imageForCropper.style.height = currentHeight;
   imageForCropper.style.maxWidth = 'none';
   imageForCropper.style.display = 'block';
 
-  // 3. Limpa e prepara o container
+  // 4. Limpa e prepara o container
   container.innerHTML = '';
 
   const wrapper = document.createElement('div');
@@ -37,7 +47,7 @@ export function prepararImagemParaCropper() {
   wrapper.appendChild(imageForCropper);
   container.appendChild(wrapper);
 
-  // 4. Restaura Scroll inicial
+  // 5. Restaura Scroll inicial
   container.scrollTop = viewerState.scrollPos.top;
   container.scrollLeft = viewerState.scrollPos.left;
 
@@ -59,8 +69,8 @@ export function instanciarCropper(imageElement) {
     highlight: true,
     background: false,
     autoCrop: false,
-    movable: false,
-    zoomable: false,
+    movable: false, // Não mover a imagem
+    zoomable: false, // Não dar zoom na imagem
     rotatable: false,
     scalable: false,
     ready: function () {
@@ -77,9 +87,12 @@ export function instanciarCropper(imageElement) {
   }, 50);
 }
 
-export function iniciarCropper() {
-  // 1. Prepara o HTML e pega a imagem
-  const imgElement = prepararImagemParaCropper();
+export async function iniciarCropper() {
+  // Feedback para o usuário (pois o render 300dpi pode demorar ~500ms)
+  customAlert('⏳ Preparando imagem em Alta Definição...', 1000);
+
+  // 1. Prepara o HTML e pega a imagem (Agora é Async)
+  const imgElement = await prepararImagemParaCropper();
 
   // 2. Se deu certo, inicia a biblioteca
   if (imgElement) {

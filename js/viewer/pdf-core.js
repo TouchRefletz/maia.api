@@ -61,6 +61,40 @@ export function renderPage(num) {
   });
 }
 
+/**
+ * Renderiza a página em alta resolução (300 DPI) para captura.
+ * Não afeta o canvas visível na tela (render off-screen).
+ * Retorna uma Promise que resolve com o DataURL da imagem gerada.
+ */
+export function renderPageHighRes(num) {
+  if (!viewerState.pdfDoc) return Promise.resolve(null);
+
+  return viewerState.pdfDoc.getPage(num).then(function (page) {
+    // 1. Cria um canvas off-screen
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    // 2. Calcula escala para 300 DPI
+    // PDF padrão é 72 DPI. 300 / 72 = 4.1666...
+    const scale300Dpi = 300 / 72;
+    const viewport = page.getViewport({ scale: scale300Dpi });
+
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+
+    const renderContext = {
+      canvasContext: ctx,
+      viewport: viewport,
+    };
+
+    // 3. Renderiza
+    return page.render(renderContext).promise.then(function () {
+      // 4. Retorna a imagem em Base64 (PNG para qualidade)
+      return canvas.toDataURL('image/png');
+    });
+  });
+}
+
 export function carregarDocumentoPDF(url) {
   const loadingTask = pdfjsLib.getDocument(url);
 
