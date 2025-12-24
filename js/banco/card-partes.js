@@ -11,11 +11,11 @@ export function gerarHtmlCorpoQuestao(q, imgsOriginalQ, htmlImgsSuporte) {
     const imgsHtml =
       imgsOriginalQ.length > 0
         ? imgsOriginalQ
-            .map(
-              (url) =>
-                `<img src="${url}" class="structure-img" style="margin-bottom:10px;">`
-            )
-            .join('')
+          .map(
+            (url) =>
+              `<img src="${url}" class="structure-img" style="margin-bottom:10px;">`
+          )
+          .join('')
         : '';
 
     htmlFinal =
@@ -149,4 +149,48 @@ export function renderCreditosCompleto(g) {
                 <tr><td>Confiança</td><td>${confianca}</td></tr>
             </table>
         </div>`;
+}
+
+// --- NOVAS FUNÇÕES PARA O USER_REQUEST ---
+
+export function renderRelatorioPesquisa(g) {
+  if (!g.texto_referencia) return '';
+
+  // Escapa aspas para não quebrar o atributo data-raw
+  const safeText = String(g.texto_referencia).replace(/"/g, '&quot;');
+
+  return `
+  <div class="q-res-section" style="border:1px solid var(--color-border); border-radius:6px; overflow:hidden; margin-bottom:10px;">
+    <details>
+      <summary style="padding:10px; background:var(--color-bg-2); cursor:pointer; font-weight:600; font-size:0.9rem;">
+        📄 Relatório Técnico da Pesquisa
+      </summary>
+      <div 
+         class="markdown-content relatorio-content" 
+         data-raw="${safeText}" 
+         style="padding:15px; max-height:300px; overflow-y:auto; background:var(--color-background); border-top:1px solid var(--color-border);">
+         ${g.texto_referencia}
+      </div>
+    </details>
+  </div>`;
+}
+
+export function renderFontesExternas(g) {
+  if (!g.fontes_externas || g.fontes_externas.length === 0) return '';
+
+  const lis = g.fontes_externas.map(f => `
+    <li>
+      <a href="${f.uri}" target="_blank" rel="noopener noreferrer" style="color:var(--color-primary); text-decoration:none; font-size:0.85rem;">
+        ${f.title || f.uri} ↗
+      </a>
+    </li>
+  `).join('');
+
+  return `
+  <div class="q-res-section">
+      <span class="q-res-label">📚 Fontes Externas</span>
+      <ul style="list-style:none; padding:0; margin:5px 0 0 0; display:flex; flex-direction:column; gap:6px;">
+        ${lis}
+      </ul>
+  </div>`;
 }

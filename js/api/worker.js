@@ -198,3 +198,188 @@ export async function uploadImagemWorker(imageBase64) {
 export async function upsertPineconeWorker(vectors, namespace = "") {
   return await callWorker("/pinecone-upsert", { vectors, namespace });
 }
+
+/**
+ * Realiza uma pesquisa via Worker (usando Google Search Grounding)
+ * Suporta STREAMING para exibir Thoughts.
+ * @returns {Promise<any>} - Retorna objecto { report: string, sources: Array }
+ */
+export async function realizarPesquisa(texto, listaImagensBase64 = [], handlers = {}) {
+  handlers?.onStatus?.("Conectando ao Researcher...");
+
+  try {
+    const response = await fetch(`${WORKER_URL}/search`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        texto,
+        listaImagensBase64,
+        apiKey: sessionStorage.getItem("GOOGLE_GENAI_API_KEY") || undefined,
+      }),
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error || `Erro HTTP ${response.status}`);
+    }
+
+    if (!response.body) throw new Error("Resposta sem corpo (stream)");
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+
+    let reportText = "";
+    let groundingMetadata = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      let parts = buffer.split("\n");
+      buffer = parts.pop() || "";
+
+      for (const line of parts) {
+        if (!line.trim()) continue;
+        try {
+          const msg = JSON.parse(line);
+
+          if (msg.type === "thought") {
+            handlers?.onThought?.(msg.text);
+          } else if (msg.type === "answer") {
+            // No caso do Search, 'answer' é o texto do relatório
+            reportText += msg.text;
+          } else if (msg.type === "grounding") {
+            groundingMetadata = msg.metadata;
+          } else if (msg.type === "error") {
+            throw new Error(msg.message || "Erro no worker de pesquisa");
+          } else if (msg.type === "reset") {
+            // Limpa relatório se houver reset (recitation)
+            reportText = "";
+            handlers?.onStatus?.("Recitation detectado na pesquisa. Tentando novo modelo...");
+          }
+        } catch (e) {
+          console.warn("Erro parse stream pesquisa:", e);
+        }
+      }
+    }
+
+    // Processa metadados
+    console.log("DEBUG: Raw Grounding Metadata:", groundingMetadata);
+
+    const chunks = groundingMetadata?.groundingChunks || groundingMetadata?.grounding_chunks || [];
+    const sources = chunks
+      .map(c => c.web)
+      .filter(w => w && w.uri); // Relaxado: exige apenas URI, título opcional
+
+    return {
+      report: reportText,
+      sources: sources,
+      rawMetadata: groundingMetadata
+    };
+
+  } catch (error) {
+    console.error("Erro na pesquisa streaming:", error);
+    throw error;
+  }
+}
+
+const PROMPT_PESQUISADOR = `Role: Você é um Pesquisador Sênior em Conteúdo Educacional (Vestibulares e Concursos).
+Objetivo: Eu tenho uma imagem de uma questão e preciso que você encontre a resolução original dela na internet e escreva um RELATÓRIO TÉCNICO DE RESOLUÇÃO (Não use "Exaustiva", seja objetivo e técnico).
+Suas Instruções de Pesquisa (Search Tools):
+OBRIGATÓRIO: Você DEVE usar a ferramenta de busca (Google Search) para validar o texto da questão e encontrar a fonte original. Execute buscas múltiplas se necessário.
+Encontre a Questão: Use o texto da imagem para achar a prova original (Ex: Fuvest 2021, ENEM 2018, Banca Vunesp).
+Ache o Gabarito Oficial: Descubra qual é a alternativa correta (Gabarito Oficial ou Definitivo).
+Consulte os Mestres: Leia as resoluções de sites de elite (Poliedro, Anglo, Objetivo, Etapa, QConcursos, Descomplica). Veja como diferentes professores explicaram.
+Instruções de Escrita (O Relatório):
+Não use estruturas rígidas. Sinta-se livre para estruturar a explicação da forma que julgar mais didática e completa para este caso específico.
+Seja Obcecado por Detalhes: Se for Matemática, narre cada transformação algébrica. Se for História, dê o contexto da época. Se for Biologia, explique o processo fisiológico a fundo.
+Fundamente tudo: Não tire nada da sua cabeça. Use as informações que você leu nas resoluções online. Se o site do Anglo diz X e o Objetivo diz Y, mencione ambos se isso enriquecer a explicação.
+Argumente contra o Erro: Se possível, explique brevemente por que as alternativas erradas ("distratores") estão erradas.`;
+
+/**
+ * Função orquestradora para Gabarito:
+ * 1. Pesquisa / Relatório
+ * 2. Geração da resposta final baseada no relatório
+ */
+export async function gerarGabaritoComPesquisa(
+  promptDaIA,
+  JSONEsperado,
+  listaImagens,
+  mimeType,
+  handlers,
+  imagensPesquisa = [], // Argumento opcional para imagens limpas/originais
+  textoQuestao = ""      // Contexto específico da questão (JSON/Texto) para a pesquisa
+) {
+  // 1. Etapa de Pesquisa
+  handlers?.onStatus?.("🕵️ Analisando imagem e pesquisando resoluções (Step 1/2)...");
+
+  let relatorioPesquisa = "";
+  let fontesEncontradas = [];
+
+  // Decide quais imagens usar na pesquisa: 
+  // Se tiver imagens de pesquisa específicas (limpas), usa elas. Senão, usa as da lista (carimbadas/misturadas).
+  const imagensParaBusca = (imagensPesquisa && imagensPesquisa.length > 0)
+    ? imagensPesquisa
+    : listaImagens;
+
+  try {
+    // Adiciona o contexto da questão (SE FORNECIDO) ao prompt do pesquisador
+    // Agora usamos 'textoQuestao' em vez de 'promptDaIA' para não poluir com instruções do próximo passo
+    let promptPesquisaComContexto = PROMPT_PESQUISADOR;
+
+    if (textoQuestao) {
+      promptPesquisaComContexto += `\n\n--- DADOS DA QUESTÃO ---\nUse o texto abaixo para localizar a questão original:\n${textoQuestao}`;
+    }
+
+    // Passamos os handlers para ver thoughts também nesta etapa
+    const searchResult = await realizarPesquisa(promptPesquisaComContexto, imagensParaBusca, {
+      onStatus: handlers?.onStatus,
+      onThought: handlers?.onThought // Thoughts do pesquisador!
+    });
+
+    relatorioPesquisa = searchResult.report;
+    fontesEncontradas = searchResult.sources || [];
+
+    console.log("DEBUG: Relatório Pesquisa:", relatorioPesquisa);
+    console.log("DEBUG: Fontes Encontradas:", fontesEncontradas);
+
+  } catch (err) {
+    console.warn("Falha na etapa de pesquisa (prosseguindo sem contexto extra):", err);
+    handlers?.onStatus?.("⚠️ Pesquisa falhou, gerando com conhecimento interno...");
+  }
+
+  // 2. Etapa de Geração Final
+  handlers?.onStatus?.("✍️ Escrevendo gabarito detalhado com base na pesquisa (Step 2/2)...");
+
+  // Enriquece o prompt original com o relatório
+  // Enriquece o prompt original com o relatório
+  let finalPrompt = promptDaIA;
+  if (relatorioPesquisa) {
+    finalPrompt += `\n\n--- INÍCIO DO RELATÓRIO DE PESQUISA (Contexto Obrigatório) ---\nUse as informações abaixo para enriquecer a explicação e garantir a precisão do gabarito:\n${relatorioPesquisa}\n--- FIM DO RELATÓRIO ---\n`;
+    finalPrompt += `\nINSTRUÇÃO OBRIGATÓRIA DE CITAÇÃO:\nVocê DEVE utilizar as informações do relatório acima para compor a explicação. SE O RELATÓRIO CITOU UMA FONTE ESPECÍFICA (Site X, Professor Y), VOCÊ DEVE MENCIONAR ISSO NO CAMPO 'evidencia' DE CADA PASSO.\nExemplo de evidencia: "Adaptado da resolução do site Etapa".\nExemplo de evidencia: "Confirmação via gabarito oficial da Fuvest encontrado na pesquisa".\nNUNCA INVENTE FONTES. Se não usar o relatório, diga "Análise IA".`;
+  }
+
+  // Chama a geração normal (streaming)
+  const jsonFinal = await gerarConteudoEmJSONComImagemStream(
+    finalPrompt,
+    JSONEsperado,
+    listaImagens,
+    mimeType,
+    handlers
+  );
+
+  // 3. Injeção HARDCODED das fontes e relatório no JSON final
+  if (fontesEncontradas.length > 0) {
+    jsonFinal.fontes_externas = fontesEncontradas;
+  }
+
+  if (relatorioPesquisa) {
+    jsonFinal.texto_referencia = relatorioPesquisa; // Para renderizar na UI por demanda
+  }
+
+  console.log("DEBUG: JSON FINAL GABARITO:", jsonFinal);
+
+  return jsonFinal;
+}

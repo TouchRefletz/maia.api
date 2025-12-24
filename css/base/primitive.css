@@ -13,8 +13,20 @@ html {
 
 body {
   margin: 0;
-  padding: 0;
+  padding: var(--space-20);
+  height: 100vh;
+  /* Fixed height to constrain children */
+  width: 100vw;
   overflow: hidden;
+  /* No scroll on body itself */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  color: var(--color-text);
+  background-color: var(--color-background);
+  font-family: var(--font-family-base);
+  cursor: default;
 }
 
 *,
@@ -29,24 +41,6 @@ body {
   box-sizing: border-box;
 }
 
-body,
 label {
   cursor: default;
-}
-
-body {
-  overflow-x: hidden;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
-
-body {
-  color: var(--color-text);
-  background-color: var(--color-background);
-  font-family: var(--font-family-base);
-  align-items: center;
-  justify-content: flex-start;
-  padding: var(--space-20);
-  min-height: 100vh;
 }

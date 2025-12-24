@@ -66,12 +66,53 @@ interface GabaritoProps {
     justificativa_curta: string;
     analise_complexidade: any;
     creditos: any;
+    texto_referencia?: string;
+    fontes_externas?: Array<{ uri: string; title: string }>;
   };
   imagensFinais: {
     g_suporte: string[];
   };
   explicacaoArray: PassoExplicacao[];
 }
+
+// --- Novos Componentes de Pesquisa ---
+
+export const SourcesList: React.FC<{ sources: Array<{ uri: string; title: string }> }> = ({ sources }) => {
+  if (!sources || sources.length === 0) return null;
+  return (
+    <div className="field-group" style={{ marginTop: '15px' }}>
+      <span className="field-label">📚 Fontes Externas (Pesquisa)</span>
+      <ul style={{ listStyle: 'none', padding: 0, margin: '5px 0 0 0', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+        {sources.map((s, i) => (
+          <li key={i}>
+            <a href={s.uri} target="_blank" rel="noopener noreferrer" style={{ fontSize: '12px', color: 'var(--color-primary)', textDecoration: 'none' }}>
+              {s.title || s.uri} ↗
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+
+export const ResearchReport: React.FC<{ text: string }> = ({ text }) => {
+  const content = text || "<em>Relatório de pesquisa não disponível ou não gerado.</em>";
+
+  return (
+    <div className="field-group" style={{ marginTop: '15px', border: '1px solid var(--color-border)', borderRadius: '6px', overflow: 'hidden' }}>
+      <details>
+        <summary style={{ padding: '8px 12px', background: 'var(--color-bg-2)', cursor: 'pointer', fontSize: '12px', fontWeight: 600, color: 'var(--color-text)' }}>
+          📄 Relatório Técnico da Pesquisa
+        </summary>
+        <div
+          className="markdown-content relatorio-content"
+          style={{ padding: '12px', fontSize: '12px', background: 'var(--color-background)', maxHeight: '300px', overflowY: 'auto' }}
+          dangerouslySetInnerHTML={{ __html: safe(content) }}
+        />
+      </details>
+    </div>
+  );
+};
 
 // --- Componentes ---
 
@@ -337,6 +378,10 @@ export const PainelGabarito: React.FC<GabaritoProps> = ({ g, imagensFinais, expl
       </div>
 
       <ComplexidadeVisual comp={g.analise_complexidade} />
+
+      <ResearchReport text={g.texto_referencia || ''} />
+      <SourcesList sources={g.fontes_externas || []} />
+
       <PassosGabarito explicacaoArray={explicacaoArray} />
       <CreditosTable c={g.creditos} />
     </div>

@@ -43,7 +43,7 @@ export function resetarBuffersImagem() {
 
 export function gerenciarEstadoInterface() {
   // Recolhe a sidebar (se existir a função)
-  if (typeof esconderPainel === 'function') esconderPainel();
+  if (typeof esconderPainel === 'function') esconderPainel(false);
 
   // Cancela modo de recorte
   if (typeof cancelarRecorte === 'function') cancelarRecorte();

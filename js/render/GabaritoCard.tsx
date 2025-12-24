@@ -28,6 +28,8 @@ interface GabaritoRaw {
   alertas_credito?: any;
   analise_complexidade?: any;
   analiseComplexidade?: any;
+  fontes_externas?: Array<{ uri: string; title: string }>; // New field
+  texto_referencia?: string; // Relatório da pesquisa
 }
 
 interface CreditosData {
@@ -55,6 +57,8 @@ interface GabaritoData {
   explicacaoArray: any[];
   alternativasAnalisadas: any[];
   complexidadeRaw: any;
+  externas: Array<{ uri: string; title: string }>; // Normalized field
+  textoReferencia: string;
   questao: any;
 }
 
@@ -99,6 +103,8 @@ export function prepararDadosGabarito(gabarito: GabaritoRaw, questao: any): Gaba
       gabarito.analiseComplexidade,
       null
     ),
+    externas: (pick(gabarito.fontes_externas, []) as any[]),
+    textoReferencia: (pick(gabarito.texto_referencia, '') as string),
     questao: questao,
   };
 }
@@ -238,6 +244,37 @@ export const PassosExplicacao: React.FC<{ explicacaoArray: any[] }> = ({ explica
           })}
         </ol>
       </div>
+    </div>
+  );
+};
+
+// Sub-componente: Fontes de Pesquisa
+export const FontesPesquisa: React.FC<{ fontes: Array<{ uri: string; title: string }> }> = ({ fontes }) => {
+  if (!fontes || !fontes.length) return null;
+
+  return (
+    <div className="gabarito-sources" style={{ margin: '15px 0', padding: '12px', border: '1px solid var(--color-border)', borderRadius: '8px', background: 'var(--color-bg-2)' }}>
+      <p style={{ fontWeight: 600, fontSize: '13px', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-text)' }}>
+        <span>📚</span> Referências Bibliográficas
+      </p>
+      <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        {fontes.map((fonte, idx) => (
+          <li key={idx}>
+            <a
+              href={fonte.uri}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ fontSize: '12px', color: 'var(--color-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}
+              title={fonte.title}
+            >
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
+                {fonte.title || fonte.uri}
+              </span>
+              <span style={{ fontSize: '10px', opacity: 0.7 }}>↗</span>
+            </a>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 };
@@ -382,6 +419,24 @@ export const GabaritoCardView: React.FC<{ dados: GabaritoData }> = ({ dados }) =
       </div>
 
       <PassosExplicacao explicacaoArray={explicacaoArray} />
+      <FontesPesquisa fontes={dados.externas} />
+      <details className="gabarito-extra" open={!dados.textoReferencia}>
+        <summary>
+          📄 Relatório Técnico
+        </summary>
+        <div
+          className="markdown-content relatorio-content"
+          data-raw={dados.textoReferencia || ''}
+          style={{
+            marginTop: '10px',
+            overflowY: 'auto',
+            padding: '5px'
+          }}
+        >
+          {dados.textoReferencia ? <SafeText text={dados.textoReferencia} /> : <em>Relatório de pesquisa não disponível.</em>}
+        </div>
+      </details>
+
       <DetalhesTecnicos dados={dados} />
     </>
   );

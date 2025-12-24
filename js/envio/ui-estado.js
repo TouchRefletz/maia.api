@@ -1,6 +1,7 @@
-import { gerarConteudoEmJSONComImagemStream } from '../api/worker.js';
+import { gerarConteudoEmJSONComImagemStream, gerarGabaritoComPesquisa } from '../api/worker.js';
 import { obterConfiguracaoIA } from '../ia/config.js';
 import { renderizarQuestaoFinal } from '../render/final/render-questao.js';
+import { urlToBase64 } from '../services/image-utils.js';
 import { prepararAreaDeResposta, pushThought } from '../sidebar/thoughts-scroll.js';
 import { customAlert } from '../ui/GlobalAlertsLogic.tsx';
 import { coletarESalvarImagensParaEnvio, prepararImagensParaEnvio } from './imagens.js';
@@ -192,17 +193,71 @@ export async function confirmarEnvioIA() {
 
     setStatus(`Analisando ${listaImagens.length} imagem(ns)...`);
 
-    const resposta = await gerarConteudoEmJSONComImagemStream(
-      promptDaIA,
-      JSONEsperado,
-      listaImagens,
-      'image/jpeg',
-      {
-        onStatus: (s) => setStatus(s),
-        onThought: (t) => pushThought(t),
-        onAnswerDelta: () => setStatus('Gerando JSON...'),
+    // Seleciona a função adequada baseada no modo
+    // Se for 'gabarito', usa a nova função com pesquisa
+    // Seleciona a função adequada baseada no modo
+    let resposta;
+
+    if (window.__modo === 'gabarito') {
+      // Tenta recuperar imagens originais da questão para a pesquisa
+      let imagensPesquisa = window.__BACKUP_IMGS_Q || [];
+
+      // Fallback: se não tiver backup, tenta usar o scan_original salvo no JSON anterior
+      if ((!imagensPesquisa || imagensPesquisa.length === 0) && window.ultimaQuestaoExtraida?.scan_original) {
+        imagensPesquisa = [window.ultimaQuestaoExtraida.scan_original];
       }
-    );
+
+      // --- USER REQUEST: Adicionar também a imagem do Gabarito (listaImagens) para o Pesquisador ---
+      // O pesquisador precisa ver a questão original E o gabarito que está sendo analisado
+      if (listaImagens && listaImagens.length > 0) {
+        imagensPesquisa = [...imagensPesquisa, ...listaImagens];
+      }
+
+      // IMPORTANTE: Converter blobs para Base64 antes de enviar para o Worker
+      if (imagensPesquisa && imagensPesquisa.length > 0) {
+        imagensPesquisa = await Promise.all(imagensPesquisa.map(async (img) => {
+          if (typeof img === 'string' && img.startsWith('blob:')) {
+            try {
+              return await urlToBase64(img);
+            } catch (e) {
+              console.error("Falha ao converter blob de pesquisa:", e);
+              return img;
+            }
+          }
+          return img;
+        }));
+      }
+
+      // Prepara o texto da questão para auxiliar a busca
+      const textoQuestao = window.questaoAtual ? JSON.stringify(window.questaoAtual) : "";
+
+      resposta = await gerarGabaritoComPesquisa(
+        promptDaIA,
+        JSONEsperado,
+        listaImagens,
+        'image/jpeg',
+        {
+          onStatus: (s) => setStatus(s),
+          onThought: (t) => pushThought(t),
+          onAnswerDelta: () => setStatus('Gerando JSON...'),
+        },
+        imagensPesquisa, // <--- Passando as imagens originais para o Researcher!
+        textoQuestao     // <--- Passando o TEXTO da questão para o Researcher!
+      );
+    } else {
+      // Modo Questão (Padrão)
+      resposta = await gerarConteudoEmJSONComImagemStream(
+        promptDaIA,
+        JSONEsperado,
+        listaImagens,
+        'image/jpeg',
+        {
+          onStatus: (s) => setStatus(s),
+          onThought: (t) => pushThought(t),
+          onAnswerDelta: () => setStatus('Gerando JSON...'),
+        }
+      );
+    }
 
     console.log('Resposta recebida:', resposta);
 

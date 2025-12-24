@@ -28,10 +28,6 @@ h4 {
   font-size: var(--font-size-xl);
 }
 
-h4 {
-  filter: blur(10px);
-}
-
 h5 {
   font-size: var(--font-size-lg);
 }

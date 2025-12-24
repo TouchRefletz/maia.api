@@ -95,6 +95,8 @@ export const _processarGabarito = (root) => {
       String(pick(root?.alternativa_correta, root?.resposta, ''))
     ),
     coerencia: root?.coerencia ?? {},
+    fontes_externas: root?.fontes_externas || [],
+    texto_referencia: root?.texto_referencia || '',
   };
 };
 
@@ -111,13 +113,13 @@ export const _processarQuestao = (root) => {
   const estruturaEnunciadoRaw = Array.isArray(root?.estrutura)
     ? root.estrutura
     : [
-        {
-          tipo: 'texto',
-          conteudo: String(
-            pick(root?.enunciado, root?.texto, root?.statement, '') ?? ''
-          ),
-        },
-      ];
+      {
+        tipo: 'texto',
+        conteudo: String(
+          pick(root?.enunciado, root?.texto, root?.statement, '') ?? ''
+        ),
+      },
+    ];
 
   // Injeta imagens no enunciado
   const estruturaEnunciado = _injetarImagensEmEstrutura(
@@ -138,11 +140,11 @@ export const _processarQuestao = (root) => {
     const estruturaBruta = Array.isArray(a?.estrutura)
       ? a.estrutura
       : [
-          {
-            tipo: 'texto',
-            conteudo: String(pick(a?.texto, a?.text, '') ?? ''),
-          },
-        ];
+        {
+          tipo: 'texto',
+          conteudo: String(pick(a?.texto, a?.text, '') ?? ''),
+        },
+      ];
 
     // Injeta imagens na alternativa
     const estrutura = _injetarImagensEmEstrutura(

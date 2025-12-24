@@ -30,7 +30,7 @@ export function criarBackdropSeNecessario() {
   return backdrop;
 }
 
-export function esconderPainel() {
+export function esconderPainel(mostrarBotao = true) {
   const viewerBody = document.getElementById('viewerBody');
   // 1. Esconde o Painel (CSS)
   if (viewerBody) viewerBody.classList.add('sidebar-collapsed');
@@ -45,7 +45,7 @@ export function esconderPainel() {
   // 3. Destrava scroll do site
   document.body.style.overflow = '';
 
-  mostrarBotaoReabrirPainel();
+  if (mostrarBotao) mostrarBotaoReabrirPainel();
 
   // ATUALIZA O CROPPER IMEDIATAMENTE E DEPOIS DA ANIMAÇÃO
   refreshOverlayPosition();

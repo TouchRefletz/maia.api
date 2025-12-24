@@ -4,7 +4,9 @@
   flex-direction: column;
   align-items: center;
   background-color: var(--color-background);
-  min-height: 100vh;
+  height: 100%;
+  flex: 1;
+  overflow-y: auto;
   font-family: var(--font-family-base);
   width: 80%;
 }
@@ -292,9 +294,9 @@
   flex-direction: column;
 }
 
-.structure-lista > ul,
-.structure-lista > li,
-.structure-lista > strong {
+.structure-lista>ul,
+.structure-lista>li,
+.structure-lista>strong {
   text-align: left;
 }
 

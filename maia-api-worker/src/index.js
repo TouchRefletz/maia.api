@@ -60,6 +60,9 @@ export default {
 				case '/pinecone-upsert':
 					return handlePineconeUpsert(request, env);
 
+				case '/search':
+					return handleGeminiSearch(request, env);
+
 				default:
 					return new Response('Endpoint Not Found', { status: 404, headers: corsHeaders });
 			}
@@ -386,3 +389,162 @@ async function handlePineconeUpsert(request, env) {
 		headers: { ...corsHeaders, 'Content-Type': 'application/json' },
 	});
 }
+
+/**
+ * 5. SERVICE: GEMINI SEARCH (Grounding with Google Search)
+ */
+/**
+ * 5. SERVICE: GEMINI SEARCH (Grounding with Google Search)
+ * STREAMING VERSION para suportar Thoughts e feedback visual
+ */
+async function handleGeminiSearch(request, env) {
+	const body = await request.json();
+	const { texto, listaImagensBase64 = [], model, apiKey: userApiKey } = body;
+
+	const finalApiKey = userApiKey || env.GOOGLE_GENAI_API_KEY;
+	if (!finalApiKey) throw new Error('GOOGLE_GENAI_API_KEY not configured');
+
+	const client = new GoogleGenAI({ apiKey: finalApiKey });
+
+	// Modelos iniciais
+	const initialModels = model ? [model] : DEFAULT_MODELS;
+
+	// Fallbacks
+	const RECITATION_FALLBACKS = [
+		'models/gemini-flash-latest',
+		'models/gemini-flash-lite-latest',
+	];
+
+	const encoder = new TextEncoder();
+
+	// Prepare parts
+	const parts = [{ text: texto }];
+	if (Array.isArray(listaImagensBase64)) {
+		listaImagensBase64.forEach((base64Image) => {
+			let imageString = base64Image;
+			let imageMime = 'image/jpeg';
+
+			if (typeof base64Image === 'string' && base64Image.includes('base64,')) {
+				const matches = base64Image.match(/^data:(.+);base64,(.+)$/);
+				if (matches) {
+					imageMime = matches[1];
+					imageString = matches[2];
+				}
+			}
+			parts.push({ inlineData: { mimeType: imageMime, data: imageString } });
+		});
+	}
+
+	const { readable, writable } = new TransformStream();
+	const writer = writable.getWriter();
+
+	const writeNdjson = async (obj) => {
+		await writer.write(encoder.encode(JSON.stringify(obj) + '\n'));
+	};
+
+	(async () => {
+		let lastError = null;
+		let success = false;
+		let recitationCount = 0;
+		const queue = [...initialModels];
+
+		while (queue.length > 0) {
+			const modelo = queue.shift();
+
+			try {
+				await writeNdjson({ type: 'meta', event: 'attempt_start', model: modelo });
+
+				const stream = await client.models.generateContentStream({
+					model: modelo,
+					contents: [{ role: 'user', parts }],
+					config: {
+						tools: [{ googleSearch: {} }],
+						safetySettings,
+						thinkingConfig: { includeThoughts: true }, // Enable thoughts
+					},
+				});
+
+				for await (const chunk of stream) {
+					const cand = chunk?.candidates?.[0];
+					const partsResp = cand?.content?.parts || [];
+					// FIX: Check both cand and chunk for groundingMetadata (camel and snake case)
+					const groundingMetadata = cand?.groundingMetadata || chunk?.groundingMetadata || cand?.grounding_metadata || chunk?.grounding_metadata;
+
+					// DEBUG: Check what is inside
+					if (chunk) {
+						await writeNdjson({ type: 'debug', text: `Chunk Keys: ${Object.keys(chunk).join(', ')}` });
+					}
+					if (cand) {
+						const hasGrounding = !!groundingMetadata;
+						await writeNdjson({ type: 'debug', text: `Cand Keys: ${Object.keys(cand).join(', ')} | Has Grounding: ${hasGrounding}` });
+						if (hasGrounding) {
+							await writeNdjson({ type: 'debug', text: `FOUND GROUNDING METADATA!` });
+						}
+					}
+
+					// Envia Grounding Metadata se existir
+					if (groundingMetadata) {
+						await writeNdjson({ type: 'grounding', metadata: groundingMetadata });
+					}
+
+					for (const part of partsResp) {
+						if (!part?.text) continue;
+						const type = part.thought ? 'thought' : 'answer';
+						// Para o endpoint de search, 'answer' é o relatório de pesquisa
+						await writeNdjson({ type, text: part.text });
+					}
+
+					const finishReason = cand?.finishReason;
+					if (finishReason) {
+						if (finishReason === 'STOP') {
+							success = true;
+							break; // Sai do loop do stream
+						}
+
+						// Recitation Logic
+						if (String(finishReason || '').toUpperCase() === 'RECITATION') {
+							recitationCount += 1;
+							await writeNdjson({ type: 'reset', reason: 'RECITATION' });
+
+							const nextFallback = RECITATION_FALLBACKS[recitationCount - 1];
+							if (nextFallback) {
+								queue.unshift(nextFallback); // Tenta o próximo
+								throw new Error('__RECITATION_RETRY__');
+							}
+
+							throw new Error('RECITATION_FAIL_ALL');
+						}
+
+						throw new Error(`Finish Reason: ${finishReason}`);
+					}
+				}
+
+				if (success) break; // Sai do loop da fila de modelos
+
+			} catch (error) {
+				if (error.message === '__RECITATION_RETRY__') continue;
+				console.warn(`Erro search model ${modelo}`, error);
+				lastError = error;
+			}
+		}
+
+		if (!success) {
+			await writeNdjson({
+				type: 'error',
+				code: 'ALL_MODELS_FAILED',
+				message: lastError?.message || 'Erro desconhecido na pesquisa',
+			});
+		}
+
+		await writer.close();
+	})();
+
+	return new Response(readable, {
+		headers: {
+			...corsHeaders,
+			'Content-Type': 'application/x-ndjson; charset=utf-8',
+			'X-Content-Type-Options': 'nosniff',
+		},
+	});
+}
+

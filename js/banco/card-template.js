@@ -1,10 +1,6 @@
-import { gerarHtmlCorpoQuestao } from './card-partes.js';
-import { prepararImagensVisualizacao } from './imagens.js';
-import { renderBotaoScanGabarito } from './card-partes.js';
-import { renderCreditosCompleto } from './card-partes.js';
-import { renderMatrizComplexidade } from './card-partes.js';
-import { renderPassosComDetalhes } from './card-partes.js';
 import { renderizar_estrutura_alternativa } from '../render/structure.js';
+import { gerarHtmlCorpoQuestao, renderBotaoScanGabarito, renderCreditosCompleto, renderFontesExternas, renderMatrizComplexidade, renderPassosComDetalhes, renderRelatorioPesquisa } from './card-partes.js';
+import { prepararImagensVisualizacao } from './imagens.js';
 
 export function prepararElementoCard(idFirebase, q, g, meta) {
   // 1. Criação do elemento DOM
@@ -120,6 +116,10 @@ export function gerarHtmlResolucao(cardId, gabarito, rawImgsG, jsonImgsG) {
                 <span class="q-res-label">Justificativa</span>
                 <p class="markdown-content" style="margin:0; line-height:1.5;">${justificativa}</p>
             </div>
+            
+            ${renderRelatorioPesquisa(gabarito)}
+            ${renderFontesExternas(gabarito)}
+
             ${renderPassosComDetalhes(gabarito)}
             ${renderMatrizComplexidade(gabarito)}
             ${renderBotaoScanGabarito(rawImgsG, jsonImgsG)}
