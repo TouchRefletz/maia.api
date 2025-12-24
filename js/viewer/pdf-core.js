@@ -332,16 +332,24 @@ export function carregarDocumentoPDF(url) {
 
     // Auto-Fit Zoom Implementation
     pdf.getPage(1).then(page => {
-      const container = document.getElementById('canvasContainer');
-      if (container) {
-        const viewport = page.getViewport({ scale: 1.0 });
-        // Get container width minus some padding (e.g. 24px total)
-        const availableWidth = container.clientWidth - 24;
-        const scale = availableWidth / viewport.width;
+      // Lógica de Zoom:
+      // Se for MOBILE (<= 900px), ajusta para caber na tela.
+      // Se for DESKTOP (> 900px), mantém 100% (1.0).
+      if (window.innerWidth <= 900) {
+        const container = document.getElementById('canvasContainer');
+        if (container) {
+          const viewport = page.getViewport({ scale: 1.0 });
+          // Get container width minus some padding (e.g. 24px total)
+          const availableWidth = container.clientWidth - 24;
+          const scale = availableWidth / viewport.width;
 
-        // Set scale but constrain it to reasonable limits
-        viewerState.pdfScale = Math.max(0.5, Math.min(scale, 3.0));
+          // Set scale but constrain it to reasonable limits
+          viewerState.pdfScale = Math.max(0.5, Math.min(scale, 3.0));
+        } else {
+          viewerState.pdfScale = 1.0;
+        }
       } else {
+        // Desktop: Default 100%
         viewerState.pdfScale = 1.0;
       }
 

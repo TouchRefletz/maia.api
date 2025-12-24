@@ -85,6 +85,65 @@ export function configurarEventosViewer() {
   aoClicar('btnModalMaisRecorte', fecharModalConfirmacao);
   aoClicar('btnModalProcessar', confirmarEnvioIA);
   aoClicar('btnModalCancelarTudo', fecharModalConfirmacao);
+
+  // --- NOVO: Click & Drag (Pan) para Desktop ---
+  // Imita o comportamento de arrastar do celular no PC
+  const container = document.getElementById('canvasContainer');
+  if (container) {
+    let isDown = false;
+    let startX, startY, scrollLeft, scrollTop;
+
+    // Define cursor inicial como "grab" (mãozinha aberta)
+    container.style.cursor = 'grab';
+
+    container.addEventListener('mousedown', (e) => {
+      // 1. Bloqueia se estiver em modo de recorte (verifica overlay)
+      const overlay = document.getElementById('selection-overlay');
+      if (overlay && overlay.offsetParent !== null) return;
+
+      // 2. Bloqueia se clicar em algum botão ou controle dentro do container (se houver)
+      if (e.target.closest('button, .resizer')) return;
+
+      isDown = true;
+      container.classList.add('is-dragging'); // Opcional, para CSS extra se precisar
+      container.style.cursor = 'grabbing';
+
+      // Previne seleção de texto durante o arrasto
+      container.style.userSelect = 'none';
+
+      startX = e.pageX - container.offsetLeft;
+      startY = e.pageY - container.offsetTop;
+      scrollLeft = container.scrollLeft;
+      scrollTop = container.scrollTop;
+    });
+
+    const stopDrag = () => {
+      isDown = false;
+      container.classList.remove('is-dragging');
+      if (!document.getElementById('selection-overlay')) {
+        container.style.cursor = 'grab';
+      }
+      container.style.removeProperty('user-select');
+    };
+
+    container.addEventListener('mouseleave', stopDrag);
+    container.addEventListener('mouseup', stopDrag);
+
+    container.addEventListener('mousemove', (e) => {
+      if (!isDown) return;
+      e.preventDefault(); // Impede comportamento padrão de seleção
+
+      const x = e.pageX - container.offsetLeft;
+      const y = e.pageY - container.offsetTop;
+
+      // Multiplicador de velocidade (1 = 1:1 com mouse)
+      const walkX = (x - startX) * 1;
+      const walkY = (y - startY) * 1;
+
+      container.scrollLeft = scrollLeft - walkX;
+      container.scrollTop = scrollTop - walkY;
+    });
+  }
 }
 
 export function realizarLimpezaCompleta() {
