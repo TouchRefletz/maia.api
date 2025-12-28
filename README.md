@@ -50,32 +50,6 @@ Para escalar a captura de provas, implementamos um agente autônomo de busca pro
 4.  **Extração & Validação:** O sistema baixa os PDFs, valida se são arquivos legítimos (checa headers, tamanho, conteúdo) e os organiza.
 5.  **Manifesto:** Gera um arquivo `manifest.json` padronizado, listando tudo o que foi encontrado (arquivos baixados e links de referência).
 
-### Testando Localmente
-
-Você pode rodar o fluxo completo de Deep Search na sua máquina:
-
-**Pré-requisitos:**
-
-- [Docker](https://www.docker.com/) rodando.
-- [Act](https://github.com/nektos/act) instalado (para simular o GitHub Actions localmente).
-- Arquivo `.secrets` na raiz com suas chaves (`LLM_API_KEY`, `TAVILY_API_KEY`, etc).
-
-**Como rodar:**
-
-1.  Inicie o "Local Runner" (servidor auxiliar):
-    ```bash
-    npm run local-runner
-    ```
-2.  Acesse a interface de debug (se houver) ou envie uma requisição POST para `http://localhost:3001/trigger-deep-search` com o corpo:
-    ```json
-    {
-      "query": "fuvest 2024",
-      "slug": "fuvest-2024"
-    }
-    ```
-3.  O `act` será iniciado e você verá o progresso no terminal do Local Runner.
-4.  Ao final, os arquivos estarão na pasta `output/fuvest-2024`.
-
 ## 🧬 Estrutura do Banco de Dados
 
 Nossos dados seguem uma estrutura JSON padronizada e rica em metadados:
@@ -213,3 +187,7 @@ Além disso, a **AGPL-3.0** também se aplica ao uso do software **via rede**: s
 Em outras palavras: se você publicar uma versão modificada, incorporar este projeto em um trabalho derivado e distribuí-lo — ou executá-lo para terceiros através da internet — você também deve licenciar esse trabalho sob a **AGPL-3.0**, garantindo as mesmas liberdades para as próximas pessoas. Acreditamos que o conhecimento cresce quando é compartilhado — e que essas liberdades devem permanecer protegidas para todos.
 
 > _A educação não tem preço. Sua falta tem custo. - Antônio Gomes Lacerda_
+
+```
+
+```

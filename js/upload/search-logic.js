@@ -1,11 +1,10 @@
 // --- CONFIG ---
-const IS_DEV = import.meta.env.DEV;
-const LOCAL_RUNNER_URL = "http://localhost:3001";
 const PROD_WORKER_URL =
   import.meta.env.VITE_WORKER_URL || "https://your-worker.workers.dev";
 
 // Importa o visualizador
 import { gerarVisualizadorPDF } from "../viewer/events.js";
+import { TerminalUI } from "./terminal-ui.js";
 
 // --- STATE ---
 let currentSlug = null;
@@ -99,106 +98,36 @@ export function setupSearchLogic() {
     selectedItems = { prova: null, gabarito: null };
     currentSlug = null;
 
-    // 1. Cria Console UI
+    // 1. Cria Console UI (Terminal Style)
     const consoleContainer = document.createElement("div");
-    consoleContainer.id = "deep-search-console";
-    // Estilos do console (mantidos)
-    Object.assign(consoleContainer.style, {
-      width: "100%",
-      maxWidth: "800px",
-      backgroundColor: "#0d1117",
-      color: "#3fb950",
-      fontFamily: "'Fira Code', monospace",
-      fontSize: "0.85rem",
-      padding: "15px",
-      borderRadius: "8px",
-      border: "1px solid #30363d",
-      height: "300px",
-      overflowY: "auto",
-      marginBottom: "20px",
-      boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-    });
-
-    const consoleHeader = document.createElement("div");
-    consoleHeader.innerText = IS_DEV
-      ? `LOCAL RUNNER :: ${query}`
-      : `CLOUD RUNNER :: ${query}`;
-    Object.assign(consoleHeader.style, {
-      borderBottom: "1px solid #30363d",
-      paddingBottom: "8px",
-      marginBottom: "8px",
-      color: "#c9d1d9",
-    });
-    consoleContainer.appendChild(consoleHeader);
-
-    const consoleOutput = document.createElement("pre");
-    consoleOutput.style.whiteSpace = "pre-wrap";
-    consoleContainer.appendChild(consoleOutput);
+    consoleContainer.id = "deep-search-terminal";
     searchResults.appendChild(consoleContainer);
+
+    // Instantiate State Machine UI
+    const terminal = new TerminalUI("deep-search-terminal");
+
+    // Helper for action button (legacy support or extra feature)
+    const updateActionButton = (url) => {
+      // Optional: Add logging/button logic here if needed,
+      // but TerminalUI handles most UI now.
+      // We could inject a button into the terminal header if we really want.
+      // For now, we trust TerminalUI's own finish state or simple logging.
+    };
 
     let actionButton = null;
 
-    // Create button immediately but in "waiting" state if possible, or just link to generic actions
-    const setupActionButton = () => {
-      if (actionButton) return;
-
-      // Defaults to generic Actions tab for the repo
-      const defaultUrl = "https://github.com/TouchRefletz/maia.api/actions";
-
-      const btn = document.createElement("a");
-      btn.href = defaultUrl;
-      btn.target = "_blank";
-      btn.innerText = "Ver GitHub Actions"; // Initial Text
-      Object.assign(btn.style, {
-        float: "right",
-        padding: "4px 12px",
-        fontSize: "0.75rem",
-        backgroundColor: "#21262d", // Darker default
-        color: "#c9d1d9",
-        borderRadius: "4px",
-        textDecoration: "none",
-        border: "1px solid rgba(240,246,252,0.1)",
-        marginTop: "-2px",
-        transition: "all 0.2s",
-      });
-
-      consoleHeader.appendChild(btn);
-      actionButton = btn;
-    };
-
-    // Initialize button immediately
-    if (!IS_DEV) setupActionButton();
-
-    const updateActionButton = (url) => {
-      if (!actionButton) setupActionButton();
-      if (actionButton) {
-        actionButton.href = url;
-        actionButton.innerText = "Ver Logs da Execução";
-        actionButton.style.backgroundColor = "#238636"; // Green
-        actionButton.style.color = "#ffffff";
-      }
-    };
-
     const log = (text, type = "info") => {
-      const line = document.createElement("div");
-      line.innerText = `> ${text}`;
-      if (type === "error") line.style.color = "#f85149";
-      if (type === "success") line.style.color = "#56d364";
-      consoleOutput.appendChild(line);
-      consoleContainer.scrollTop = consoleContainer.scrollHeight;
+      // Pass to Terminal UI Processor
+      terminal.processLogLine(text, type);
 
-      // Check for Log URL with explicit tag
+      // Check for Log URL with explicit tag (keep legacy hook just in case)
       const tagMatch = text.match(/\[GITHUB_LOGS\]\s*(https?:\/\/[^\s]+)/);
       if (tagMatch && tagMatch[1]) {
         updateActionButton(tagMatch[1]);
-      } else {
-        // Fallback for older format or if tag missing
-        const urlMatch = text.match(/Logs:\s*(https?:\/\/[^\s]+)/);
-        if (urlMatch && urlMatch[1]) updateActionButton(urlMatch[1]);
       }
     };
 
-    log("Iniciando Deep Search...", "info");
+    log("Iniciando Pesquisa Avançada...", "info");
 
     const slug = query
       .toLowerCase()
@@ -212,151 +141,94 @@ export function setupSearchLogic() {
 
     // --- EXECUÇÃO ---
     try {
-      if (IS_DEV) {
-        log(`Modo Local detectado. Conectando ao Local Runner...`);
-        activeWebSocket = new WebSocket("ws://localhost:3001");
+      log(`Modo Produção. Conectando via Pusher (Canal: ${slug})...`);
 
-        activeWebSocket.onopen = async () => {
-          log("WebSocket Conectado.", "success");
-          try {
-            const resp = await fetch(
-              `${LOCAL_RUNNER_URL}/trigger-deep-search`,
-              {
-                method: "POST",
-                body: JSON.stringify({ query, slug, force }),
-              }
-            );
-            if (!resp.ok) throw new Error("Falha ao iniciar busca local");
+      // Import Pusher dynamically or assume it's loaded via <script> or import
+      // For module compatibility, let's try to use the imported one if available,
+      // or rely on window.Pusher if strictly vanilla.
+      let PusherClass = window.Pusher;
+      if (!PusherClass) {
+        const module = await import("pusher-js");
+        PusherClass = module.default;
+      }
 
-            const result = await resp.json();
-            if (result.candidates) {
-              log(
-                "Candidatos encontrados em cache. Aguardando seleção...",
-                "success"
-              );
-              showCandidatesModal(result.candidates, query, slug);
-              return; // Stop here
-            }
+      activePusher = new PusherClass(pusherKey, {
+        cluster: pusherCluster,
+      });
 
-            log("Comando enviado para o Act.");
-          } catch (e) {
-            log(`Erro ao chamar trigger: ${e.message}`, "error");
-          }
-        };
+      activeChannel = activePusher.subscribe(slug);
 
-        activeWebSocket.onmessage = (event) => {
-          try {
-            const msg = JSON.parse(event.data);
-            if (msg.type === "log") log(msg.text);
-            if (msg.type === "info") log(msg.text, "info");
-            if (msg.type === "error") log(msg.text, "error");
-            if (msg.type === "complete") {
-              log("Processo concluído! Carregando resultados...", "success");
-              activeWebSocket.close();
-              activeWebSocket = null;
+      activeChannel.bind("log", function (data) {
+        if (!data) return;
+        // data.message is the string from bash usually, but let's be safe
+        const text =
+          data.message ||
+          (typeof data === "string" ? data : JSON.stringify(data));
+        if (!text) return;
 
-              const finalSlug = msg.new_slug || slug;
-              currentSlug = finalSlug;
-              loadResults(
-                `${LOCAL_RUNNER_URL}/output/${finalSlug}/manifest.json`
-              );
-            }
-          } catch (e) {
-            log(event.data);
-          }
-        };
-      } else {
-        // PROD LOGIC (PUSHER)
-        log(`Modo Produção. Conectando via Pusher (Channel: ${slug})...`);
+        if (text.includes("COMPLETED")) {
+          // Explicitly tell terminal to finish
+          if (terminal) terminal.finish();
 
-        // Import Pusher dynamically or assume it's loaded via <script> or import
-        // For module compatibility, let's try to use the imported one if available,
-        // or rely on window.Pusher if strictly vanilla.
-        // Assuming 'import Pusher from "pusher-js"' logic at top or setup via npm.
-        // If imports fail, we might need to add it to package.json.
-
-        // Import it dynamically if not globally available
-        let PusherClass = window.Pusher;
-        if (!PusherClass) {
-          const module = await import("pusher-js");
-          PusherClass = module.default;
-        }
-
-        activePusher = new PusherClass(pusherKey, {
-          cluster: pusherCluster,
-        });
-
-        activeChannel = activePusher.subscribe(slug);
-
-        activeChannel.bind("log", function (data) {
-          if (!data) return;
-          // data.message is the string from bash usually, but let's be safe
-          const text =
-            data.message ||
-            (typeof data === "string" ? data : JSON.stringify(data));
-          if (!text) return;
-
-          if (text.includes("COMPLETED")) {
-            log("Workflow Concluído! Aguardando propagação (5s)...", "success");
-            activePusher.unsubscribe(slug);
-
-            const finalSlug = data.new_slug || slug;
-            currentSlug = finalSlug;
-
-            setTimeout(() => {
-              // Fetch from HUGGING FACE now
-              const hfBase =
-                "https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main";
-              loadResults(`${hfBase}/output/${finalSlug}/manifest.json`);
-            }, 5000);
-          } else {
-            log(text);
-          }
-        });
-
-        const response = await fetch(`${PROD_WORKER_URL}/trigger-deep-search`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            query,
-            slug,
-            force,
-            ntfy_topic: "deprecated", // Legacy param
-            apiKey: sessionStorage.getItem("GOOGLE_GENAI_API_KEY"),
-          }),
-        });
-
-        const result = await response.json();
-
-        // Debug Log for Pinecone
-        if (result.debug_matches) {
-          log(`[DEBUG] Matches Pinecone encontrados (Top 5):`, "info");
-          result.debug_matches.forEach((m) => {
-            log(
-              ` - ${m.metadata.slug || "slug?"} (Score: ${m.score.toFixed(4)})`,
-              "info"
-            );
-          });
-        }
-
-        if (result.candidates) {
-          log("Encontradas pesquisas similares no histórico.", "success");
-          showCandidatesModal(result.candidates, query, slug);
-          activePusher.unsubscribe(slug); // Stop listening to this channel for now
-          return;
-        }
-
-        if (result.cached && result.slug) {
           log(
-            "Resultado idêntico encontrado em cache! Carregando...",
+            "Fluxo de Trabalho Concluído! Aguardando propagação (5s)...",
             "success"
           );
           activePusher.unsubscribe(slug);
-          loadResults(
-            `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${result.slug}/manifest.json`
-          );
-          return;
+
+          const finalSlug = data.new_slug || slug;
+          currentSlug = finalSlug;
+
+          setTimeout(() => {
+            // Fetch from HUGGING FACE now
+            const hfBase =
+              "https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main";
+            loadResults(`${hfBase}/output/${finalSlug}/manifest.json`);
+          }, 5000);
+        } else {
+          log(text);
         }
+      });
+
+      const response = await fetch(`${PROD_WORKER_URL}/trigger-deep-search`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query,
+          slug,
+          force,
+          ntfy_topic: "deprecated", // Legacy param
+          apiKey: sessionStorage.getItem("GOOGLE_GENAI_API_KEY"),
+        }),
+      });
+
+      const result = await response.json();
+
+      // Debug Log for Pinecone
+      if (result.debug_matches) {
+        log(`[DEBUG] Correspondências Pinecone encontradas (Top 5):`, "info");
+        result.debug_matches.forEach((m) => {
+          log(
+            ` - ${m.metadata.slug || "slug?"} (Score: ${m.score.toFixed(4)})`,
+            "info"
+          );
+        });
+      }
+
+      if (result.candidates) {
+        log("Encontradas pesquisas similares no histórico.", "success");
+        showCandidatesModal(result.candidates, query, slug);
+        activePusher.unsubscribe(slug); // Stop listening to this channel for now
+        return;
+      }
+
+      if (result.cached && result.slug) {
+        log("Resultado idêntico encontrado em cache! Carregando...", "success");
+        activePusher.unsubscribe(slug);
+        loadResults(
+          `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${result.slug}/manifest.json`
+        );
+        return;
       }
     } catch (e) {
       log(`Erro Fatal: ${e.message}`, "error");
@@ -397,9 +269,9 @@ export function setupSearchLogic() {
       currentManifest = manifest; // Save for later usage
       renderResultsNewUI(manifest);
     } catch (e) {
-      const c = document.getElementById("deep-search-console");
-      if (c)
-        c.innerHTML += `<div style='color:red'>Erro no carregamento: ${e.message}</div>`;
+      if (typeof log === "function") {
+        log(`Erro ao carregar resultados: ${e.message}`, "error");
+      }
     }
   };
 
@@ -488,9 +360,7 @@ export function setupSearchLogic() {
           ? finalUrl.slice(1)
           : finalUrl;
         const prefix = `output/${currentSlug}`; // Uses globally captured currentSlug
-        if (IS_DEV) finalUrl = `${LOCAL_RUNNER_URL}/${prefix}/${cleanPath}`;
-        else
-          finalUrl = `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/${prefix}/${cleanPath}`;
+        finalUrl = `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/${prefix}/${cleanPath}`;
       }
       return finalUrl;
     };
@@ -715,9 +585,7 @@ export function setupSearchLogic() {
       // Ensure we point to the correct output folder
       const prefix = `output/${currentSlug}`;
 
-      if (IS_DEV) finalUrl = `${LOCAL_RUNNER_URL}/${prefix}/${cleanPath}`;
-      else
-        finalUrl = `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/${prefix}/${cleanPath}`;
+      finalUrl = `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/${prefix}/${cleanPath}`;
     }
 
     // --- Title Fallback Logic ---
