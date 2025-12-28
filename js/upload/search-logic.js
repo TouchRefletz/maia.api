@@ -1077,6 +1077,9 @@ export function setupSearchLogic() {
       activeRenders.set(canvas, renderTask);
 
       await renderTask.promise;
+
+      // Marca como carregado para não renderizar novamente
+      canvas.dataset.loaded = "true";
       activeRenders.delete(canvas);
     } catch (e) {
       if (e.name === "RenderingCancelledException") return;
@@ -1098,6 +1101,9 @@ export function setupSearchLogic() {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText("PDF", canvas.width / 2, canvas.height / 2);
+
+    // Marca como carregado (com erro) para não tentar de novo infinitamente
+    canvas.dataset.loaded = "true";
   };
 
   // Global Observer para gerenciar visibilidade e cancelamento
@@ -1108,6 +1114,8 @@ export function setupSearchLogic() {
         const url = canvas.dataset.pdfUrl;
 
         if (entry.isIntersecting) {
+          // Se já carregou, ignora
+          if (canvas.dataset.loaded === "true") return;
           renderThumbnail(url, canvas);
         } else {
           // Saiu da tela: Cancelar renderização pesada
