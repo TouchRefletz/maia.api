@@ -194,6 +194,76 @@ jobs:
           name: deep-search-artifact
           path: output/${{ github.event.client_payload.slug || inputs.slug }}
 
+      - name: Push to Hugging Face Dataset
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          # Configure Git
+          git config --global user.email "bot@maia.api"
+          git config --global user.name "Maia Bot"
+
+          # Clone HF Repo (using depth 1 for speed)
+          git clone --depth 1 https://user:$HF_TOKEN@huggingface.co/datasets/toquereflexo/maia-deep-search hf_repo
+
+          # Prepare Directories
+          slug="${{ github.event.client_payload.slug || inputs.slug }}"
+          mkdir -p hf_repo/output/$slug
+
+          # Copy Artifacts
+          cp -r output/$slug/* hf_repo/output/$slug/
+
+          # Commit and Push
+          cd hf_repo
+          git add .
+          git commit -m "Add deep search results for $slug" || echo "No changes to commit"
+          git push
+
+      - name: Update Semantic Cache
+        if: success()
+        env:
+          WORKER_URL: https://maia-api-worker.willian-campos-ismart.workers.dev
+          GH_PAT: ${{ secrets.GH_PAT }} # Using GH_PAT matching the Worker's expected secret
+          QUERY: ${{ github.event.client_payload.query || inputs.query }}
+          SLUG: ${{ github.event.client_payload.slug || inputs.slug }}
+        run: |
+          echo "Updating Semantic Cache at $WORKER_URL..."
+
+          MANIFEST_PATH="output/$SLUG/manifest.json"
+
+          if [ -f "$MANIFEST_PATH" ]; then
+            # Extract relevant metadata (institution, year, etc) if possible, 
+            # or just send the whole manifest as 'metadata.manifest' or similar.
+            # The worker expects 'metadata' object. We can send the manifest content as part of it.
+            # Ideally we want flat metadata for filtering: institution, year. 
+            # For now, let's send the whole manifest as metadata (or a subset if it's too big).
+            # Pinecone metadata limit is 40KB. Manifest might be large.
+            # Let's just send basic info + file count.
+            
+            # Using jq to create a safe JSON payload
+            PAYLOAD=$(jq -n \
+                    --arg query "$QUERY" \
+                    --arg slug "$SLUG" \
+                    --slurpfile manifest "$MANIFEST_PATH" \
+                    '{
+                      query: $query, 
+                      slug: $slug, 
+                      metadata: {
+                        source: "deep-search",
+                        file_count: ($manifest[0] | length),
+                        institution: ($manifest[0][0].institution // "unknown"),
+                        year: ($manifest[0][0].year // "unknown")
+                      }
+                    }')
+            
+            # Curl Request
+            curl -X POST "$WORKER_URL/update-deep-search-cache" \
+                 -H "Content-Type: application/json" \
+                 -H "Authorization: Bearer $GH_PAT" \
+                 -d "$PAYLOAD"
+          else
+            echo "Manifest not found at $MANIFEST_PATH. Skipping cache update."
+          fi
+
       - name: Notify Completion
         if: ${{ always() }}
         env:

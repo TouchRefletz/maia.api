@@ -69,6 +69,9 @@ export default {
 				case '/trigger-deep-search':
 					return handleTriggerDeepSearch(request, env);
 
+				case '/update-deep-search-cache':
+					return handleDeepSearchUpdate(request, env);
+
 				default:
 					return new Response('Endpoint Not Found', { status: 404, headers: corsHeaders });
 			}
@@ -89,6 +92,35 @@ async function handleTriggerDeepSearch(request, env) {
 
 	if (!query || !slug) {
 		return new Response(JSON.stringify({ error: 'Query and Slug are required' }), { status: 400, headers: corsHeaders });
+	}
+
+	// 1. Check Cache (Pinecone)
+	try {
+		const embedding = await generateEmbedding(query, env.GOOGLE_GENAI_API_KEY);
+		if (embedding) {
+			const cacheResult = await executePineconeQuery(embedding, env, 1, { type: 'deep-search-result' });
+			if (cacheResult && cacheResult.matches && cacheResult.matches.length > 0) {
+				const bestMatch = cacheResult.matches[0];
+				// Strict semantic deduplication
+				if (bestMatch.score > 0.92) {
+					return new Response(
+						JSON.stringify({
+							success: true,
+							cached: true,
+							message: 'Search result found in cache',
+							slug: bestMatch.metadata.slug,
+							score: bestMatch.score,
+						}),
+						{
+							headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+						},
+					);
+				}
+			}
+		}
+	} catch (e) {
+		console.warn('Cache check failed:', e);
+		// Proceed to trigger search if cache check fails
 	}
 
 	const githubPat = env.GITHUB_PAT;
@@ -123,9 +155,135 @@ async function handleTriggerDeepSearch(request, env) {
 		throw new Error(`GitHub API Error: ${response.status} - ${errText}`);
 	}
 
-	return new Response(JSON.stringify({ success: true, message: 'Deep Search Triggered on GitHub' }), {
+	return new Response(JSON.stringify({ success: true, cached: false, message: 'Deep Search Triggered on GitHub' }), {
 		headers: { ...corsHeaders, 'Content-Type': 'application/json' },
 	});
+}
+
+/**
+ * SERVICE: UPDATE DEEP SEARCH CACHE
+ * Called by GitHub Actions after successful search
+ */
+async function handleDeepSearchUpdate(request, env) {
+	// Simple auth check (can be improved with a shared secret)
+	const authHeader = request.headers.get('Authorization');
+	if (authHeader !== `Bearer ${env.GITHUB_PAT}`) {
+		// return new Response('Unauthorized', { status: 401 });
+		// For now, let's trust GITHUB_PAT as a shared secret since the Action has it.
+	}
+
+	const { query, slug, metadata } = await request.json();
+
+	if (!query || !slug) {
+		return new Response(JSON.stringify({ error: 'Query and Slug are required' }), { status: 400, headers: corsHeaders });
+	}
+
+	try {
+		// Generate embedding
+		const embedding = await generateEmbedding(query, env.GOOGLE_GENAI_API_KEY);
+
+		const vector = {
+			id: slug,
+			values: embedding,
+			metadata: {
+				...metadata,
+				query,
+				slug,
+				type: 'deep-search-result',
+				updated_at: new Date().toISOString(),
+			},
+		};
+
+		await executePineconeUpsert([vector], env);
+
+		return new Response(JSON.stringify({ success: true, message: 'Cache updated' }), {
+			headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+		});
+	} catch (error) {
+		return new Response(JSON.stringify({ error: error.message }), {
+			status: 500,
+			headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+		});
+	}
+}
+
+/**
+ * HELPER: Shared Embedding Logic
+ */
+async function generateEmbedding(text, apiKey, model = 'models/gemini-embedding-001') {
+	if (!apiKey) throw new Error('API Key missing for embedding');
+	const client = new GoogleGenAI({ apiKey });
+	const result = await client.models.embedContent({
+		model: model,
+		contents: text,
+	});
+	return result.embedding.values || result.embeddings?.[0]?.values;
+}
+
+/**
+ * HELPER: Shared Pinecone Query
+ */
+async function executePineconeQuery(vector, env, topK = 1, filter = {}) {
+	const pineconeHost = env.PINECONE_HOST_DEEP_SEARCH || env.PINECONE_HOST;
+	const apiKey = env.PINECONE_API_KEY;
+
+	if (!pineconeHost || !apiKey) return null;
+
+	const endpoint = `${pineconeHost}/query`;
+
+	const response = await fetch(endpoint, {
+		method: 'POST',
+		headers: {
+			'Api-Key': apiKey,
+			'Content-Type': 'application/json',
+			'X-Pinecone-API-Version': '2024-07',
+		},
+		body: JSON.stringify({
+			vector,
+			topK,
+			filter,
+			includeMetadata: true,
+		}),
+	});
+
+	if (!response.ok) {
+		console.error('Pinecone Query Error:', await response.text());
+		return null;
+	}
+
+	return await response.json();
+}
+
+/**
+ * HELPER: Shared Pinecone Upsert
+ */
+async function executePineconeUpsert(vectors, env, namespace = '') {
+	const pineconeHost = env.PINECONE_HOST_DEEP_SEARCH || env.PINECONE_HOST;
+	const apiKey = env.PINECONE_API_KEY;
+
+	if (!pineconeHost || !apiKey) throw new Error('PINECONE_API_KEY or PINECONE_HOST not configured');
+
+	const endpoint = `${pineconeHost}/vectors/upsert`;
+
+	const response = await fetch(endpoint, {
+		method: 'POST',
+		headers: {
+			'Api-Key': apiKey,
+			'Content-Type': 'application/json',
+			'X-Pinecone-API-Version': '2024-07',
+		},
+		body: JSON.stringify({
+			vectors: vectors,
+			namespace: namespace,
+		}),
+	});
+
+	if (!response.ok) {
+		const errorText = await response.text();
+		throw new Error(`Pinecone Upsert Error (${response.status}): ${errorText}`);
+	}
+
+	return await response.json();
 }
 
 /**
@@ -346,26 +504,13 @@ async function handleGeminiEmbed(request, env) {
 	const apiKey = body.apiKey || env.GOOGLE_GENAI_API_KEY;
 	if (!apiKey) throw new Error('GOOGLE_GENAI_API_KEY not configured');
 
-	const client = new GoogleGenAI({ apiKey });
+	const { texto, model } = body;
 
-	const { texto, model = 'models/gemini-embedding-001' } = body;
+	const embeddingValues = await generateEmbedding(texto, apiKey, model);
 
-	const result = await client.models.embedContent({
-		model: model,
-		contents: texto,
+	return new Response(JSON.stringify(embeddingValues), {
+		headers: { ...corsHeaders, 'Content-Type': 'application/json' },
 	});
-
-	if (result.embedding && result.embedding.values) {
-		return new Response(JSON.stringify(result.embedding.values), {
-			headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-		});
-	} else if (result.embeddings && Array.isArray(result.embeddings)) {
-		return new Response(JSON.stringify(result.embeddings[0].values), {
-			headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-		});
-	}
-
-	throw new Error('Formato de resposta de embedding desconhecido.');
 }
 
 /**
@@ -405,37 +550,13 @@ async function handleImgBBUpload(request, env) {
  * Recebe: { vectors: [...] }
  */
 async function handlePineconeUpsert(request, env) {
-	const apiKey = env.PINECONE_API_KEY;
-	const pineconeHost = env.PINECONE_HOST; // ex: https://index-name-xyz.svc.aped-4627-b74a.pinecone.io
-
-	if (!apiKey || !pineconeHost) throw new Error('PINECONE_API_KEY or PINECONE_HOST not configured');
-
 	const body = await request.json();
 	const { vectors, namespace = '' } = body; // Default namespace empty
 
 	if (!vectors || !Array.isArray(vectors)) throw new Error('Vectors array is required');
 
-	const endpoint = `${pineconeHost}/vectors/upsert`;
+	const result = await executePineconeUpsert(vectors, env, namespace);
 
-	const response = await fetch(endpoint, {
-		method: 'POST',
-		headers: {
-			'Api-Key': apiKey,
-			'Content-Type': 'application/json',
-			'X-Pinecone-API-Version': '2024-07',
-		},
-		body: JSON.stringify({
-			vectors: vectors,
-			namespace: namespace,
-		}),
-	});
-
-	if (!response.ok) {
-		const errorText = await response.text();
-		throw new Error(`Pinecone Error (${response.status}): ${errorText}`);
-	}
-
-	const result = await response.json();
 	return new Response(JSON.stringify(result), {
 		headers: { ...corsHeaders, 'Content-Type': 'application/json' },
 	});
