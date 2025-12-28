@@ -158,6 +158,20 @@ export class TerminalUI {
   }
 
   processLogLine(text, type = "info") {
+    if (!text) return;
+
+    // 0. Handle Batched Logs (Split newlines)
+    if (text.includes("\n")) {
+      const lines = text.split("\n");
+      lines.forEach((line) => {
+        const trimmed = line.trim();
+        if (trimmed) {
+          this.processLogLine(trimmed, type);
+        }
+      });
+      return;
+    }
+
     // 1. Detect Job URL System Message
     if (text.includes("[SYSTEM_INFO] JOB_URL=")) {
       const url = text.split("JOB_URL=")[1].trim();
@@ -167,8 +181,6 @@ export class TerminalUI {
         this.el.logBtn.style.color = "#4CAF50"; // Green to show active
         this.el.logBtn.style.borderColor = "#4CAF50";
         this.el.logBtn.style.pointerEvents = "auto";
-        // Optional: Don't show this system line in the UI to keep it clean,
-        // or show it as a meta info. Let's hide it from the stream.
         return;
       }
     }
@@ -180,57 +192,37 @@ export class TerminalUI {
     // --- Micro-Growth Logic ---
     // BOOT MODE: 0 -> 10%
     if (this.state === this.MODES.BOOT) {
-      // Allow logs to push boot forward significantly
       if (this.currentVirtualProgress < 10) {
-        this.currentVirtualProgress += 0.05; // Slower boot crawl
+        this.currentVirtualProgress += 0.05;
         this.updateProgressBar();
       }
     }
     // EXEC MODE: 10 -> 90%
     else if (this.state === this.MODES.EXEC) {
-      // We are in the 10% -> 90% range.
-      // We divide this 80% chunk by the total tasks.
-      // Example: 4 tasks. Each task gets 20% of the bar.
-      // Task 1: 10% -> 30%
-      // Task 2: 30% -> 50%
-      // etc.
-
       const rangePerTask = 80 / (this.totalTasks || 1);
-      const currentTaskIndex = this.completedTasks; // 0-indexed index of task we are working on
-
-      // Calculate the start and end % for the CURRENT task
+      const currentTaskIndex = this.completedTasks;
       const taskStartPercent = 10 + currentTaskIndex * rangePerTask;
-      const taskEndPercent = taskStartPercent + rangePerTask;
-
-      // We implement a "Soft Cap" for logs:
-      // Logs can only push us up to 90% of the CURRENT TASK'S range.
-      // The final 10% of the task range is reserved for the "DONE" event jump.
       const softCap = taskStartPercent + rangePerTask * 0.9;
 
-      // --- FINAL STRETCH LOGIC (90% -> 99.5%) ---
-      // If we are capped at 90% (all tasks done), or just high up, allow slow crawl to 99%
       if (
         this.currentVirtualProgress >= 90 &&
         this.currentVirtualProgress < 99.5
       ) {
-        this.currentVirtualProgress += 0.0001; // Crawl to the finish line
+        this.currentVirtualProgress += 0.0001;
         this.updateProgressBar();
       }
 
       if (this.currentVirtualProgress < softCap) {
-        // Micro-increment: 0.0001% per log (Back to VERY slow)
         this.currentVirtualProgress += 0.0001;
-
         this.updateProgressBar();
       }
     }
 
     // Parsing Logic
     try {
-      if (text.includes("TaskTrackingAction") && text.includes("task_list=[")) {
+      if (text.includes("task_list=[")) {
         this.parseTaskPlan(text);
       } else if (text.includes("AgentAction") || text.includes("Observation")) {
-        // If we see actions but missed the plan, ensure we leave boot
         this.forceExecStart();
       } else if (
         text.includes("AgentFinishAction") ||
@@ -255,7 +247,8 @@ export class TerminalUI {
   }
 
   parseTaskPlan(text) {
-    const jsonMatch = text.match(/task_list=(\[\{.*\}\])/);
+    // Regex improved to capture list content more reliably
+    const jsonMatch = text.match(/task_list=(\[.*\])/);
     if (jsonMatch && jsonMatch[1]) {
       let jsonStr = jsonMatch[1]
         .replace(/'/g, '"')
@@ -266,7 +259,7 @@ export class TerminalUI {
         const plan = JSON.parse(jsonStr);
         this.updatePlan(plan);
       } catch (e) {
-        // partial json
+        // partial json or parse error
       }
     }
   }
@@ -355,7 +348,9 @@ export class TerminalUI {
     const line = document.createElement("div");
     line.className = `term-log-line ${type}`;
     // eslint-disable-next-line
-    const cleanText = text.replace(/\x1B\[[0-9;]*[mK]/g, "");
+    const cleanText = text
+      .replace(/\x1B\[[0-9;]*[mK]/g, "")
+      .replace(/\[[0-9;]*m/g, "");
     line.innerText = `> ${cleanText}`;
 
     this.el.logStream.appendChild(line);
