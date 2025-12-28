@@ -172,14 +172,22 @@ jobs:
             -lc '
             set -euo pipefail
             
-            # 1. Garante dependências de compilação ANTES de qualquer pip install
-            # (Caso o wheel do greenlet falhe, o g++ já estará pronto)
+            # 1. Instala compiladores (pra garantir) e o dotenv
             apt-get update -qq && apt-get install -y -qq --no-install-recommends g++ build-essential python3-dev
+            python -m pip install --no-cache-dir python-dotenv
 
-            # 2. Agora pode instalar tudo. O greenlet será compilado se não houver binário.
-            python -m pip install --no-cache-dir python-dotenv browsergym-core
+            # 2. HACK: Instala versões compatíveis com Python 3.13 PRIMEIRO
+            # (Greenlet 3.1.1+ e Playwright 1.48+ suportam Py3.13)
+            python -m pip install "greenlet>=3.1.1" "playwright>=1.48.0"
 
-            # 3. Executa a aplicação
+            # 3. Instala browsergym-core ignorando que ele pede playwright antigo
+            python -m pip install --no-deps browsergym-core
+
+            # 4. Instala o resto das dependências do browsergym manualmente
+            # (pra não quebrar por falta de numpy, lxml, etc)
+            python -m pip install "beautifulsoup4" "gymnasium" "lxml" "numpy" "pillow" "pyparsing" "pyee" "typing-extensions"
+
+            # Roda o OpenHands
             python -m openhands.core.main -t "$PROMPT"
             '
           )
