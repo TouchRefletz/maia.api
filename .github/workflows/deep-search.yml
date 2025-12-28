@@ -214,6 +214,12 @@ jobs:
 
           # Commit and Push
           cd hf_repo
+
+          # Setup LFS for binaries
+          git lfs install
+          git lfs track "*.pdf" "*.zip" "*.rar" "*.doc" "*.docx"
+          git add .gitattributes
+
           git add .
           git commit -m "Add deep search results for $slug" || echo "No changes to commit"
           git push
