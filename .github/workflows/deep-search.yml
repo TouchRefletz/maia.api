@@ -123,17 +123,23 @@ jobs:
           echo "[GITHUB_LOGS] ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" | log_to_ntfy
 
           VOL_NAME="openhands-vol-${{ github.run_id }}"
+          STATE_VOL_NAME="openhands-state-${{ github.run_id }}"
           docker volume create "$VOL_NAME"
+          docker volume create "$STATE_VOL_NAME"
 
           # Pre-fix permissions and create config using alpine (as root)
           docker run --rm \
             -v "$VOL_NAME:/workspace" \
+            -v "$STATE_VOL_NAME:/.openhands" \
             -e TAVILY_API_KEY="$TAVILY_API_KEY" \
             alpine sh -c '
               printf "[core]\nsearch_api_key = \"%s\"\n" "$TAVILY_API_KEY" > /workspace/config.toml && \
               chown -R 1001:1001 /workspace && \
               chmod 777 /workspace && \
-              chmod 666 /workspace/config.toml
+              chmod 666 /workspace/config.toml && \
+              mkdir -p /.openhands && \
+              chown -R 1001:1001 /.openhands && \
+              chmod 777 /.openhands
             '
 
           docker rm -f openhands-app 2>/dev/null || true
@@ -144,12 +150,12 @@ jobs:
             -w /workspace \
             -v /var/run/docker.sock:/var/run/docker.sock \
             -v "$VOL_NAME:/workspace:rw" \
+            -v "$STATE_VOL_NAME:/.openhands" \
             --add-host host.docker.internal:host-gateway \
             -e SANDBOX_USER_ID="$(id -u)" \
             -e SANDBOX_VOLUMES="$VOL_NAME:/workspace:rw" \
             -e SANDBOX_RUNTIME_CONTAINER_IMAGE="docker.openhands.dev/openhands/runtime:1.0-nikolaik" \
             -e LOG_ALL_EVENTS=true \
-            -e HOME=/workspace \
             -e LLM_API_KEY="$LLM_API_KEY" \
             -e LLM_MODEL="gemini/gemini-3-flash-preview" \
             -e TAVILY_API_KEY="$TAVILY_API_KEY" \
@@ -169,6 +175,7 @@ jobs:
           # Cleanup
           docker rm -f openhands-app
           docker volume rm "$VOL_NAME" || true
+          docker volume rm "$STATE_VOL_NAME" || true
 
           exit $EXIT_CODE
 
