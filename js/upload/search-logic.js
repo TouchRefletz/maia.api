@@ -219,6 +219,7 @@ export function setupSearchLogic() {
         log("Encontradas pesquisas similares no histórico.", "success");
         showCandidatesModal(
           result.candidates,
+          query,
           (candidate) => {
             log(`Carregando cache: ${candidate.slug}...`, "success");
             currentSlug = candidate.slug;
@@ -833,7 +834,12 @@ export function setupSearchLogic() {
     return card;
   };
 
-  const showCandidatesModal = (candidates, onSelect, onForce) => {
+  const showCandidatesModal = (
+    candidates,
+    originalQuery,
+    onSelect,
+    onForce
+  ) => {
     // Create Overlay
     const overlay = document.createElement("div");
     Object.assign(overlay.style, {
@@ -865,7 +871,8 @@ export function setupSearchLogic() {
     modal.innerHTML = `
         <h3 style="margin-top:0; color:var(--color-text);">Pesquisas Similares Encontradas</h3>
         <p style="color:var(--color-text-secondary); font-size:0.9rem;">
-            Já realizamos pesquisas parecidas anteriormente. Gostaria de ver os resultados de uma delas?
+            Encontramos resultados parecidos com <strong>"${originalQuery}"</strong>.<br>
+            Você pode aproveitar esse conteúdo já processado:
         </p>
         <div id="candidatesList" style="
             margin: 20px 0; 
