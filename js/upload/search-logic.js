@@ -682,24 +682,8 @@ export function setupSearchLogic() {
     canvas.style.objectFit = "contain";
     thumbContainer.appendChild(canvas);
 
-    // --- Lazy Load Thumbnail ---
-    if ("IntersectionObserver" in window) {
-      const observer = new IntersectionObserver(
-        (entries) => {
-          entries.forEach((entry) => {
-            if (entry.isIntersecting) {
-              generatePdfThumbnail(finalUrl, canvas);
-              observer.unobserve(entry.target);
-            }
-          });
-        },
-        { rootMargin: "100px" }
-      ); // Start loading slightly before
-      observer.observe(thumbContainer);
-    } else {
-      // Fallback for old browsers
-      generatePdfThumbnail(finalUrl, canvas);
-    }
+    // --- Lazy Load Thumbnail (Global Optimized) ---
+    registerPdfThumbnail(finalUrl, canvas);
 
     // Badge
     const typeLabel = (item.tipo || "Arquivo").toUpperCase();
@@ -1028,76 +1012,106 @@ export function setupSearchLogic() {
     }
   };
 
-  // --- PDF Thumbnail Queue System ---
-  const MAX_CONCURRENT_THUMBNAILS = 2;
-  const thumbnailQueue = [];
-  let activeThumbnailCount = 0;
+  // --- Advanced PDF Thumbnail Logic (Cancellation + Retina) ---
+  const activeRenders = new Map();
+  const TARGET_HEIGHT = 300;
+  const PIXEL_RATIO = window.devicePixelRatio || 1;
 
-  const processThumbnailQueue = async () => {
-    if (
-      activeThumbnailCount >= MAX_CONCURRENT_THUMBNAILS ||
-      thumbnailQueue.length === 0
-    )
-      return;
+  const renderThumbnail = async (url, canvas) => {
+    if (!url || !canvas) return;
 
-    activeThumbnailCount++;
-    const { url, canvas } = thumbnailQueue.shift();
+    // Se já estiver renderizando neste canvas, cancela o anterior
+    if (activeRenders.has(canvas)) {
+      try {
+        await activeRenders.get(canvas).cancel();
+      } catch (e) {
+        // RenderingCancelledException é esperado
+      }
+    }
 
     try {
       if (!window.pdfjsLib) return;
-
       if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
         pdfjsLib.GlobalWorkerOptions.workerSrc =
           "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
       }
 
-      const pdf = await pdfjsLib.getDocument(url).promise;
+      const loadingTask = pdfjsLib.getDocument(url);
+      const pdf = await loadingTask.promise;
       const page = await pdf.getPage(1);
 
-      // Otimização: Calcular escala baseada na altura desejada (aprox 300px para qualidade retina em container de 220px)
-      // Scale 1.0 gera imagens muito grandes (~800px+ altura) que causam lag
-      const TARGET_HEIGHT = 300;
+      // --- CÁLCULO DE ESCALA OTIMIZADO (RETINA) ---
       const initialViewport = page.getViewport({ scale: 1 });
-      const scale = TARGET_HEIGHT / initialViewport.height;
+      const scale = (TARGET_HEIGHT * PIXEL_RATIO) / initialViewport.height;
       const viewport = page.getViewport({ scale });
 
+      // Tamanho físico (alta resolução)
       canvas.width = viewport.width;
       canvas.height = viewport.height;
 
-      const ctx = canvas.getContext("2d");
-      // Background branco para PDFs transparentes
+      // Tamanho visual (CSS) para manter layout
+      canvas.style.width = `${viewport.width / PIXEL_RATIO}px`;
+      canvas.style.height = `${TARGET_HEIGHT}px`;
+
+      const ctx = canvas.getContext("2d", { alpha: false });
       ctx.fillStyle = "white";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      await page.render({
+      const renderTask = page.render({
         canvasContext: ctx,
         viewport: viewport,
-      }).promise;
+      });
+
+      activeRenders.set(canvas, renderTask);
+
+      await renderTask.promise;
+      activeRenders.delete(canvas);
     } catch (e) {
-      console.warn("Falha na thumbnail", e);
-      const ctx = canvas.getContext("2d");
-      // Se falhar antes de definir tamanho
-      if (canvas.width === 0 || canvas.width === 300) {
-        canvas.width = 210;
-        canvas.height = 297;
-      }
-      ctx.fillStyle = "#f5f5f5";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = "#999";
-      ctx.font = "bold 20px sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("PDF", canvas.width / 2, canvas.height / 2);
-    } finally {
-      activeThumbnailCount--;
-      // Processa o próximo da fila com pequeno delay para liberar main thread
-      setTimeout(processThumbnailQueue, 50);
+      if (e.name === "RenderingCancelledException") return;
+      console.warn("Erro no thumbnail:", e);
+      renderFallback(canvas);
     }
   };
 
-  const generatePdfThumbnail = (url, canvas) => {
-    thumbnailQueue.push({ url, canvas });
-    processThumbnailQueue();
+  const renderFallback = (canvas) => {
+    const ctx = canvas.getContext("2d");
+    if (canvas.width === 0 || canvas.width === 300) {
+      canvas.width = 210;
+      canvas.height = 297;
+    }
+    ctx.fillStyle = "#f5f5f5";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#999";
+    ctx.font = "bold 20px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("PDF", canvas.width / 2, canvas.height / 2);
+  };
+
+  // Global Observer para gerenciar visibilidade e cancelamento
+  const thumbnailObserver = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        const canvas = entry.target;
+        const url = canvas.dataset.pdfUrl;
+
+        if (entry.isIntersecting) {
+          renderThumbnail(url, canvas);
+        } else {
+          // Saiu da tela: Cancelar renderização pesada
+          if (activeRenders.has(canvas)) {
+            activeRenders.get(canvas).cancel();
+            activeRenders.delete(canvas);
+          }
+        }
+      });
+    },
+    { rootMargin: "200px", threshold: 0.1 }
+  );
+
+  const registerPdfThumbnail = (url, canvas) => {
+    canvas.dataset.pdfUrl = url;
+    thumbnailObserver.observe(canvas);
   };
 
   const openPreviewModal = (url, title) => {
