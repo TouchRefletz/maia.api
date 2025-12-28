@@ -222,8 +222,18 @@ export function setupSearchLogic() {
           (candidate) => {
             log(`Carregando cache: ${candidate.slug}...`, "success");
             currentSlug = candidate.slug;
-            // Finish terminal as we are just loading cache
-            if (terminal) terminal.finish();
+
+            // Visual feedback: Update task list to show we are loading cache
+            if (terminal) {
+              terminal.updatePlan([
+                {
+                  title: `Recuperando dados de: ${candidate.slug}`,
+                  status: "completed",
+                },
+              ]);
+              terminal.finish();
+            }
+
             const hfBase =
               "https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main";
             loadResults(`${hfBase}/output/${candidate.slug}/manifest.json`);

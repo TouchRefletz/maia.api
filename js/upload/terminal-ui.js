@@ -352,13 +352,6 @@ export class TerminalUI {
     this.el.eta.innerText = "TEMPO: FINALIZADO";
     this.el.stepText.innerText =
       "Todas as tarefas foram concluídas com sucesso.";
-
-    const actionLine = document.createElement("div");
-    actionLine.style.marginTop = "20px";
-    actionLine.style.textAlign = "center";
-    actionLine.innerHTML = `<a href="#" onclick="window.location.reload()" class="term-action-btn">Ver Dados Extraídos</a>`;
-    this.el.logStream.appendChild(actionLine);
-    this.el.logStream.scrollTop = this.el.logStream.scrollHeight;
   }
 
   fail(reason = "Erro desconhecido") {
