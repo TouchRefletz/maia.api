@@ -172,15 +172,14 @@ jobs:
             -lc '
             set -euo pipefail
             
-            # Instala dependências no sistema (sem --target customizado para não zoar o path)
-            python -m pip install --no-cache-dir python-dotenv browsergym-core
-            
-            # Tenta instalar greenlet binário. Se falhar (por ser py3.13), compila do fonte instalando g++ antes.
-            if ! python -m pip install --no-cache-dir --only-binary=greenlet greenlet; then
-              apt-get update -qq && apt-get install -y -qq --no-install-recommends g++ build-essential python3-dev
-              python -m pip install --no-cache-dir greenlet
-            fi
+            # 1. Garante dependências de compilação ANTES de qualquer pip install
+            # (Caso o wheel do greenlet falhe, o g++ já estará pronto)
+            apt-get update -qq && apt-get install -y -qq --no-install-recommends g++ build-essential python3-dev
 
+            # 2. Agora pode instalar tudo. O greenlet será compilado se não houver binário.
+            python -m pip install --no-cache-dir python-dotenv browsergym-core
+
+            # 3. Executa a aplicação
             python -m openhands.core.main -t "$PROMPT"
             '
           )
