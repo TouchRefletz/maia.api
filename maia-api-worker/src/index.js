@@ -237,7 +237,15 @@ async function generateEmbedding(text, apiKey, model = 'models/gemini-embedding-
 		model: model,
 		contents: text,
 	});
-	return result.embedding.values || result.embeddings?.[0]?.values;
+
+	const values = result.embedding?.values || result.embeddings?.[0]?.values;
+
+	if (!values) {
+		console.error('[Embedding Error] Invalid response from Gemini:', JSON.stringify(result, null, 2));
+		throw new Error('Failed to generate embedding: Invalid response structure');
+	}
+
+	return values;
 }
 
 /**
