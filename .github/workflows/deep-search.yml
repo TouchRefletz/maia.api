@@ -145,6 +145,14 @@ jobs:
           t.join(timeout=5)
           EOF
 
+      - name: Announce Job URL
+        env:
+          RUN_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        run: |
+          (
+            echo "[SYSTEM_INFO] JOB_URL=$RUN_URL"
+          ) 2>&1 | python3 logger.py
+
       - name: Free Disk Space
         run: |
           (

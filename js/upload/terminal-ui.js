@@ -70,6 +70,12 @@ export class TerminalUI {
         </div>
       </div>
 
+      <div class="term-log-header" style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; border-bottom: 1px solid #333; padding-bottom: 5px;">
+        <span class="term-label">LOGS EM TEMPO REAL</span>
+        <a href="#" target="_blank" id="term-btn-logs" class="term-btn disabled" style="font-size: 0.75rem; text-decoration: none; padding: 2px 8px; border: 1px solid #444; border-radius: 4px; color: #666; pointer-events: none; transition: all 0.2s;">
+            Ver Logs no GitHub ↗
+        </a>
+      </div>
       <div class="term-logs" id="term-logs-stream"></div>
     `;
 
@@ -79,6 +85,7 @@ export class TerminalUI {
     this.el.stepText = this.container.querySelector(".term-step-text");
     this.el.taskList = this.container.querySelector(".term-tasks");
     this.el.logStream = this.container.querySelector("#term-logs-stream");
+    this.el.logBtn = this.container.querySelector("#term-btn-logs");
 
     // Boot Animator REMOVED (User request: No time-based progress)
     // Progress will only move when logs or plan updates arrive.
@@ -151,6 +158,21 @@ export class TerminalUI {
   }
 
   processLogLine(text, type = "info") {
+    // 1. Detect Job URL System Message
+    if (text.includes("[SYSTEM_INFO] JOB_URL=")) {
+      const url = text.split("JOB_URL=")[1].trim();
+      if (url && this.el.logBtn) {
+        this.el.logBtn.href = url;
+        this.el.logBtn.classList.remove("disabled");
+        this.el.logBtn.style.color = "#4CAF50"; // Green to show active
+        this.el.logBtn.style.borderColor = "#4CAF50";
+        this.el.logBtn.style.pointerEvents = "auto";
+        // Optional: Don't show this system line in the UI to keep it clean,
+        // or show it as a meta info. Let's hide it from the stream.
+        return;
+      }
+    }
+
     // Update Activity
     this.lastLogTime = Date.now();
     this.appendLog(text, type);
