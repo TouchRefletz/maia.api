@@ -70,7 +70,7 @@ export function setupSearchLogic() {
   }
 
   // --- Deep Search Lógica ---
-  const doSearch = async () => {
+  const doSearch = async (force = false) => {
     const query = searchInput.value.trim();
     if (!query) return;
 
@@ -203,10 +203,21 @@ export function setupSearchLogic() {
               `${LOCAL_RUNNER_URL}/trigger-deep-search`,
               {
                 method: "POST",
-                body: JSON.stringify({ query, slug }),
+                body: JSON.stringify({ query, slug, force }),
               }
             );
             if (!resp.ok) throw new Error("Falha ao iniciar busca local");
+
+            const result = await resp.json();
+            if (result.candidates) {
+              log(
+                "Candidatos encontrados em cache. Aguardando seleção...",
+                "success"
+              );
+              showCandidatesModal(result.candidates, query, slug);
+              return; // Stop here
+            }
+
             log("Comando enviado para o Act.");
           } catch (e) {
             log(`Erro ao chamar trigger: ${e.message}`, "error");
@@ -252,8 +263,12 @@ export function setupSearchLogic() {
         const channel = pusher.subscribe(slug);
 
         channel.bind("log", function (data) {
-          // data.message is the string from bash
-          const text = data.message;
+          if (!data) return;
+          // data.message is the string from bash usually, but let's be safe
+          const text =
+            data.message ||
+            (typeof data === "string" ? data : JSON.stringify(data));
+          if (!text) return;
 
           if (text.includes("COMPLETED")) {
             log("Workflow Concluído! Aguardando propagação (5s)...", "success");
@@ -269,16 +284,38 @@ export function setupSearchLogic() {
           }
         });
 
-        await fetch(`${PROD_WORKER_URL}/trigger-deep-search`, {
+        const response = await fetch(`${PROD_WORKER_URL}/trigger-deep-search`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             query,
             slug,
+            force,
             ntfy_topic: "deprecated", // Legacy param
             apiKey: sessionStorage.getItem("GOOGLE_GENAI_API_KEY"),
           }),
         });
+
+        const result = await response.json();
+
+        if (result.candidates) {
+          log("Encontradas pesquisas similares no histórico.", "success");
+          showCandidatesModal(result.candidates, query, slug);
+          pusher.unsubscribe(slug); // Stop listening to this channel for now
+          return;
+        }
+
+        if (result.cached && result.slug) {
+          log(
+            "Resultado idêntico encontrado em cache! Carregando...",
+            "success"
+          );
+          pusher.unsubscribe(slug);
+          loadResults(
+            `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${result.slug}/manifest.json`
+          );
+          return;
+        }
       }
     } catch (e) {
       log(`Erro Fatal: ${e.message}`, "error");
@@ -860,6 +897,123 @@ export function setupSearchLogic() {
     card.onclick = () => toggleSelection(item, card, selectOverlay, finalUrl);
 
     return card;
+  };
+
+  const showCandidatesModal = (candidates, originalQuery, currentSlug) => {
+    // Create Overlay
+    const overlay = document.createElement("div");
+    Object.assign(overlay.style, {
+      position: "fixed",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: "rgba(0,0,0,0.8)",
+      zIndex: 10000,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      backdropFilter: "blur(4px)",
+    });
+
+    const modal = document.createElement("div");
+    Object.assign(modal.style, {
+      backgroundColor: "var(--color-surface)",
+      width: "90%",
+      maxWidth: "600px",
+      borderRadius: "var(--radius-lg)",
+      padding: "24px",
+      border: "1px solid var(--color-border)",
+      boxShadow: "var(--shadow-xl)",
+      animation: "fadeIn 0.3s ease",
+    });
+
+    modal.innerHTML = `
+        <h3 style="margin-top:0; color:var(--color-text);">Pesquisas Similares Encontradas</h3>
+        <p style="color:var(--color-text-secondary); font-size:0.9rem;">
+            Já realizamos pesquisas parecidas anteriormente. Gostaria de ver os resultados de uma delas?
+        </p>
+        <div id="candidatesList" style="
+            margin: 20px 0; 
+            max-height: 300px; 
+            overflow-y: auto; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 10px;">
+        </div>
+        <div style="display:flex; justify-content:end; gap:10px; margin-top:20px; border-top:1px solid var(--color-border); padding-top:16px;">
+            <button id="btnForceSearch" style="
+                background: transparent; 
+                border: 1px solid var(--color-border); 
+                color: var(--color-text); 
+                padding: 8px 16px; 
+                border-radius: var(--radius-base); 
+                cursor: pointer;">
+                Não, fazer nova pesquisa
+            </button>
+        </div>
+      `;
+
+    const list = modal.querySelector("#candidatesList");
+
+    candidates.forEach((cand) => {
+      const item = document.createElement("div");
+      Object.assign(item.style, {
+        padding: "12px",
+        border: "1px solid var(--color-border)",
+        borderRadius: "8px",
+        cursor: "pointer",
+        transition: "background 0.2s",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        backgroundColor: "var(--color-bg-sub)",
+      });
+      item.onmouseover = () =>
+        (item.style.backgroundColor = "var(--color-bg-hover)");
+      item.onmouseout = () =>
+        (item.style.backgroundColor = "var(--color-bg-sub)");
+
+      const title = cand.query || cand.slug;
+      const info =
+        [cand.institution, cand.year].filter(Boolean).join(" • ") ||
+        "Processado recentemente";
+
+      item.innerHTML = `
+            <div>
+                <div style="font-weight:600; color:var(--color-primary);">${title}</div>
+                <div style="font-size:0.8rem; color:var(--color-text-secondary);">${info}</div>
+            </div>
+            <div style="font-size:0.8rem; background:var(--color-bg-2); padding:4px 8px; borderRadius:4px;">
+                ${(cand.score * 100).toFixed(0)}% match
+            </div>
+          `;
+
+      item.onclick = () => {
+        document.body.removeChild(overlay);
+        const consoleDiv = document.getElementById("deep-search-console");
+        if (consoleDiv)
+          consoleDiv.innerHTML += `<div style='color:#56d364'>> Carregando cache: ${cand.slug}...</div>`;
+
+        const hfBase =
+          "https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main";
+        loadResults(`${hfBase}/output/${cand.slug}/manifest.json`);
+      };
+
+      list.appendChild(item);
+    });
+
+    const btnForce = modal.querySelector("#btnForceSearch");
+    btnForce.onclick = () => {
+      document.body.removeChild(overlay);
+      const consoleDiv = document.getElementById("deep-search-console");
+      if (consoleDiv)
+        consoleDiv.innerHTML += `<div style='color:#e3b341'>> Forçando nova pesquisa...</div>`;
+      doSearch(true); // Force API call
+    };
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
   };
 
   const toggleSelection = (item, cardEl, overlayEl, url) => {

@@ -71,7 +71,7 @@ jobs:
           - Gabaritos correspondentes (e “soluções”, se houver).
           - INDISPENSÁVEL: Classifique cada item no manifesto:
             - status: "downloaded" (se baixou com sucesso e validou) OU "reference" (se é apenas um link externo que não foi possível baixar ou não é PDF).
-          - Estrutura do JSON: {nome, tipo, ano, fase, link_origem, status, filename (só se status=downloaded)}
+          - Estrutura do JSON: {nome, tipo, ano, instituicao, fase, link_origem, status, filename (só se status=downloaded)}
 
           Preferência de links:
           - Priorize links diretos de PDF.
@@ -100,53 +100,119 @@ jobs:
 
           PROMPT="${PROMPT_TEMPLATE/__QUERY__/$QUERY}"
 
-          log_to_pusher() {
-            local app_id="${{ secrets.PUSHER_APP_ID }}"
-            local key="${{ secrets.PUSHER_KEY }}"
-            local secret="${{ secrets.PUSHER_SECRET }}"
-            local cluster="${{ secrets.PUSHER_CLUSTER }}"
-            local channel="${{ github.event.client_payload.slug || inputs.slug }}" # Channel is the SLUG
-            local event="log"
+          # 2) Python Logger (Non-blocking)
+          cat << 'EOF' > logger.py
+          import sys
+          import time
+          import json
+          import hashlib
+          import hmac
+          import os
+          import threading
+          import http.client
+          import urllib.parse
+          from collections import deque
 
-            # Check if secrets are present
-            if [ -z "$app_id" ] || [ -z "$key" ] || [ -z "$secret" ] || [ -z "$cluster" ]; then
-              # If secrets missing, just cat to console
-              cat
-              return
-            fi
+          # Config
+          PUSHER_APP_ID = os.environ.get("PUSHER_APP_ID")
+          PUSHER_KEY = os.environ.get("PUSHER_KEY")
+          PUSHER_SECRET = os.environ.get("PUSHER_SECRET")
+          PUSHER_CLUSTER = os.environ.get("PUSHER_CLUSTER")
+          CHANNEL = os.environ.get("SLUG")
 
-            while IFS= read -r line; do
-              echo "$line"
-              
-              # Escape JSON content properly
-              # Using python for reliable JSON escaping since jq might not be available or fail on some chars
-              # If python is available in alpine:
-              ESCAPED_LINE=$(echo "$line" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | sed "s/'/\\'/g")
-              
-              # Timestamp
-              TS=$(date +%s)
-              
-              # Construct body
-              BODY="{\"name\":\"$event\",\"channels\":[\"$channel\"],\"data\":\"{\\\"message\\\":\\\"$ESCAPED_LINE\\\"}\"}"
-              
-              # MD5 of body
-              BODY_MD5=$(echo -n "$BODY" | md5sum | awk '{print $1}')
-              
-              # Auth Signature
-              # POST\n/apps/$app_id/events\nauth_key=$key&auth_timestamp=$TS&auth_version=1.0&body_md5=$BODY_MD5
-              SIGN_STRING="POST\n/apps/$app_id/events\nauth_key=$key&auth_timestamp=$TS&auth_version=1.0&body_md5=$BODY_MD5"
-              AUTH_SIGNATURE=$(echo -n -e "$SIGN_STRING" | openssl dgst -sha256 -hmac "$secret" | sed 's/^.* //')
-              
-              # Send to Pusher
-              curl -s -X POST "https://api-$cluster.pusher.com/apps/$app_id/events?auth_key=$key&auth_timestamp=$TS&auth_version=1.0&body_md5=$BODY_MD5&auth_signature=$AUTH_SIGNATURE" \
-                   -H "Content-Type: application/json" \
-                   -d "$BODY" > /dev/null || true
-            done
-          }
+          if not all([PUSHER_APP_ID, PUSHER_KEY, PUSHER_SECRET, PUSHER_CLUSTER, CHANNEL]):
+              print("Missing Pusher secrets. Logging to stdout only.")
+              # Fallback: just print everything
+              for line in sys.stdin:
+                  sys.stdout.write(line)
+                  sys.stdout.flush()
+              sys.exit(0)
 
-          echo "Starting OpenHands Docker Container..." | log_to_pusher
-          echo "[GITHUB_LOGS] ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" | log_to_pusher
+          # Buffer
+          log_buffer = deque()
+          buffer_lock = threading.Lock()
+          running = True
 
+          def send_batch(lines):
+              if not lines:
+                  return
+              
+              timestamp = str(int(time.time()))
+              # Join lines reliably
+              # Note: Javascript expects a single "message" string usually, but we want to stream lines.
+              # To allow the frontend to process line-by-line easily, we can send them joined by newlines 
+              # or send individual events. Sending deeply nested JSON in a single event is better for rate limits.
+              # Let's send the raw chunk.
+              text_chunk = "".join(lines)
+              
+              # Construct Body
+              body_data = json.dumps({"message": text_chunk})
+              body = json.dumps({
+                  "name": "log",
+                  "channels": [CHANNEL],
+                  "data": body_data
+              })
+              
+              body_md5 = hashlib.md5(body.encode('utf-8')).hexdigest()
+              
+              sign_string = f"POST\n/apps/{PUSHER_APP_ID}/events\nauth_key={PUSHER_KEY}&auth_timestamp={timestamp}&auth_version=1.0&body_md5={body_md5}"
+              auth_signature = hmac.new(PUSHER_SECRET.encode('utf-8'), sign_string.encode('utf-8'), hashlib.sha256).hexdigest()
+              
+              params = urllib.parse.urlencode({
+                  'auth_key': PUSHER_KEY,
+                  'auth_timestamp': timestamp,
+                  'auth_version': '1.0',
+                  'body_md5': body_md5,
+                  'auth_signature': auth_signature
+              })
+              
+              try:
+                  conn = http.client.HTTPSConnection(f"api-{PUSHER_CLUSTER}.pusher.com", timeout=3)
+                  headers = {'Content-Type': 'application/json'}
+                  conn.request("POST", f"/apps/{PUSHER_APP_ID}/events?{params}", body, headers)
+                  resp = conn.getresponse()
+                  resp.read() # Consume
+                  conn.close()
+              except Exception as e:
+                  print(f"Pusher Error: {e}")
+
+          def consumer_thread():
+              while running or log_buffer:
+                  with buffer_lock:
+                      if not log_buffer:
+                          batch = []
+                      else:
+                          batch = list(log_buffer)
+                          log_buffer.clear()
+                  
+                  if batch:
+                      send_batch(batch)
+                  
+                  # Sleep/Tick
+                  # If we just sent data, maybe sleep less. If empty, sleep 1s.
+                  # For responsiveness, 1s is fine.
+                  time.sleep(1.0)
+
+          # Start Consumer
+          t = threading.Thread(target=consumer_thread)
+          t.daemon = True
+          t.start()
+
+          # Main Producer Loop
+          for line in sys.stdin:
+              # Always print to stdout for GitHub logs
+              sys.stdout.write(line)
+              sys.stdout.flush()
+              
+              with buffer_lock:
+                  log_buffer.append(line)
+
+          # Shutdown
+          running = False
+          t.join(timeout=5)
+          EOF
+
+          # 3) Setup Docker volumes and permissions
           VOL_NAME="openhands-vol-${GITHUB_RUN_ID}"
           STATE_VOL_NAME="openhands-state-${GITHUB_RUN_ID}"
           docker volume create "$VOL_NAME"
@@ -175,7 +241,7 @@ jobs:
             '
           docker rm -f openhands-app 2>/dev/null || true
 
-          # 2) Chamada robusta: sem "\" com risco de whitespace no fim
+          # 4) Run Docker piped to Python
           docker_args=(
             run --pull=always
             -w /workspace
@@ -198,7 +264,14 @@ jobs:
             docker.openhands.dev/openhands/openhands:1.0
             python -m openhands.core.main -t "$PROMPT"
           )
-          docker "${docker_args[@]}" 2>&1 | log_to_pusher
+
+          # Pipe to python script, passing secrets implicitly via env of the step
+          env PUSHER_APP_ID="${{ secrets.PUSHER_APP_ID }}" \
+              PUSHER_KEY="${{ secrets.PUSHER_KEY }}" \
+              PUSHER_SECRET="${{ secrets.PUSHER_SECRET }}" \
+              PUSHER_CLUSTER="${{ secrets.PUSHER_CLUSTER }}" \
+              SLUG="${{ github.event.client_payload.slug || inputs.slug }}" \
+              docker "${docker_args[@]}" 2>&1 | python3 logger.py
 
           EXIT_CODE=${PIPESTATUS[0]}
           echo "Docker run finished with exit code $EXIT_CODE"
@@ -280,8 +353,8 @@ jobs:
                       metadata: {
                         source: "deep-search",
                         file_count: ($manifest[0] | length),
-                        institution: ($manifest[0][0].institution // "unknown"),
-                        year: ($manifest[0][0].year // "unknown")
+                        institution: ($manifest[0][0].instituicao // $manifest[0][0].institution // "unknown"),
+                        year: ($manifest[0][0].ano // $manifest[0][0].year // "unknown")
                       }
                     }')
             
@@ -293,6 +366,7 @@ jobs:
           else
             echo "Manifest not found at $MANIFEST_PATH. Skipping cache update."
           fi
+        continue-on-error: true
 
       - name: Notify Completion
         if: ${{ always() }}
@@ -303,16 +377,16 @@ jobs:
           PUSHER_CLUSTER: ${{ secrets.PUSHER_CLUSTER }}
           SLUG: ${{ github.event.client_payload.slug || inputs.slug }}
         run: |
-            LOG_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-            MESSAGE="COMPLETED. Logs: $LOG_URL"
-            
-            # Simple Pusher Trigger for Completion
-            TS=$(date +%s)
-            BODY="{\"name\":\"log\",\"channels\":[\"$SLUG\"],\"data\":\"{\\\"message\\\":\\\"$MESSAGE\\\"}\"}"
-            BODY_MD5=$(echo -n "$BODY" | md5sum | awk '{print $1}')
-            SIGN_STRING="POST\n/apps/$PUSHER_APP_ID/events\nauth_key=$PUSHER_KEY&auth_timestamp=$TS&auth_version=1.0&body_md5=$BODY_MD5"
-            AUTH_SIGNATURE=$(echo -n -e "$SIGN_STRING" | openssl dgst -sha256 -hmac "$PUSHER_SECRET" | sed 's/^.* //')
-            
-            curl -s -X POST "https://api-$PUSHER_CLUSTER.pusher.com/apps/$PUSHER_APP_ID/events?auth_key=$PUSHER_KEY&auth_timestamp=$TS&auth_version=1.0&body_md5=$BODY_MD5&auth_signature=$AUTH_SIGNATURE" \
-                   -H "Content-Type: application/json" \
-                   -d "$BODY"
+          LOG_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          MESSAGE="COMPLETED. Logs: $LOG_URL"
+
+          # Simple Pusher Trigger for Completion
+          TS=$(date +%s)
+          BODY="{\"name\":\"log\",\"channels\":[\"$SLUG\"],\"data\":\"{\\\"message\\\":\\\"$MESSAGE\\\"}\"}"
+          BODY_MD5=$(echo -n "$BODY" | md5sum | awk '{print $1}')
+          SIGN_STRING="POST\n/apps/$PUSHER_APP_ID/events\nauth_key=$PUSHER_KEY&auth_timestamp=$TS&auth_version=1.0&body_md5=$BODY_MD5"
+          AUTH_SIGNATURE=$(echo -n -e "$SIGN_STRING" | openssl dgst -sha256 -hmac "$PUSHER_SECRET" | sed 's/^.* //')
+
+          curl -s -X POST "https://api-$PUSHER_CLUSTER.pusher.com/apps/$PUSHER_APP_ID/events?auth_key=$PUSHER_KEY&auth_timestamp=$TS&auth_version=1.0&body_md5=$BODY_MD5&auth_signature=$AUTH_SIGNATURE" \
+                 -H "Content-Type: application/json" \
+                 -d "$BODY"

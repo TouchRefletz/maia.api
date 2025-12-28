@@ -88,41 +88,55 @@ export default {
  * SERVICE: TRIGGER DEEP SEARCH (GITHUB ACTIONS)
  */
 async function handleTriggerDeepSearch(request, env) {
-	const { query, slug, ntfy_topic } = await request.json();
+	const body = await request.json();
+	const { query, slug, ntfy_topic, force } = body;
 
 	if (!query || !slug) {
 		return new Response(JSON.stringify({ error: 'Query and Slug are required' }), { status: 400, headers: corsHeaders });
 	}
 
-	// 1. Check Cache (Pinecone)
-	// 1. Check Cache (Pinecone)
-	try {
-		const embedding = await generateEmbedding(query, env.GOOGLE_GENAI_API_KEY);
-		if (embedding) {
-			const cacheResult = await executePineconeQuery(embedding, env, 1, { type: 'deep-search-result' });
-			if (cacheResult && cacheResult.matches && cacheResult.matches.length > 0) {
-				const bestMatch = cacheResult.matches[0];
-				// Strict semantic deduplication
-				if (bestMatch.score > 0.92) {
-					console.log(`[Cache Hit] Slug: ${bestMatch.metadata.slug} Score: ${bestMatch.score}`);
-					return new Response(
-						JSON.stringify({
-							success: true,
-							cached: true,
-							message: 'Search result found in cache',
-							slug: bestMatch.metadata.slug,
-							score: bestMatch.score,
-						}),
-						{
-							headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-						},
-					);
+	// 1. Check Cache (Pinecone) - Skip if forced
+	if (!force) {
+		try {
+			const embedding = await generateEmbedding(query, env.GOOGLE_GENAI_API_KEY);
+			if (embedding) {
+				// Search for top 3 matches with a lower threshold to find relatable queries
+				const cacheResult = await executePineconeQuery(embedding, env, 3, { type: 'deep-search-result' });
+
+				if (cacheResult && cacheResult.matches && cacheResult.matches.length > 0) {
+					// Filter matches that are reasonably relevant (e.g., > 0.80)
+					const candidates = cacheResult.matches
+						.filter((m) => m.score > 0.8)
+						.map((m) => ({
+							slug: m.metadata.slug,
+							score: m.score,
+							query: m.metadata.query,
+							year: m.metadata.year,
+							institution: m.metadata.institution,
+							file_count: m.metadata.file_count,
+							timestamp: m.metadata.updated_at,
+						}));
+
+					if (candidates.length > 0) {
+						console.log(`[Cache Hit] Found ${candidates.length} candidates for: ${query}`);
+						return new Response(
+							JSON.stringify({
+								success: true,
+								cached: true,
+								message: 'Possible matches found',
+								candidates: candidates,
+							}),
+							{
+								headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+							},
+						);
+					}
 				}
 			}
+		} catch (e) {
+			console.warn('Cache check failed:', e);
+			// Proceed to trigger search if cache check fails
 		}
-	} catch (e) {
-		console.warn('Cache check failed:', e);
-		// Proceed to trigger search if cache check fails
 	}
 
 	const githubPat = env.GITHUB_PAT;
