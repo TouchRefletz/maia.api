@@ -133,13 +133,20 @@ jobs:
             -v "$STATE_VOL_NAME:/.openhands" \
             -e TAVILY_API_KEY="$TAVILY_API_KEY" \
             alpine sh -c '
-              printf "[core]\nsearch_api_key = \"%s\"\n" "$TAVILY_API_KEY" > /workspace/config.toml && \
-              chown -R 1001:1001 /workspace && \
-              chmod 777 /workspace && \
-              chmod 666 /workspace/config.toml && \
-              mkdir -p /.openhands && \
-              chown -R 1001:1001 /.openhands && \
-              chmod 777 /.openhands
+              set -eux
+
+              printf "[core]\nsearch_api_key = \"%s\"\n" "$TAVILY_API_KEY" > /workspace/config.toml
+
+              # workspace ok
+              chown -R 1001:1001 /workspace
+              chmod 777 /workspace
+              chmod 666 /workspace/config.toml
+
+              # IMPORTANTÍSSIMO: preparar o state volume
+              mkdir -p /.openhands
+              rm -f /.openhands/.jwt_secret || true
+              chown -R 1001:1001 /.openhands
+              chmod 700 /.openhands
             '
 
           docker rm -f openhands-app 2>/dev/null || true
