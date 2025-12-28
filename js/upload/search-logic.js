@@ -1335,10 +1335,10 @@ export function setupSearchLogic() {
   };
 
   // Listeners Iniciais
-  if (btnSearch) btnSearch.addEventListener("click", doSearch);
+  if (btnSearch) btnSearch.addEventListener("click", () => doSearch(false));
   if (searchInput) {
     searchInput.addEventListener("keypress", (e) => {
-      if (e.key === "Enter") doSearch();
+      if (e.key === "Enter") doSearch(false);
     });
   }
 }
