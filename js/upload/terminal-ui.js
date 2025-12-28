@@ -178,8 +178,8 @@ export class TerminalUI {
       if (url && this.el.logBtn) {
         this.el.logBtn.href = url;
         this.el.logBtn.classList.remove("disabled");
-        this.el.logBtn.style.color = "#4CAF50"; // Green to show active
-        this.el.logBtn.style.borderColor = "#4CAF50";
+        this.el.logBtn.style.color = "var(--color-primary)"; // Green to show active
+        this.el.logBtn.style.borderColor = "var(--color-primary)";
         this.el.logBtn.style.pointerEvents = "auto";
         return;
       }
