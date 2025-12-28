@@ -125,8 +125,16 @@ jobs:
           VOL_NAME="openhands-vol-${{ github.run_id }}"
           docker volume create "$VOL_NAME"
 
-          # Pre-fix permissions using alpine to ensure enduser can write to workspace
-          docker run --rm -v "$VOL_NAME:/workspace" alpine chmod 777 /workspace
+          # Pre-fix permissions and create config using alpine (as root)
+          docker run --rm \
+            -v "$VOL_NAME:/workspace" \
+            -e TAVILY_API_KEY="$TAVILY_API_KEY" \
+            alpine sh -c '
+              printf "[core]\nsearch_api_key = \"%s\"\n" "$TAVILY_API_KEY" > /workspace/config.toml && \
+              chown -R 1001:1001 /workspace && \
+              chmod 777 /workspace && \
+              chmod 666 /workspace/config.toml
+            '
 
           docker rm -f openhands-app 2>/dev/null || true
 
@@ -148,7 +156,7 @@ jobs:
             -e PROMPT="$PROMPT" \
             --name openhands-app \
             docker.openhands.dev/openhands/openhands:1.0 \
-            bash -c 'rm -rf config.toml && printf "[core]\nsearch_api_key = \"%s\"\n" "$TAVILY_API_KEY" > config.toml && python -m openhands.core.main -t "$PROMPT"' 2>&1 | log_to_ntfy
+            bash -c 'python -m openhands.core.main -t "$PROMPT"' 2>&1 | log_to_ntfy
             
           EXIT_CODE=$?
           echo "Docker run finished with exit code $EXIT_CODE"
