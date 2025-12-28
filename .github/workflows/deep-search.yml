@@ -48,7 +48,7 @@ jobs:
           QUERY: ${{ github.event.client_payload.query || inputs.query }}
           SLUG: ${{ github.event.client_payload.slug || inputs.slug }}
         run: |
-          set -o pipefail
+          set -euo pipefail
           # Define the PROMPT variable inside the shell
           PROMPT=$(cat <<EOF
           Você recebeu uma consulta curta (QUERY) do tipo "nome da prova + ano", por exemplo: "ita 2022".
@@ -130,7 +130,7 @@ jobs:
           # Pre-fix permissions and create config using alpine (as root)
           docker run --rm \
             -v "$VOL_NAME:/workspace" \
-            -v "$STATE_VOL_NAME:/.openhands" \
+            -v "$STATE_VOL_NAME:/workspace/.openhands" \
             -e TAVILY_API_KEY="$TAVILY_API_KEY" \
             alpine sh -c '
               set -eux
@@ -143,10 +143,10 @@ jobs:
               chmod 666 /workspace/config.toml
 
               # IMPORTANTÍSSIMO: preparar o state volume
-              mkdir -p /.openhands
-              rm -f /.openhands/.jwt_secret || true
-              chown -R 1001:1001 /.openhands
-              chmod 700 /.openhands
+              mkdir -p /workspace/.openhands
+              rm -f /workspace/.openhands/.jwt_secret || true
+              chown -R 1001:1001 /workspace/.openhands
+              chmod 700 /workspace/.openhands
             '
 
           docker rm -f openhands-app 2>/dev/null || true
@@ -157,7 +157,7 @@ jobs:
             -w /workspace \
             -v /var/run/docker.sock:/var/run/docker.sock \
             -v "$VOL_NAME:/workspace:rw" \
-            -v "$STATE_VOL_NAME:/.openhands" \
+            -v "$STATE_VOL_NAME:/workspace/.openhands" \  
             --add-host host.docker.internal:host-gateway \
             -e SANDBOX_USER_ID="$(id -u)" \
             -e SANDBOX_VOLUMES="$VOL_NAME:/workspace:rw" \
@@ -168,11 +168,13 @@ jobs:
             -e TAVILY_API_KEY="$TAVILY_API_KEY" \
             -e PYTHONUNBUFFERED=1 \
             -e PROMPT="$PROMPT" \
+            -e FILE_STORE=local \
+            -e FILE_STORE_PATH=/workspace/.openhands \
             --name openhands-app \
             docker.openhands.dev/openhands/openhands:1.0 \
             bash -c 'python -m openhands.core.main -t "$PROMPT"' 2>&1 | log_to_ntfy
             
-          EXIT_CODE=$?
+          EXIT_CODE=${PIPESTATUS[0]}
           echo "Docker run finished with exit code $EXIT_CODE"
 
           # Extract artifacts from the volume (via the container)
