@@ -324,12 +324,45 @@ export class TerminalUI {
     }
   }
 
+  updateTaskStateByName(title, newStatus) {
+    // Fuzzy match title
+    const task = this.tasks.find((t) => t.title.trim() === title.trim());
+    if (task) {
+      if (task.status !== newStatus) {
+        // Only update if changed
+        task.status = newStatus;
+        this.updatePlan(this.tasks); // Trigger Re-render
+      }
+    } else {
+      // Optional: Add new task if not exists?
+      // For now, let's stick to updating existing ones to avoid duplicates from partial logs
+    }
+  }
+
   processLogLine(text, type = "info") {
     if (!text) return;
 
-    // 1. PRIORITY: Legacy Regex Parsing Removed
-    // We now rely on server-side broadcasting of TASKS.md via 'task_update' event.
+    // 1. HYBRID STRATEGY: Server Event + Log Parsing Fallback
+    // We try to detect standard task formats: "- [x] Title", "[x] Title", "* [x] Title"
     let foundTask = false;
+
+    // Cleaning: Remove common prefixes like "> ", "- ", "* "
+    const cleanLine = text.trim().replace(/^[\-\*\>]\s+/, "");
+    // Regex for: [x] Title, [ ] Title, [/] Title
+    const taskMatch = cleanLine.match(/^\[([ xX/])\]\s+(.*)/);
+
+    if (taskMatch) {
+      foundTask = true;
+      const statusChar = taskMatch[1].toLowerCase();
+      const taskTitle = taskMatch[2].trim();
+
+      let status = "todo";
+      if (statusChar === "x") status = "completed";
+      if (statusChar === "/") status = "in_progress";
+
+      // Update Local State (Idempotent)
+      this.updateTaskStateByName(taskTitle, status);
+    }
 
     if (text.includes("IPythonRunCellAction")) {
       this.el.stepText.innerText = "Executando script de automação Python...";

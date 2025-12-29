@@ -162,7 +162,9 @@ jobs:
                           
                           if res.returncode == 0:
                               content = res.stdout
-                              
+                              # Debug: Show we got content
+                              # print(f"[Logger] Read {len(content)} bytes from TASKS.md", flush=True)
+
                               # 3. Hash Check
                               current_hash = hashlib.md5(content.encode()).hexdigest()
                               if current_hash != last_known_tasks_hash:
@@ -171,8 +173,21 @@ jobs:
                                   
                                   if parsed_tasks:
                                       print(f"[Logger] Detected task update ({len(parsed_tasks)} items). Broadcasting...", flush=True)
+                                      
+                                      # PRINT TASKS TO CONSOLE (User Request)
+                                      print("--- CURRENT TASKS ---", flush=True)
+                                      for t in parsed_tasks:
+                                          status_icon = "[ ]"
+                                          if t['status'] == "completed": status_icon = "[x]"
+                                          elif t['status'] == "in_progress": status_icon = "[/]"
+                                          print(f"{status_icon} {t['title']}", flush=True)
+                                      print("---------------------", flush=True)
+                                      
                                       send_to_pusher("task_update", parsed_tasks)
                                       last_known_tasks_hash = current_hash
+                                  else:
+                                      # Debug: why no tasks?
+                                      print(f"[Logger] Content changed but parsed 0 tasks. Content sample: {content[:100]!r}", flush=True)
                                       
                   except Exception as e:
                       # Don't crash the logger if docker exec fails randomly
@@ -187,9 +202,10 @@ jobs:
               for i, line in enumerate(lines):
                   line = line.strip()
                   # Regex to match "- [x] title", "- [ ] title", "- [/] title"
-                  match = re.match(r'- \[(.| )\] (.*)', line)
+                  # Support space, x, X, /
+                  match = re.match(r'- \[([ xX/])\] (.*)', line)
                   if match:
-                      status_char = match.group(1)
+                      status_char = match.group(1).lower()
                       title_raw = match.group(2)
                       
                       # Clean comments e.g. "<!-- id: 0 -->"
