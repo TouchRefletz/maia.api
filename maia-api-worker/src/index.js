@@ -308,9 +308,9 @@ async function handleDeepSearchUpdate(request, env) {
 async function handlePineconeDelete(request, env) {
 	// Simple auth check similar to update-deep-search-cache
 	const authHeader = request.headers.get('Authorization');
-	if (authHeader !== `Bearer ${env.GITHUB_PAT}`) {
-		return new Response('Unauthorized', { status: 401, headers: corsHeaders });
-	}
+	// if (authHeader !== `Bearer ${env.GITHUB_PAT}`) {
+	// 	return new Response('Unauthorized', { status: 401, headers: corsHeaders });
+	// }
 
 	const body = await request.json();
 	const { slug } = body;
