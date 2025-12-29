@@ -474,7 +474,7 @@ export class TerminalUI {
 
   // NOTE: removed direct 'appendLog' in favor of queueLog used internally
 
-  finish() {
+  finish(showRetry = false) {
     this.state = this.MODES.DONE;
     this.currentVirtualProgress = 100;
     this.updateProgressBar();
@@ -493,9 +493,13 @@ export class TerminalUI {
     }
 
     if (this.el.retryBtn) {
-      this.el.retryBtn.style.display = "flex";
-      this.el.retryBtn.style.alignItems = "center";
-      this.el.retryBtn.style.height = "22px";
+      if (showRetry) {
+        this.el.retryBtn.style.display = "flex";
+        this.el.retryBtn.style.alignItems = "center";
+        this.el.retryBtn.style.height = "22px";
+      } else {
+        this.el.retryBtn.style.display = "none";
+      }
     }
   }
 

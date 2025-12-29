@@ -195,8 +195,8 @@ export function setupSearchLogic() {
         if (!text) return;
 
         if (text.includes("COMPLETED")) {
-          // Explicitly tell terminal to finish
-          if (terminal) terminal.finish();
+          // Explicitly tell terminal to finish with NO retry button (success)
+          if (terminal) terminal.finish(false);
           isSuccess = true; // Mark as success for retry logic
 
           log(
@@ -263,7 +263,7 @@ export function setupSearchLogic() {
                   status: "completed",
                 },
               ]);
-              terminal.finish();
+              terminal.finish(false); // Hide retry button for cache hits
             }
 
             const hfBase =
