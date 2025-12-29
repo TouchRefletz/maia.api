@@ -95,9 +95,9 @@ export class TerminalUI {
     const styles = `
       <style>
         @keyframes term-pulse-gold {
-          0% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(255, 193, 7, 0)); }
-          50% { transform: scale(1.1); filter: drop-shadow(0 0 8px rgba(255, 193, 7, 0.6)); }
-          100% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(255, 193, 7, 0)); }
+          0% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.7); }
+          70% { box-shadow: 0 0 0 10px rgba(255, 193, 7, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0); }
         }
         .term-btn-notify {
           background: transparent;
@@ -113,7 +113,8 @@ export class TerminalUI {
         }
         .term-btn-notify.active {
           color: #ffc107;
-          animation: term-pulse-gold 2s infinite ease-in-out;
+          background: rgba(255, 193, 7, 0.1); /* Subtle yellow background */
+          animation: term-pulse-gold 2s infinite;
         }
         .term-btn-notify.inactive {
           opacity: 0.4;
@@ -135,7 +136,7 @@ export class TerminalUI {
         <div class="term-status-group" style="display:flex; align-items:center; gap:12px;">
             <div class="term-status active">INICIANDO_SISTEMA...</div>
              <button id="term-btn-notify" class="term-btn-notify inactive" title="Notificar ao concluir">
-                <span class="icon">�</span>
+                <span class="icon">🔕</span>
             </button>
         </div>
       </div>
