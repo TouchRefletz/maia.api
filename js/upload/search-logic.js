@@ -195,8 +195,8 @@ export function setupSearchLogic() {
         if (!text) return;
 
         if (text.includes("COMPLETED")) {
-          // Explicitly tell terminal to finish with NO retry button (success)
-          if (terminal) terminal.finish(false);
+          // Explicitly tell terminal to finish with retry button enabled (New Search Success)
+          if (terminal) terminal.finish(true);
           isSuccess = true; // Mark as success for retry logic
 
           log(
