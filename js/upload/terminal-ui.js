@@ -78,8 +78,8 @@ export class TerminalUI {
       <div class="term-log-header" style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; border-bottom: 1px solid #333; padding-bottom: 5px;">
         <span class="term-label" style="margin: 0px 0px 0px 8px;">LOGS EM TEMPO REAL</span>
         <div style="display: flex; align-items: center;">
-            <button id="term-btn-cancel" class="term-btn cancel">
-                Cancelar
+            <button id="term-btn-cancel" class="term-btn cancel disabled" disabled>
+                Infos
             </button>
             <a href="#" target="_blank" id="term-btn-logs" class="term-btn disabled">
                 Ver Logs no GitHub ↗
@@ -105,6 +105,15 @@ export class TerminalUI {
 
     // Boot Animator REMOVED (User request: No time-based progress)
     // Progress will only move when logs or plan updates arrive.
+
+    // Force "Infos" state initially or "Cancelar" disabled?
+    // User requested "sempre esteja lá, mas desabilitado no começo... mas aí ao invés de aparecer ele fica ativado"
+    // AND "botão de cancelar funcione igual ao de log" (Log button is "Ver Logs no GitHub")
+    // Wait, the user said "mas desabilitado no começo... quando eu clico nele e finalmente dá certo ele fica de novo inativo mas agora com a mensagem de cancelado"
+    // So distinct texts: "Cancelar" (disabled start) -> "Cancelar" (active) -> "Cancelado" (disabled end)
+    if (this.el.cancelBtn) {
+      this.el.cancelBtn.innerText = "Cancelar";
+    }
   }
 
   updateProgressBar() {
@@ -202,7 +211,9 @@ export class TerminalUI {
             this.runId = runId;
             // Enable Cancel Button if we have a Run ID and not done
             if (this.el.cancelBtn && this.state !== this.MODES.DONE) {
-              this.el.cancelBtn.style.display = "inline-block";
+              this.el.cancelBtn.classList.remove("disabled");
+              this.el.cancelBtn.disabled = false;
+              this.el.cancelBtn.innerText = "Cancelar"; // Ensure text is correct
             }
           } else {
             console.warn("Could not match Run ID in URL:", url);
@@ -417,7 +428,9 @@ export class TerminalUI {
       "Todas as tarefas foram concluídas com sucesso.";
 
     if (this.el.cancelBtn) {
-      this.el.cancelBtn.style.display = "none";
+      this.el.cancelBtn.classList.add("disabled");
+      this.el.cancelBtn.disabled = true;
+      // If we finished normally, we can keep it as "Cancelar" (disabled) or "Finalizado"
     }
   }
 
@@ -440,7 +453,8 @@ export class TerminalUI {
     this.appendLog(`[ERRO CRÍTICO] ${reason}`, "error");
 
     if (this.el.cancelBtn) {
-      this.el.cancelBtn.style.display = "none";
+      this.el.cancelBtn.classList.add("disabled");
+      this.el.cancelBtn.disabled = true;
     }
   }
 
@@ -463,7 +477,9 @@ export class TerminalUI {
     this.appendLog(`[SISTEMA] Processo cancelado e encerrado.`, "warning");
 
     if (this.el.cancelBtn) {
-      this.el.cancelBtn.style.display = "none";
+      this.el.cancelBtn.innerText = "Cancelado";
+      this.el.cancelBtn.classList.add("disabled");
+      this.el.cancelBtn.disabled = true;
     }
   }
 
