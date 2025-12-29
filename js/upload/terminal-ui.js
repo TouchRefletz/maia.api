@@ -619,7 +619,7 @@ export class TerminalUI {
       this.el.notifyBtn.innerHTML = '<span class="icon">🔔</span>';
     } else {
       this.el.notifyBtn.className = "term-btn-notify inactive";
-      this.el.notifyBtn.innerHTML = '<span class="icon">�</span>';
+      this.el.notifyBtn.innerHTML = '<span class="icon">🔕</span>';
     }
   }
 
