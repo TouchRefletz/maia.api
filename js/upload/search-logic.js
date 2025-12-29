@@ -1195,24 +1195,23 @@ export function setupSearchLogic() {
     const overlay = document.createElement("div");
     Object.assign(overlay.style, {
       position: "fixed",
-      bottom: "20px",
-      right: "20px",
-      width: "450px",
-      height: "350px",
+      top: "0",
+      left: "0",
+      width: "100%",
+      height: "45vh",
       background: "#0d1117",
-      borderRadius: "12px",
-      boxShadow: "0 10px 30px rgba(0,0,0,0.5), 0 0 0 1px #30363d",
+      borderBottom: "1px solid #30363d",
+      boxShadow: "0 20px 50px rgba(0,0,0,0.8)",
       zIndex: 99999,
-      overflow: "hidden",
       display: "flex",
       flexDirection: "column",
-      animation: "slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+      animation: "slideDown 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
     });
 
     if (!document.getElementById("anim-slide")) {
       const style = document.createElement("style");
       style.id = "anim-slide";
-      style.textContent = `@keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }`;
+      style.textContent = `@keyframes slideDown { from { transform: translateY(-100%); } to { transform: translateY(0); } }`;
       document.head.appendChild(style);
     }
 
@@ -1229,11 +1228,10 @@ export function setupSearchLogic() {
       fontSize: "0.85rem",
     });
     headerObj.innerHTML = `
-        <div style="display:flex; align-items:center; gap:8px;">
-            <span style="color:var(--color-warning);">⚡ LIMPEZA AUTOMÁTICA</span>
-            <span style="font-weight:400; color:#8b949e;">| ${filename}</span>
+        <div style="display:flex; align-items:center; gap:12px;">
+            <span style="color:var(--color-warning); font-size: 1.1rem;">⚡ LIMPEZA AUTOMÁTICA</span>
+            <span style="font-weight:400; color:#8b949e; font-family: monospace;">| ${filename}</span>
         </div>
-        <div style="font-size:0.7rem; color:#8b949e;">⚠️ NÃO FECHE</div>
     `;
 
     const termContainer = document.createElement("div");
@@ -1245,11 +1243,13 @@ export function setupSearchLogic() {
     overlay.appendChild(termContainer);
     document.body.appendChild(overlay);
 
-    const term = new TerminalUI(terminalId);
-    term.el.status.innerText = "ELIMINANDO_ARQUIVO";
-    term.el.stepText.innerText =
-      "Conectando ao sistema de arquivos distribuído...";
-    term.currentVirtualProgress = 5;
+    const term = new TerminalUI(terminalId, {
+      mode: "simple",
+      initialDuration: 15,
+    });
+    term.el.status.innerText = "INICIANDO_PROTOCOLO";
+    term.el.stepText.innerText = "Identificando artefato corrompido...";
+    term.currentVirtualProgress = 0;
     term.updateProgressBar();
     if (term.el.cancelBtn) term.el.cancelBtn.style.display = "none";
 
@@ -1270,13 +1270,20 @@ export function setupSearchLogic() {
           data.message ||
           (typeof data === "string" ? data : JSON.stringify(data));
         term.processLogLine(text);
+
+        if (text.includes("Cleanup Hugging Face")) {
+          term.el.status.innerText = "LIMPANDO_REPOSITÓRIO";
+          term.el.stepText.innerText = "Removendo arquivo do Hugging Face...";
+        } else if (text.includes("Manifesto atualizado")) {
+          term.el.status.innerText = "ATUALIZANDO_ÍNDICE";
+          term.el.stepText.innerText = "Sincronizando manifest.json...";
+        }
         if (text.includes("COMPLETED")) {
           term.finish();
           term.el.status.innerText = "LIMPEZA_CONCLUÍDA";
           setTimeout(() => {
-            overlay.style.transition = "transform 0.5s ease, opacity 0.5s ease";
-            overlay.style.transform = "translateY(50px)";
-            overlay.style.opacity = "0";
+            overlay.style.transition = "transform 0.5s ease";
+            overlay.style.transform = "translateY(-100%)";
             setTimeout(() => overlay.remove(), 500);
             if (cardElement) cardElement.remove();
 

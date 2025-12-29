@@ -1,10 +1,19 @@
 export class TerminalUI {
-  constructor(containerId) {
+  constructor(containerId, options = {}) {
     this.container = document.getElementById(containerId);
     if (!this.container) {
       console.error(`Terminal container ${containerId} not found`);
       return;
     }
+
+    // Options
+    this.options = Object.assign(
+      {
+        mode: "full", // 'full' | 'simple'
+        initialDuration: 480,
+      },
+      options
+    );
 
     // State Enums
     this.MODES = {
@@ -28,7 +37,7 @@ export class TerminalUI {
     // Progress Logic 2.0 State
     this.currentVirtualProgress = 0;
     this.lastLogTime = Date.now();
-    this.initialEstimatedDuration = 480; // ~8m target
+    this.initialEstimatedDuration = this.options.initialDuration;
     this.estimatedRemainingTime = this.initialEstimatedDuration; // Dynamic ETA
 
     // Cancellation State
@@ -57,30 +66,42 @@ export class TerminalUI {
   }
 
   renderInitialStructure() {
-    this.container.innerHTML = `
-      <div class="term-header">
-        <div class="term-title">
-          <span>>_</span> PESQUISA_AVANÇADA
-        </div>
-        <div class="term-status active">INICIANDO_SISTEMA...</div>
-      </div>
-      
-      <div class="term-progress-container">
-        <div class="term-bar-wrapper">
-          <div class="term-bar-fill" style="width: 0%"></div>
-        </div>
-        <div class="term-meta">
-          <span class="term-step-text">Inicializando ambiente de execução...</span>
-          <span class="term-eta">TEMPO ESTIMADO: 08:00</span>
-        </div>
-      </div>
-
+    // Conditional Task Block
+    const tasksBlock =
+      this.options.mode === "simple"
+        ? ""
+        : `
       <div class="term-tasks">
         <div class="term-task-item current">
           <span class="term-icon">⚡</span> 
           <span>Iniciando Executor OpenHands Cloud...</span>
         </div>
       </div>
+    `;
+
+    // Adjust height for simple mode if needed via CSS class or inline
+    const simpleClass =
+      this.options.mode === "simple" ? "term-mode-simple" : "";
+
+    this.container.innerHTML = `
+      <div class="term-header ${simpleClass}">
+        <div class="term-title">
+          <span>>_</span> ${this.options.mode === "simple" ? "SISTEMA_LIMPEZA" : "PESQUISA_AVANÇADA"}
+        </div>
+        <div class="term-status active">INICIANDO_SISTEMA...</div>
+      </div>
+      
+      <div class="term-progress-container ${simpleClass}">
+        <div class="term-bar-wrapper">
+          <div class="term-bar-fill" style="width: 0%"></div>
+        </div>
+        <div class="term-meta">
+          <span class="term-step-text">Inicializando ambiente de execução...</span>
+          <span class="term-eta">TEMPO ESTIMADO: ${this.options.mode === "simple" ? "00:15" : "08:00"}</span>
+        </div>
+      </div>
+
+      ${tasksBlock}
 
       <div class="term-log-header" style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; border-bottom: 1px solid #333; padding-bottom: 5px;">
         <span class="term-label" style="margin: 0px 0px 0px 8px;">LOGS EM TEMPO REAL</span>
@@ -96,7 +117,7 @@ export class TerminalUI {
             </a>
         </div>
       </div>
-      <div class="term-logs" id="term-logs-stream"></div>
+      <div class="term-logs ${simpleClass}" id="term-logs-stream"></div>
     `;
 
     this.el.fill = this.container.querySelector(".term-bar-fill");
