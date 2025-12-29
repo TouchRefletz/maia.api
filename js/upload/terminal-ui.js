@@ -132,6 +132,24 @@ export class TerminalUI {
     this.el.fill.style.width = `${safePercent.toFixed(3)}%`;
   }
 
+  // Helper to calculate current strict limit of the bar
+  getCurrentHardCap() {
+    let maxAllowed = 0;
+    if (this.state === this.MODES.BOOT) {
+      maxAllowed = 10;
+    } else if (this.state === this.MODES.EXEC) {
+      const rangePerTask = 80 / (this.totalTasks || 1);
+      maxAllowed = 10 + (this.completedTasks + 1) * rangePerTask;
+
+      if (this.completedTasks + 1 === this.totalTasks) {
+        maxAllowed = Math.min(maxAllowed, 99);
+      }
+    } else if (this.state === this.MODES.DONE) {
+      return 100;
+    }
+    return Math.max(0, maxAllowed - 1.0); // 1% buffer
+  }
+
   // Called every 1s
   tick() {
     if (this.state === this.MODES.DONE) return;
@@ -139,32 +157,44 @@ export class TerminalUI {
     // --- Visual Drift ---
     this.bumpProgress(true);
 
-    // --- Smoother Elastic ETA Logic ---
+    // --- Time-to-Progress P-Controller ---
     const now = Date.now();
     const idleSeconds = (now - this.lastLogTime) / 1000;
 
-    let change = -1; // Default: drop 1 second per real second
+    // 1. Calculate Target Time based on Bar Position
+    // If Bar is at 50%, Time should be 50% of 480s = 240s
+    const pct = Math.max(0, Math.min(100, this.currentVirtualProgress));
+    const targetRemaining = this.initialEstimatedDuration * (1 - pct / 100);
 
-    if (idleSeconds > 60) {
-      // "Demorar MUITO tipo 1 minuto... subir lentamente"
-      // "2 segundos pra subir 1" => +0.5 per sec
-      change = 0.5;
-    } else if (idleSeconds > 10) {
-      // "Vai desacelerando o tempo de descida"
-      // Linear scale from -1 (at 10s) to 0 (at 60s)
-      const range = 50; // 60 - 10
-      const progress = idleSeconds - 10;
-      const ratio = Math.min(1, progress / range); // 0 to 1
+    // 2. Calculate Error (Positive = We are "Slow/Lagging", Negative = We are "Fast/Ahead")
+    const error = this.estimatedRemainingTime - targetRemaining;
 
-      // We want factor to go from 1.0 (at 10s) to 0.0 (at 60s)
-      const factor = 1.0 - ratio;
+    // 3. Determine Base Change (P-Control)
+    let change = -1.0; // Default beat
 
-      change = -1 * factor;
+    if (error < -10) {
+      // We are WAY ahead (Time is 200s, Target is 250s). "Mentindo".
+      // Force Rise to realign.
+      change = +0.5;
+    } else if (error < 0) {
+      // Slightly ahead. Slow down the drop.
+      change = -0.2;
+    } else if (error > 20) {
+      // We are lagging behind (Time is 400s, Target is 300s).
+      // Drop faster to catch up?
+      // Or just let log activity handle it. Staying standard -1 is safer to avoid jumps.
+      change = -1.0;
+    }
+
+    // 4. Activity Bonus (Logs make time fly)
+    if (idleSeconds < 5) {
+      // Active! Boost the drop ONLY if we aren't trying to rise
+      if (change < 0) {
+        change -= 1.0; // effectively -2.0 or -1.2
+      }
     }
 
     this.estimatedRemainingTime += change;
-
-    // Clamp to reasonable bounds (0 to 2x initial)
     this.estimatedRemainingTime = Math.max(
       0,
       Math.min(9999, this.estimatedRemainingTime)
@@ -241,8 +271,8 @@ export class TerminalUI {
     this.bumpProgress(false);
 
     // --- ETA Bonus on Activity ---
-    // "Vai caindo conforme tem novos logs"
-    this.estimatedRemainingTime -= 2; // Bonus drop per log line
+    // Moved to tick() P-Controller logic
+    // We just mark activity time here.
 
     // 5. Completion/Failure Checks
     this.checkStateTransitions(displayText);
@@ -263,21 +293,8 @@ export class TerminalUI {
   bumpProgress(isDrift = false) {
     if (this.state === this.MODES.DONE) return;
 
-    // 1. Calculate Strict Limit based on Current Stage
-    let maxAllowed = 0;
-
-    if (this.state === this.MODES.BOOT) {
-      maxAllowed = 10;
-    } else if (this.state === this.MODES.EXEC) {
-      const rangePerTask = 80 / (this.totalTasks || 1);
-      maxAllowed = 10 + (this.completedTasks + 1) * rangePerTask;
-
-      if (this.completedTasks + 1 === this.totalTasks) {
-        maxAllowed = Math.min(maxAllowed, 99);
-      }
-    }
-
-    const hardCap = Math.max(0, maxAllowed - 1.0); // Keep 1% buffer
+    // 1. Get Hard Cap
+    const hardCap = this.getCurrentHardCap();
 
     // 2. Calculate Potential Progress
     let bump = 0;
@@ -387,7 +404,7 @@ export class TerminalUI {
     }
 
     // --- MILESTONE SYNC FOR TIME ---
-    // "Quando chega em uma milestone... sincroniza IMEDIATAMENTE"
+    // Not strictly needed with P-Controller but good for immediate snap
     const remainingFraction = 1 - this.currentVirtualProgress / 100;
     this.estimatedRemainingTime =
       this.initialEstimatedDuration * remainingFraction;
