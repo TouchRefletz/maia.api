@@ -15,6 +15,15 @@ export class TerminalUI {
       options
     );
 
+    // Sound Config
+    this.config = {
+      sounds: {
+        success: "/sounds/success.mp3",
+        error: "/sounds/error.mp3",
+      },
+    };
+    this.notifyEnabled = false;
+
     // State Enums
     this.MODES = {
       BOOT: "BOOT", // 0-10%
@@ -88,7 +97,12 @@ export class TerminalUI {
         <div class="term-title">
           <span>>_</span> ${this.options.mode === "simple" ? "SISTEMA_LIMPEZA" : "PESQUISA_AVANÇADA"}
         </div>
-        <div class="term-status active">INICIANDO_SISTEMA...</div>
+        <div class="term-status-group" style="display:flex; align-items:center; gap:12px;">
+            <div class="term-status active">INICIANDO_SISTEMA...</div>
+             <button id="term-btn-notify" class="term-btn-icon" title="Notificar ao concluir" style="background:transparent; border:none; cursor:pointer; opacity:0.5; color:var(--color-text);">
+                <span class="icon">🔔</span>
+            </button>
+        </div>
       </div>
       
       <div class="term-progress-container ${simpleClass}">
@@ -144,6 +158,14 @@ export class TerminalUI {
 
     if (this.el.cancelBtn) {
       this.el.cancelBtn.innerText = "Cancelar";
+    }
+
+    // Bind Notification Toggle
+    this.el.notifyBtn = this.container.querySelector("#term-btn-notify");
+    if (this.el.notifyBtn) {
+      this.el.notifyBtn.addEventListener("click", () =>
+        this.toggleNotification()
+      );
     }
   }
 
@@ -532,6 +554,72 @@ export class TerminalUI {
 
   // NOTE: removed direct 'appendLog' in favor of queueLog used internally
 
+  toggleNotification() {
+    if (!("Notification" in window)) {
+      alert("Este navegador não suporta notificações de área de trabalho.");
+      return;
+    }
+
+    if (Notification.permission === "granted") {
+      this.notifyEnabled = !this.notifyEnabled;
+      this.updateNotifyUI();
+      // Test sound on enable
+      if (this.notifyEnabled) {
+        const audio = new Audio(this.config.sounds.success);
+        audio.volume = 0.5;
+        audio.play().catch((e) => console.warn("Audio play blocked", e));
+      }
+    } else if (Notification.permission !== "denied") {
+      Notification.requestPermission().then((permission) => {
+        if (permission === "granted") {
+          this.notifyEnabled = true;
+          this.updateNotifyUI();
+          new Notification("Notificações Ativadas", {
+            body: "Você será avisado quando a tarefa terminar.",
+          });
+        }
+      });
+    }
+  }
+
+  updateNotifyUI() {
+    if (!this.el.notifyBtn) return;
+    if (this.notifyEnabled) {
+      this.el.notifyBtn.style.opacity = "1";
+      this.el.notifyBtn.style.color = "var(--color-primary)";
+      // Replace only inner HTML to keep button structure if needed, or fully replace content
+      this.el.notifyBtn.innerHTML =
+        '<span class="icon">🔔</span> <span style="font-size:0.7em; font-weight:bold;">ON</span>';
+    } else {
+      this.el.notifyBtn.style.opacity = "0.5";
+      this.el.notifyBtn.style.color = "var(--color-text)";
+      this.el.notifyBtn.innerHTML = '<span class="icon">🔔</span>';
+    }
+  }
+
+  triggerNotification(title, body, isError = false) {
+    if (!this.notifyEnabled) return;
+
+    if (Notification.permission === "granted") {
+      try {
+        new Notification(title, {
+          body: body,
+          // icon: isError ? "/error.png" : "/success.png" // Optional path
+        });
+
+        const soundUrl = isError
+          ? this.config.sounds.error
+          : this.config.sounds.success;
+        const audio = new Audio(soundUrl);
+        audio
+          .play()
+          .catch((e) => console.error("Error playing notification sound:", e));
+      } catch (e) {
+        console.warn("Notification failed:", e);
+      }
+    }
+  }
+
   finish(showRetry = false) {
     this.state = this.MODES.DONE;
     this.currentVirtualProgress = 100;
@@ -543,6 +631,11 @@ export class TerminalUI {
     this.el.eta.innerText = "TEMPO: FINALIZADO";
     this.el.stepText.innerText =
       "Todas as tarefas foram concluídas com sucesso.";
+
+    this.triggerNotification(
+      "Tarefa Concluída!",
+      "O processo foi finalizado com sucesso."
+    );
 
     if (this.el.cancelBtn) {
       this.el.cancelBtn.classList.add("disabled");
@@ -579,6 +672,12 @@ export class TerminalUI {
 
     this.queueLog(`[ERRO CRÍTICO] ${reason}`, "error");
 
+    this.triggerNotification(
+      "Falha na Tarefa",
+      `O processo falhou: ${reason}`,
+      true
+    );
+
     if (this.el.cancelBtn) {
       this.el.cancelBtn.classList.add("disabled");
       this.el.cancelBtn.disabled = true;
@@ -609,6 +708,11 @@ export class TerminalUI {
       this.el.fill.style.backgroundColor = "var(--color-warning)";
 
     this.queueLog(`[SISTEMA] Processo cancelado e encerrado.`, "warning");
+
+    this.triggerNotification(
+      "Tarefa Cancelada",
+      "O processo foi cancelado manualmente."
+    );
 
     if (this.el.cancelBtn) {
       this.el.cancelBtn.innerText = "Cancelado";
