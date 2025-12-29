@@ -549,20 +549,6 @@ export class TerminalUI {
     this.el.taskList.scrollTop = this.el.taskList.scrollHeight;
   }
 
-  processLogLine(line) {
-    // Determine type
-    let type = "info";
-    if (line.toLowerCase().includes("error")) type = "error";
-    if (line.toLowerCase().includes("warning")) type = "warning";
-    if (line.toLowerCase().includes("success")) type = "success";
-
-    // Batch text
-    this.logQueue.push({ text: line, type, time: Date.now() });
-
-    // Reset idle timer
-    this.lastLogTime = Date.now();
-  }
-
   setVerifyMode() {
     this.state = this.MODES.VERIFY;
     this.bumpProgress(true);
