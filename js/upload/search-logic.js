@@ -3,6 +3,7 @@ const PROD_WORKER_URL =
   import.meta.env.VITE_WORKER_URL || "https://your-worker.workers.dev";
 
 // Importa o visualizador
+import { AsyncQueue } from "../utils/queue.js";
 import { gerarVisualizadorPDF } from "../viewer/events.js";
 import { TerminalUI } from "./terminal-ui.js";
 
@@ -115,44 +116,20 @@ export function setupSearchLogic() {
       };
 
       if (isSuccess) {
-        // Modal Warning
-        // We can use a custom modal or standard confirm for simplicity as per request "aviso num modal"
-        // Since we don't have a custom modal ready for this generic content, confirm is safest
-        // or we build a small overlay? User said "modal".
-        // Let's use confirm() which is a "modal dialog" in browser terms, or create a quick custom one?
-        // "modal dizendo que ao tentar novamente tudo vai ser excluído"
         if (
           confirm(
-            "ATENÇÃO: A pesquisa anterior foi concluída com sucesso.\n\nAo tentar novamente, os resultados salvos (Hugging Face e Pinecone) serão EXCLUÍDOS PERMANENTEMENTE para permitir uma nova busca limpa.\n\nDeseja continuar?"
+            "ATENÇÃO: A pesquisa anterior foi concluída.\n\nAo tentar novamente, os resultados salvos serão EXCLUÍDOS para permitir uma nova busca limpa.\n\nDeseja continuar?"
           )
         ) {
           proceed();
         }
       } else {
-        // Failed/Cancelled -> No warning needed
         proceed();
       }
     };
 
-    // Helper for action button (legacy support or extra feature)
-    const updateActionButton = (url) => {
-      // Optional: Add logging/button logic here if needed,
-      // but TerminalUI handles most UI now.
-      // We could inject a button into the terminal header if we really want.
-      // For now, we trust TerminalUI's own finish state or simple logging.
-    };
-
-    let actionButton = null;
-
     const log = (text, type = "info") => {
-      // Pass to Terminal UI Processor
       terminal.processLogLine(text, type);
-
-      // Check for Log URL with explicit tag (keep legacy hook just in case)
-      const tagMatch = text.match(/\[GITHUB_LOGS\]\s*(https?:\/\/[^\s]+)/);
-      if (tagMatch && tagMatch[1]) {
-        updateActionButton(tagMatch[1]);
-      }
     };
 
     log("Iniciando Pesquisa Avançada...", "info");
@@ -171,9 +148,6 @@ export function setupSearchLogic() {
     try {
       log(`Modo Produção. Conectando via Pusher (Canal: ${slug})...`);
 
-      // Import Pusher dynamically or assume it's loaded via <script> or import
-      // For module compatibility, let's try to use the imported one if available,
-      // or rely on window.Pusher if strictly vanilla.
       let PusherClass = window.Pusher;
       if (!PusherClass) {
         const module = await import("pusher-js");
@@ -188,19 +162,16 @@ export function setupSearchLogic() {
 
       activeChannel.bind("log", function (data) {
         if (!data) return;
-        // data.message is the string from bash usually, but let's be safe
         const text =
           data.message ||
           (typeof data === "string" ? data : JSON.stringify(data));
         if (!text) return;
 
         if (text.includes("COMPLETED")) {
-          // Explicitly tell terminal to finish with retry button enabled (New Search Success)
-          if (terminal) terminal.finish(true);
-          isSuccess = true; // Mark as success for retry logic
-
+          // Changed: Do NOT finish yet. Transition to verification phase.
+          isSuccess = true;
           log(
-            "Fluxo de Trabalho Concluído! Aguardando propagação (5s)...",
+            "Fluxo de Trabalho Concluído. Iniciando verificação de integridade...",
             "success"
           );
           activePusher.unsubscribe(slug);
@@ -208,12 +179,16 @@ export function setupSearchLogic() {
           const finalSlug = data.new_slug || slug;
           currentSlug = finalSlug;
 
+          // Artificial delay for propagation assurance then Verification
           setTimeout(() => {
-            // Fetch from HUGGING FACE now
             const hfBase =
               "https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main";
-            loadResults(`${hfBase}/output/${finalSlug}/manifest.json`, log);
-          }, 5000);
+            loadResults(
+              `${hfBase}/output/${finalSlug}/manifest.json`,
+              log,
+              terminal
+            );
+          }, 3000);
         } else {
           log(text);
         }
@@ -226,8 +201,7 @@ export function setupSearchLogic() {
           query,
           slug,
           force,
-          cleanup, // Pass cleanup flag
-          ntfy_topic: "deprecated", // Legacy param
+          cleanup,
           apiKey: sessionStorage.getItem("GOOGLE_GENAI_API_KEY"),
         }),
       });
@@ -253,9 +227,8 @@ export function setupSearchLogic() {
           (candidate) => {
             log(`Carregando cache: ${candidate.slug}...`, "success");
             currentSlug = candidate.slug;
-            isSuccess = true; // Cache hit is also a success
+            isSuccess = true;
 
-            // Visual feedback: Update task list to show we are loading cache
             if (terminal) {
               terminal.updatePlan([
                 {
@@ -263,14 +236,14 @@ export function setupSearchLogic() {
                   status: "completed",
                 },
               ]);
-              terminal.finish(false); // Hide retry button for cache hits
             }
 
             const hfBase =
               "https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main";
             loadResults(
               `${hfBase}/output/${candidate.slug}/manifest.json`,
-              log
+              log,
+              terminal
             );
           },
           () => {
@@ -278,18 +251,18 @@ export function setupSearchLogic() {
             doSearch(true);
           }
         );
-        activePusher.unsubscribe(slug); // Stop listening to this channel for now
+        activePusher.unsubscribe(slug);
         return;
       }
 
       if (result.cached && result.slug) {
         log("Resultado idêntico encontrado em cache! Carregando...", "success");
-        if (terminal) terminal.finish(false);
         activePusher.unsubscribe(slug);
-        isSuccess = true; // Cache hit
+        isSuccess = true;
         loadResults(
           `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${result.slug}/manifest.json`,
-          log
+          log,
+          terminal
         );
         return;
       }
@@ -298,62 +271,211 @@ export function setupSearchLogic() {
     }
   };
 
-  // --- UI RENDER ---
-  const loadResults = async (manifestUrl, logFn) => {
-    // Fallback logger if not provided
+  // --- CORE: INTEGRATED VERIFICATION & LOAD LOGIC ---
+  const loadResults = async (manifestUrl, logFn, terminal) => {
     const log =
       logFn ||
       ((msg, type) => console.log(`[${type?.toUpperCase() || "INFO"}] ${msg}`));
 
     try {
+      // 1. Fetch Manifest
       let loadingAttempts = 0;
       let manifest = null;
+
+      // Update Terminal for Phase 3 (Verification)
+      if (terminal) {
+        // Switch mode to allow progress up to 99%
+        if (terminal.setVerifyMode) terminal.setVerifyMode();
+
+        terminal.el.status.innerText = "VERIFICANDO_INTEGRIDADE";
+        terminal.el.stepText.innerText = "Analisando estrutura dos arquivos...";
+      }
+
       while (loadingAttempts < 10 && !manifest) {
-        // 10 attempts (20s) for HF caching/propagation
         try {
-          log(
-            `[SearchLogic] Tentando carregar manifesto: ${manifestUrl} (Tentativa ${loadingAttempts + 1})`,
-            "info"
-          );
           const r = await fetch(manifestUrl);
           if (r.ok) {
             manifest = await r.json();
-            log("[SearchLogic] Manifesto carregado com sucesso.", "success");
             break;
-          } else {
-            log(
-              `[SearchLogic] Falha ao carregar manifesto. Status: ${r.status} ${r.statusText}`,
-              "warning"
-            );
           }
         } catch (e) {
-          log(`[SearchLogic] Erro ao carregar manifesto: ${e}`, "error");
+          /* ignore */
         }
         loadingAttempts++;
         await new Promise((res) => setTimeout(res, 2000));
       }
-      if (!manifest)
-        throw new Error(
-          "Manifesto não encontrado no Hugging Face. Verifique os logs do GitHub Actions para erros de upload."
+
+      if (!manifest) throw new Error("Manifesto não encontrado.");
+
+      // 2. Headless Verification
+      log(
+        "[SISTEMA] Iniciando verificação de integridade dos arquivos...",
+        "info"
+      );
+
+      const { validItems, corruptedItems } = await verifyManifestIntegrity(
+        manifest,
+        log,
+        terminal
+      );
+
+      // 3. Conditional Cleanup
+      if (corruptedItems.length > 0) {
+        log(
+          `[ALERTA] Identificados ${corruptedItems.length} arquivos incompatíveis.`,
+          "warning"
         );
-      currentManifest = manifest; // Save for later usage
-      renderResultsNewUI(manifest);
-    } catch (e) {
-      if (typeof log === "function") {
-        log(`Erro ao carregar resultados: ${e.message}`, "error");
+
+        if (terminal) {
+          terminal.el.status.innerText = "LIMPANDO_ARQUIVOS";
+          terminal.el.stepText.innerText = `Removendo ${corruptedItems.length} itens corrompidos...`;
+          // Bump slightly
+          terminal.currentVirtualProgress = 95;
+          terminal.updateProgressBar();
+        }
+
+        await performBatchCleanup(corruptedItems, log);
+
+        log("[SISTEMA] Limpeza concluída. Recarregando índice...", "success");
+
+        // Recursive Retry (Wait small delay for GitHub API propagation)
+        await new Promise((r) => setTimeout(r, 2000));
+        return loadResults(manifestUrl, logFn, terminal);
       }
+
+      // 4. Success -> Render
+      log("[SISTEMA] Todos os arquivos validados com sucesso.", "success");
+
+      if (terminal) {
+        terminal.finish(true);
+      }
+
+      currentManifest = validItems;
+      renderResultsNewUI(validItems);
+    } catch (e) {
+      if (terminal) terminal.fail(e.message);
+      log(`Erro ao carregar resultados: ${e.message}`, "error");
     }
   };
 
-  const renderResultsNewUI = async (manifest) => {
-    console.log("Renderizando Manifesto:", manifest); // Debug Log
-
-    // Fix: Validar tanto .results quanto .files
-    const lista =
+  // Headless Verification using Range Headers
+  const verifyManifestIntegrity = async (manifest, log, terminal) => {
+    // Normalization logic
+    const items = (
       manifest.results ||
       manifest.files ||
-      (Array.isArray(manifest) ? manifest : []);
+      (Array.isArray(manifest) ? manifest : [])
+    ).map((item) => normalizeItem(item));
 
+    // Split references vs downloads
+    const downloadableItems = items.filter((i) => i.status !== "reference");
+    // Pre-populate valid with references
+    const validItems = items.filter((i) => i.status === "reference");
+    const corruptedItems = [];
+
+    // Check downloads efficiently
+    const queue = new AsyncQueue(4); // 4 checks in parallel
+    let processed = 0;
+    const total = downloadableItems.length;
+
+    const checkTask = async (item) => {
+      const isValid = await quickVerifyPdf(item.url);
+      if (isValid) {
+        validItems.push(item);
+      } else {
+        corruptedItems.push(item);
+      }
+      processed++;
+    };
+
+    downloadableItems.forEach((item) => queue.enqueue(() => checkTask(item)));
+    await queue.drain();
+
+    return { validItems, corruptedItems };
+  };
+
+  const quickVerifyPdf = async (url) => {
+    try {
+      const fetchUrl = url.startsWith("http")
+        ? url
+        : `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${currentSlug}/${url}`;
+
+      // 1. Try HEAD first
+      const headResp = await fetch(fetchUrl, { method: "HEAD" });
+      if (!headResp.ok) return false;
+
+      const type = headResp.headers.get("Content-Type");
+      const len = headResp.headers.get("Content-Length");
+
+      if (type && !type.includes("pdf") && !type.includes("octet-stream"))
+        return false;
+      if (len && parseInt(len) < 500) return false;
+
+      // 2. Try Range Request (First 1024 bytes) to check signature
+      // Some hosts don't support range, so fallback to GET if needed, but for HF/Storage usually ok
+      const rangeResp = await fetch(fetchUrl, {
+        headers: { Range: "bytes=0-1023" },
+      });
+
+      if (!rangeResp.ok && rangeResp.status !== 206) return false; // If Range fails hard
+
+      // If server ignores Range (returns 200), we just read the first chunk of body stream
+      const buffer = await rangeResp.arrayBuffer();
+      const headerStr = new TextDecoder().decode(buffer.slice(0, 10)); // "%PDF-..."
+
+      if (!headerStr.includes("%PDF-")) return false;
+
+      return true;
+    } catch (e) {
+      console.warn("Verify check failed:", url, e);
+      return false;
+    }
+  };
+
+  const performBatchCleanup = async (corruptedItems, log) => {
+    const queue = new AsyncQueue(2); // Cleanup Concurrency = 2
+
+    corruptedItems.forEach((item) => {
+      queue.enqueue(async () => {
+        const filename = item.filename || item.path.split("/").pop();
+        log(`[QUEUE] Solicitando exclusão: ${filename}...`, "warning");
+
+        // 1. Delete Artifact (HF)
+        try {
+          await fetch(`${PROD_WORKER_URL}/delete-artifact`, {
+            method: "POST",
+            body: JSON.stringify({ slug: currentSlug, filename: filename }),
+            headers: { "Content-Type": "application/json" },
+          });
+        } catch (e) {
+          console.error("Artifact delete failed", e);
+        }
+      });
+    });
+
+    await queue.drain();
+  };
+
+  const normalizeItem = (item) => {
+    // Helper to ensure item has standard props
+    let newItem = { ...item };
+    if (!newItem.name && newItem.nome) newItem.name = newItem.nome;
+    if (!newItem.name && newItem.friendly_name)
+      newItem.name = newItem.friendly_name;
+    if (!newItem.url) {
+      let path = newItem.path || newItem.filename || newItem.arquivo_local;
+      if (path && !path.startsWith("http")) {
+        // Construct full URL for verification
+        const prefix = `output/${currentSlug}`;
+        // Handle 'files/' prefix cleanly
+        if (path.startsWith("files/")) path = path.replace("files/", "");
+        newItem.url = `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/${prefix}/files/${path}`;
+      }
+    }
+    return newItem;
+  };
+
+  const renderResultsNewUI = async (items) => {
     // Container Principal
     const container = document.createElement("div");
     container.className = "results-container fade-in-centralized";
@@ -372,7 +494,7 @@ export function setupSearchLogic() {
 
     header.innerHTML = `
       <h2 style="color:var(--color-text); font-weight:var(--font-weight-bold); font-size:var(--font-size-2xl);">
-        Resultados Encontrados (${lista.length})
+        Resultados Encontrados (${items.length})
       </h2>
       <button id="btnExtractSelection" disabled style="
         background: var(--color-primary); 
@@ -394,283 +516,42 @@ export function setupSearchLogic() {
     // Grid Repaginado
     const grid = document.createElement("div");
     grid.style.display = "grid";
-    // Mobile first: 1 col, md: 2 cols, lg: 3 cols
     grid.style.gridTemplateColumns = "repeat(auto-fill, minmax(320px, 1fr))";
     grid.style.gap = "24px";
 
     container.appendChild(grid);
     searchResults.appendChild(container);
 
-    // Filter Items Logic
-    const items = lista;
-    if (!items || items.length === 0) {
-      searchResults.innerHTML =
-        '<div style="text-align:center; padding: 20px;">0 resultados encontrados (manifesto vazio)</div>';
-      return;
-    }
-
-    // Show loading for verification
-    const loadingDiv = document.createElement("div");
-    loadingDiv.innerHTML = "Verificando integridade dos arquivos...";
-    loadingDiv.style.textAlign = "center";
-    loadingDiv.style.padding = "20px";
-    loadingDiv.style.color = "#888";
-    container.appendChild(loadingDiv);
-
-    // Listas separadas
-    const validItems = [];
-    const referenceItems = [];
-
-    // Helper to resolve URL for verification
-    const resolveUrl = (item) => {
-      let finalUrl = item.path || item.url;
-      if (!finalUrl) return "#";
-      if (!finalUrl.startsWith("http")) {
-        const cleanPath = finalUrl.startsWith("/")
-          ? finalUrl.slice(1)
-          : finalUrl;
-        const prefix = `output/${currentSlug}`; // Uses globally captured currentSlug
-        finalUrl = `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/${prefix}/${cleanPath}`;
-      }
-      return finalUrl;
-    };
-
-    // Parallel verification
-    await Promise.all(
-      items.map(async (item) => {
-        // Normalization (Enhanced for robust key handling)
-        if (!item.name && item.nome) item.name = item.nome;
-        if (!item.name && item.titulo) item.name = item.titulo;
-        if (!item.name && item.nome_amigavel) item.name = item.nome_amigavel;
-        if (!item.name && item.description) item.name = item.description;
-        if (!item.name && item.friendly_name) item.name = item.friendly_name;
-
-        if (!item.path && item.arquivo_local) {
-          if (!item.arquivo_local.startsWith("files/"))
-            item.path = `files/${item.arquivo_local}`;
-          else item.path = item.arquivo_local;
-        }
-        if (!item.path && item.filename) {
-          // Ensure path is files/filename
-          if (
-            !item.filename.startsWith("files/") &&
-            !item.path?.startsWith("files/")
-          ) {
-            item.path = `files/${item.filename}`;
-          } else if (item.filename) {
-            item.path = item.filename;
-          }
-        }
-
-        if (!item.url && item.link_origem) item.url = item.link_origem;
-        if (!item.url && item.link) item.url = item.link;
-        if (!item.url && item.link_direto) item.url = item.link_direto;
-        if (!item.url && item.direct_link) item.url = item.direct_link;
-
-        if (!item.tipo && item.type) item.tipo = item.type;
-
-        // Status Check (from Agent)
-        const status = item.status || "unknown"; // "downloaded" or "reference"
-        const fullUrl = resolveUrl(item);
-
-        // If explicitly "reference", skip verification and add to refs
-        if (status === "reference") {
-          referenceItems.push({ ...item, url: item.url || fullUrl });
-          return;
-        }
-
-        // Verify potentially valid local file
-        const isValid = await verifyPdfResource(fullUrl);
-
-        if (isValid) {
-          validItems.push(item);
-        } else {
-          console.warn(
-            `[SearchLogic] Item ignorado (inválido/corrompido): ${item.name} - ${fullUrl}`
-          );
-          // If verification fails but we have a link, treat as reference
-          referenceItems.push({ ...item, url: item.url || fullUrl });
-        }
-      })
-    );
-
-    // Remove loading
-    loadingDiv.remove();
-
-    // Update count
-    header.querySelector("h2").innerText =
-      `Arquivos Baixados (${validItems.length})`;
-
-    if (validItems.length === 0 && referenceItems.length === 0) {
+    if (items.length === 0) {
       searchResults.innerHTML +=
-        '<div style="text-align:center; padding: 20px; color: orangered;">Nenhum resultado encontrado.</div>';
+        '<div style="text-align:center; padding: 20px;">Nenhum resultado válido encontrado.</div>';
       return;
     }
 
-    // Render Cards (Valid items)
-    validItems.forEach((item) => {
+    // Render Cards
+    items.forEach((item) => {
       const card = createCard(item);
       grid.appendChild(card);
     });
 
-    // Render Reference List
-    if (referenceItems.length > 0) {
-      const refContainer = document.createElement("div");
-      refContainer.className = "references-container fade-in-centralized";
-      refContainer.style.marginTop = "40px";
-      refContainer.style.marginBottom = "40px";
-      refContainer.style.width = "100%";
-      refContainer.style.borderTop = "1px solid var(--color-border)";
-      refContainer.style.paddingTop = "24px";
-
-      // Disclaimer Banner for References
-      const warningBanner = document.createElement("div");
-      Object.assign(warningBanner.style, {
-        backgroundColor: "rgba(255, 152, 0, 0.1)",
-        border: "1px solid rgba(255, 152, 0, 0.3)",
-        borderRadius: "8px",
-        padding: "16px",
-        marginBottom: "24px",
-        display: "flex",
-        gap: "12px",
-        alignItems: "flex-start",
-      });
-      warningBanner.innerHTML = `
-          <div style="color:var(--color-warning); margin-top:2px;">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          </div>
-          <div>
-              <h4 style="margin:0 0 4px 0; color:var(--color-text); font-size:0.95rem;">Links não processados automaticamente</h4>
-              <p style="margin:0; font-size:0.85rem; color:var(--color-text-secondary); line-height:1.4;">
-                  Estes links podem conter o material que você procura, mas não puderam ser verificados ou baixados automaticamente. 
-                  Você pode acessá-los manualmente e, se encontrar o arquivo correto, fazer o <strong>Upload Manual</strong> abaixo.
-              </p>
-          </div>
-      `;
-      refContainer.appendChild(warningBanner);
-
-      const refTitle = document.createElement("h3");
-      refTitle.innerText = `Outros Links Encontrados (${referenceItems.length})`;
-      refTitle.style.fontSize = "1.1rem";
-      refTitle.style.fontWeight = "600";
-      refTitle.style.marginBottom = "16px";
-      refTitle.style.color = "var(--color-text)";
-      refContainer.appendChild(refTitle);
-
-      const list = document.createElement("div");
-      list.style.display = "flex";
-      list.style.flexDirection = "column";
-      list.style.gap = "12px";
-
-      referenceItems.forEach((ref) => {
-        const row = document.createElement("div");
-        row.style.display = "flex";
-        row.style.alignItems = "center";
-        row.style.gap = "12px";
-        row.style.padding = "12px";
-        row.style.backgroundColor = "var(--color-surface)";
-        row.style.border = "1px solid var(--color-border)";
-        row.style.borderRadius = "8px";
-
-        const isRef = ref.status === "reference" || !ref.status;
-        const statusLabel = isRef ? "Link Externo" : "Falha Download";
-
-        row.innerHTML = `
-                <div style="width:32px; height:32px; border-radius:50%; background:var(--color-bg-1); display:flex; align-items:center; justify-content:center; color:var(--color-text-secondary);">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
-                </div>
-                <div style="flex:1;">
-                    <a href="${ref.url}" target="_blank" style="color:var(--color-primary); text-decoration:none; font-weight:500; display:block; margin-bottom:2px;">
-                        ${ref.name || "Documento sem nome"}
-                    </a>
-                    <div style="font-size:0.8rem; color:var(--color-text-secondary); display:flex; gap:8px; align-items:center;">
-                        <span style="background:var(--color-bg-1); padding:2px 6px; border-radius:4px; font-size:0.7rem;">${(ref.tipo || "Desconhecido").toUpperCase()}</span>
-                        <span>${ref.ano || ""}</span>
-                        <span style="color:${isRef ? "var(--color-text-secondary)" : "var(--color-warning)"}">${statusLabel}</span>
-                    </div>
-                </div>
-                <a href="${ref.url}" target="_blank" class="btn btn--sm btn--outline" style="min-width:auto; padding:6px 12px; font-size:0.8rem;">
-                    Acessar
-                </a>
-            `;
-        list.appendChild(row);
-      });
-
-      refContainer.appendChild(list);
-      container.appendChild(refContainer);
-    }
-
     document.getElementById("btnExtractSelection").onclick = showRenameModal;
   };
 
-  const verifyPdfResource = async (url) => {
-    try {
-      // Allow relative paths in dev/prod
-      const fetchUrl = url.startsWith("http") ? url : url;
-      const method = "HEAD";
-
-      const response = await fetch(fetchUrl, { method });
-
-      if (!response.ok) return false;
-
-      const type = response.headers.get("Content-Type");
-      const length = response.headers.get("Content-Length");
-
-      // Basic checks
-      if (
-        type &&
-        !type.toLowerCase().includes("pdf") &&
-        !type.includes("application/octet-stream")
-      ) {
-        // If it's explicitly text/html, it's bad
-        if (type.includes("text/html")) return false;
-      }
-
-      if (length && parseInt(length) < 1000) {
-        // < 1KB is suspicious for a PDF
-        return false;
-      }
-
-      return true;
-    } catch (e) {
-      console.warn("Verification failed for", url, e);
-      // If we can't check, we might assume it's okay or bad. Let's assume bad to be safe?
-      // Or maybe permissive if it's CORS issue?
-      // For local runner, CORS should be fine.
-      return false;
-    }
-  };
-
   const createCard = (item) => {
-    let finalUrl = item.path || item.url;
-
-    // Safety check just in case
-    if (!finalUrl) {
-      console.warn("Item sem URL ou Path:", item);
-      finalUrl = "#";
-    }
-
-    if (!finalUrl.startsWith("http")) {
-      const cleanPath = finalUrl.startsWith("/") ? finalUrl.slice(1) : finalUrl;
-      // Ensure we point to the correct output folder
-      const prefix = `output/${currentSlug}`;
-
-      finalUrl = `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/${prefix}/${cleanPath}`;
-    }
+    let finalUrl = item.url;
+    // Fallback if url is somehow missing but path exists
+    // (Normalized by verify strategy but just in case)
+    if (!finalUrl && item.path) finalUrl = item.path;
 
     // --- Title Fallback Logic ---
     let displayTitle =
       item.name || item.nome_amigavel || item.description || item.friendly_name;
 
     if (!displayTitle || displayTitle.trim() === "") {
-      // Fallback: Use filename
-      let fileBase = (item.filename || item.path || "").split("/").pop(); // Get basename
+      let fileBase = (item.filename || item.path || "").split("/").pop();
       if (fileBase) {
-        // Remove extension
         fileBase = fileBase.replace(/\.pdf$/i, "");
-        // Replace underscores/hyphens with spaces
         displayTitle = fileBase.replace(/[_-]/g, " ");
-        // Capitalize first letters
         displayTitle = displayTitle.replace(/\b\w/g, (l) => l.toUpperCase());
       } else {
         displayTitle = "Sem Título";
@@ -700,7 +581,6 @@ export function setupSearchLogic() {
       boxShadow: "var(--shadow-sm)",
     });
 
-    // Hover Effect via JS (já que inline)
     card.onmouseenter = () => {
       card.style.transform = "translateY(-4px)";
       card.style.boxShadow = "var(--shadow-lg)";
@@ -713,7 +593,7 @@ export function setupSearchLogic() {
     // Thumbnail
     const thumbContainer = document.createElement("div");
     Object.assign(thumbContainer.style, {
-      height: "220px", // Fixo para uniformidade
+      height: "220px",
       width: "100%",
       position: "relative",
       backgroundColor: "var(--color-background)",
@@ -726,7 +606,7 @@ export function setupSearchLogic() {
     canvas.style.objectFit = "contain";
     thumbContainer.appendChild(canvas);
 
-    // --- Lazy Load Thumbnail (Global Optimized) ---
+    // Load Thumbnail
     registerPdfThumbnail(finalUrl, canvas);
 
     // Badge
@@ -763,7 +643,7 @@ export function setupSearchLogic() {
 
     const title = document.createElement("h3");
     title.innerText = displayTitle;
-    title.title = displayTitle; // Tooltip
+    title.title = displayTitle;
     Object.assign(title.style, {
       fontSize: "var(--font-size-md)",
       color: "var(--color-text)",
@@ -1128,216 +1008,14 @@ export function setupSearchLogic() {
     } catch (e) {
       if (e.name === "RenderingCancelledException") return;
 
-      // Handle Corrupt PDF
-      if (
-        e.name === "InvalidPDFException" ||
-        e.message?.includes("Invalid PDF structure")
-      ) {
-        console.error("PDF Corrompido detectado:", url, e);
-        const card = canvas.closest(".result-card");
-        if (card) {
-          // UI Update
-          card.style.pointerEvents = "none";
-          card.style.filter = "grayscale(100%)";
-          card.style.opacity = "0.8";
-          card.style.border = "2px solid var(--color-error)";
+      // REMOVED LEGACY CORRUPTION CHECK FROM HERE
+      // Verification logic is now handled HEADLESSLY before rendering.
+      // If we are here, the PDF ID is supposedly valid.
+      // If it still fails to render, we just show fallback, no auto-trigger.
 
-          const overlay = document.createElement("div");
-          Object.assign(overlay.style, {
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "rgba(20, 20, 20, 0.9)",
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 20,
-            padding: "20px",
-            textAlign: "center",
-            backdropFilter: "blur(2px)",
-          });
-          overlay.innerHTML = `
-            <div style="font-size: 2rem; margin-bottom: 12px;">⚠️</div>
-            <h4 style="color: var(--color-error); margin: 0 0 8px 0;">Arquivo Corrompido</h4>
-            <div style="font-size: 0.75rem; color: var(--color-warning);">Iniciando protocolo de auto-limpeza...</div>
-          `;
-          card.appendChild(overlay);
-
-          // Extract Filename
-          const filename = url.split("/").pop();
-          let relativeFilename = filename;
-          if (url.includes("/output/")) {
-            const parts = url.split(`/output/${currentSlug}/`);
-            if (parts[1]) relativeFilename = parts[1];
-          } else if (url.includes("/files/")) {
-            relativeFilename = `files/${filename}`;
-          }
-
-          triggerDeletionWorkflow(currentSlug, relativeFilename, card);
-        }
-        return;
-      }
-
-      console.warn("Erro no thumbnail:", e);
-      renderFallback(canvas);
+      console.warn("Erro no thumbnail (Render):", e);
+      // Fallback Visual
     }
-  };
-
-  /**
-   * TRIGGER DELETION WORKFLOW
-   */
-  const triggerDeletionWorkflow = async (slug, filename, cardElement) => {
-    // 1. Create Floating Terminal
-    const terminalId = `term-del-${Date.now()}`;
-    const overlay = document.createElement("div");
-    // Top Notification Style
-    Object.assign(overlay.style, {
-      position: "fixed",
-      top: "24px",
-      left: "50%",
-      transform: "translateX(-50%)",
-      width: "75%",
-      height: "auto",
-      minHeight: "150px",
-      background: "#0d1117",
-      borderRadius: "16px",
-      border: "1px solid #30363d",
-      boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
-      zIndex: 99999,
-      display: "flex",
-      flexDirection: "column",
-      animation: "slideDown 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
-    });
-
-    if (!document.getElementById("anim-slide")) {
-      const style = document.createElement("style");
-      style.id = "anim-slide";
-      style.textContent = `@keyframes slideDown { from { transform: translateY(-100%); } to { transform: translateY(0); } }`;
-      document.head.appendChild(style);
-    }
-
-    const headerObj = document.createElement("div");
-    Object.assign(headerObj.style, {
-      padding: "12px 16px",
-      background: "#161b22",
-      borderBottom: "1px solid #30363d",
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center",
-      color: "#e6edf3",
-      fontWeight: "600",
-      fontSize: "0.85rem",
-    });
-    headerObj.innerHTML = `
-        <div style="display:flex; align-items:center; gap:12px;">
-            <span style="color:var(--color-warning); font-size: 1.1rem;">⚡ LIMPEZA AUTOMÁTICA</span>
-            <span style="font-weight:400; color:#8b949e; font-family: monospace;">| ${filename}</span>
-        </div>
-    `;
-
-    const termContainer = document.createElement("div");
-    termContainer.id = terminalId;
-    termContainer.style.flex = "1";
-    termContainer.style.overflow = "hidden";
-
-    overlay.appendChild(headerObj);
-    overlay.appendChild(termContainer);
-    document.body.appendChild(overlay);
-
-    const term = new TerminalUI(terminalId, {
-      mode: "simple",
-      initialDuration: 15,
-    });
-    term.el.status.innerText = "INICIANDO_PROTOCOLO";
-    term.el.stepText.innerText = "Identificando artefato corrompido...";
-    term.currentVirtualProgress = 0;
-    term.updateProgressBar();
-    if (term.el.cancelBtn) term.el.cancelBtn.style.display = "none";
-
-    let cleanupPusher = activePusher;
-    if (!cleanupPusher) {
-      const PusherClass = window.Pusher;
-      if (PusherClass) {
-        cleanupPusher = new PusherClass("6c9754ef715796096116", {
-          cluster: "sa1",
-        });
-      }
-    }
-
-    if (cleanupPusher) {
-      const channel = cleanupPusher.subscribe(slug);
-      channel.bind("log", (data) => {
-        const text =
-          data.message ||
-          (typeof data === "string" ? data : JSON.stringify(data));
-        term.processLogLine(text);
-
-        if (text.includes("Cleanup Hugging Face")) {
-          term.el.status.innerText = "LIMPANDO_REPOSITÓRIO";
-          term.el.stepText.innerText = "Removendo arquivo do Hugging Face...";
-        } else if (text.includes("Manifesto atualizado")) {
-          term.el.status.innerText = "ATUALIZANDO_ÍNDICE";
-          term.el.stepText.innerText = "Sincronizando manifest.json...";
-        }
-        if (text.includes("COMPLETED")) {
-          term.finish();
-          term.el.status.innerText = "LIMPEZA_CONCLUÍDA";
-          setTimeout(() => {
-            overlay.style.transition = "transform 0.5s ease, opacity 0.5s ease";
-            overlay.style.transform = "translateX(-50%) translateY(-100%)";
-            overlay.style.opacity = "0";
-            setTimeout(() => overlay.remove(), 500);
-
-            // Reload Results (Clean & Fix Duplicates)
-            if (cardElement) cardElement.remove();
-
-            const container = document.querySelector(".results-container");
-            if (container) container.innerHTML = "";
-
-            const hfBase =
-              "https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main";
-            loadResults(`${hfBase}/output/${slug}/manifest.json`);
-          }, 2000);
-        }
-      });
-    }
-
-    try {
-      const resp = await fetch(`${PROD_WORKER_URL}/delete-artifact`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slug, filename }),
-      });
-      const json = await resp.json();
-      if (json.success) {
-        term.processLogLine(`[REQ] Solicitação enviada com sucesso.`);
-      } else {
-        term.processLogLine(`[REQ] Erro: ${json.error}`, "error");
-      }
-    } catch (e) {
-      term.fail(`Falha de conexão: ${e.message}`);
-    }
-  };
-
-  const renderFallback = (canvas) => {
-    const ctx = canvas.getContext("2d");
-    if (canvas.width === 0 || canvas.width === 300) {
-      canvas.width = 210;
-      canvas.height = 297;
-    }
-    ctx.fillStyle = "#f5f5f5";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "#999";
-    ctx.font = "bold 20px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("PDF", canvas.width / 2, canvas.height / 2);
-
-    // Marca como carregado (com erro) para não tentar de novo infinitamente
-    canvas.dataset.loaded = "true";
   };
 
   // Global Observer para gerenciar visibilidade e cancelamento

@@ -28,6 +28,7 @@ export class TerminalUI {
     this.MODES = {
       BOOT: "BOOT", // 0-10%
       EXEC: "EXEC", // 10-90%
+      VERIFY: "VERIFY", // 90-99%
       DONE: "DONE", // 100%
     };
 
@@ -223,6 +224,8 @@ export class TerminalUI {
       if (this.completedTasks + 1 === this.totalTasks) {
         maxAllowed = Math.min(maxAllowed, 99);
       }
+    } else if (this.state === this.MODES.VERIFY) {
+      return 99;
     } else if (this.state === this.MODES.DONE) {
       return 100;
     }
@@ -544,6 +547,25 @@ export class TerminalUI {
       .join("");
 
     this.el.taskList.scrollTop = this.el.taskList.scrollHeight;
+  }
+
+  processLogLine(line) {
+    // Determine type
+    let type = "info";
+    if (line.toLowerCase().includes("error")) type = "error";
+    if (line.toLowerCase().includes("warning")) type = "warning";
+    if (line.toLowerCase().includes("success")) type = "success";
+
+    // Batch text
+    this.logQueue.push({ text: line, type, time: Date.now() });
+
+    // Reset idle timer
+    this.lastLogTime = Date.now();
+  }
+
+  setVerifyMode() {
+    this.state = this.MODES.VERIFY;
+    this.bumpProgress(true);
   }
 
   queueLog(text, type) {
