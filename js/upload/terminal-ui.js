@@ -448,7 +448,9 @@ export class TerminalUI {
     }
 
     if (this.el.retryBtn) {
-      this.el.retryBtn.style.display = "inline-flex";
+      this.el.retryBtn.style.display = "flex";
+      this.el.retryBtn.style.alignItems = "center";
+      this.el.retryBtn.style.height = "22px";
     }
   }
 
@@ -477,7 +479,9 @@ export class TerminalUI {
     }
 
     if (this.el.retryBtn) {
-      this.el.retryBtn.style.display = "inline-flex";
+      this.el.retryBtn.style.display = "flex";
+      this.el.retryBtn.style.alignItems = "center";
+      this.el.retryBtn.style.height = "22px";
     }
   }
 
@@ -507,7 +511,9 @@ export class TerminalUI {
     }
 
     if (this.el.retryBtn) {
-      this.el.retryBtn.style.display = "inline-flex";
+      this.el.retryBtn.style.display = "flex";
+      this.el.retryBtn.style.alignItems = "center";
+      this.el.retryBtn.style.height = "22px";
     }
   }
 
