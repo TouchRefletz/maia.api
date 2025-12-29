@@ -347,6 +347,8 @@ export class TerminalUI {
     // Format A: "- [x] Title"
     // Format B: "1. ⏳ Title"
 
+    let foundTask = false;
+
     // Cleaning: Remove common prefixes like "> ", "- ", "* "
     const cleanLine = text.trim().replace(/^[\-\*\>]\s+/, "");
 
@@ -356,6 +358,7 @@ export class TerminalUI {
     const matchB = cleanLine.match(/^\d+\.\s+(?:([^\w\s]+)\s+)?(.*)/);
 
     if (matchA) {
+      foundTask = true;
       const statusChar = matchA[1].toLowerCase();
       const taskTitle = matchA[2].trim();
 
@@ -365,6 +368,7 @@ export class TerminalUI {
 
       this.updateTaskStateByName(taskTitle, status);
     } else if (matchB) {
+      foundTask = true;
       const icon = matchB[1] || "";
       const taskTitle = matchB[2].trim();
 
@@ -426,9 +430,7 @@ export class TerminalUI {
     // 3. Prepare Display Text
     let displayText = text;
     if (foundTask) {
-      displayText = text
-        .replace(taskListRegex, "[PLAN UPDATE RECEIVED]")
-        .replace(/\n\s*\n/g, "\n");
+      displayText = "[PLAN UPDATE RECEIVED]";
     }
 
     // 4. Update Activity
