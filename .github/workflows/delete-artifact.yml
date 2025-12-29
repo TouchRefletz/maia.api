@@ -8,6 +8,9 @@ on:
       slug:
         description: 'Slug to delete (e.g. "enem-2022")'
         required: true
+      filename:
+        description: 'Specific filename to delete (e.g. "files/prova.pdf")'
+        required: true
 
 jobs:
   delete:
@@ -17,6 +20,11 @@ jobs:
 
     env:
       SLUG: ${{ github.event.client_payload.slug || inputs.slug }}
+      FILENAME: ${{ github.event.client_payload.filename || inputs.filename }}
+      PUSHER_APP_ID: ${{ secrets.PUSHER_APP_ID }}
+      PUSHER_KEY: ${{ secrets.PUSHER_KEY }}
+      PUSHER_SECRET: ${{ secrets.PUSHER_SECRET }}
+      PUSHER_CLUSTER: ${{ secrets.PUSHER_CLUSTER }}
 
     steps:
       - name: Setup Logger
@@ -116,52 +124,145 @@ jobs:
           t.join(timeout=5)
           EOF
 
-      - name: Cleanup Hugging Face
+      - name: Announce Job URL
         env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          PUSHER_APP_ID: ${{ secrets.PUSHER_APP_ID }}
-          PUSHER_KEY: ${{ secrets.PUSHER_KEY }}
-          PUSHER_SECRET: ${{ secrets.PUSHER_SECRET }}
-          PUSHER_CLUSTER: ${{ secrets.PUSHER_CLUSTER }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: ${{ github.run_id }}
+          REPO: ${{ github.repository }}
         run: |
           (
-            echo "DELETING artifact from Hugging Face: $SLUG..."
+            JOBS_JSON=$(curl -s -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$REPO/actions/runs/$RUN_ID/jobs")
+            JOB_URL=$(echo "$JOBS_JSON" | jq -r '.jobs[0].html_url')
+            if [ "$JOB_URL" == "null" ] || [ -z "$JOB_URL" ]; then
+                JOB_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            fi
+            echo "[SYSTEM_INFO] JOB_URL=$JOB_URL"
+          ) 2>&1 | python3 logger.py
+
+      - name: Cleanup Hugging Face (Specific File)
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          (
+            echo "INICIANDO REMOÇÃO do arquivo corrompido: $FILENAME (Slug: $SLUG)..."
             
             git config --global user.email "bot@maia.api"
             git config --global user.name "Maia Bot"
 
+            # Clone Repo
             git clone --depth 1 https://user:$HF_TOKEN@huggingface.co/datasets/toquereflexo/maia-deep-search hf_cleanup_repo
             cd hf_cleanup_repo
 
-            if [ -d "output/$SLUG" ]; then
-                echo "Removing output/$SLUG..."
-                git rm -rf "output/$SLUG"
-                git commit -m "Manual Deletion (Corrupt) for $SLUG"
+            # Path Checks
+            BASE_DIR="output/$SLUG"
+            FILE_PATH="$BASE_DIR/$FILENAME"
+            MANIFEST_PATH="$BASE_DIR/manifest.json"
+
+            if [ -f "$FILE_PATH" ]; then
+                echo "Arquivo encontrado. Removendo: $FILE_PATH"
+                git rm "$FILE_PATH"
+                
+                if [ -f "$MANIFEST_PATH" ]; then
+                    echo "Atualizando manifest.json..."
+                    # Python script to safely remove entry from manifest
+                    python3 <<PY_SCRIPT
+          import json
+          import sys
+          import os
+
+          try:
+              with open("$MANIFEST_PATH", "r", encoding="utf-8") as f:
+                  data = json.load(f)
+
+              # Normalize filename for comparison
+              target = "$FILENAME"
+              if target.startswith("files/"):
+                  target_base = target.replace("files/", "")
+              else:
+                  target_base = target
+
+              # Helper to calculate new list
+              new_data = []
+              
+              # Handle robustly common structures (Array or Object with results)
+              # Assumption: data is Array or { results: [...] }
+              
+              items = []
+              is_wrapped = False
+              
+              if isinstance(data, list):
+                  items = data
+              elif isinstance(data, dict) and "results" in data:
+                  items = data["results"]
+                  is_wrapped = True
+              elif isinstance(data, dict) and "files" in data:
+                  items = data["files"]
+                  is_wrapped = True
+              
+              # Filter Logic
+              start_len = len(items)
+              filtered_items = []
+              
+              for item in items:
+                  # Check various filename properties
+                  fname = item.get("filename", "")
+                  path = item.get("path", "")
+                  
+                  # If exact match or basename match
+                  if fname == target or fname == target_base or path == target or path == target_base:
+                      print(f"REMOVENDO entrada do manifesto para: {fname}")
+                      continue # Skip (Delete)
+                  
+                  # Check deeply if needed (e.g. if it's 'files/foo.pdf' vs 'foo.pdf')
+                  if fname.endswith(target_base) or path.endswith(target_base):
+                       print(f"REMOVENDO entrada do manifesto para: {fname} (Match parcial)")
+                       continue
+
+                  filtered_items.append(item)
+              
+              end_len = len(filtered_items)
+              print(f"Total itens antes: {start_len}, depois: {end_len}")
+
+              if is_wrapped:
+                  data["results"] = filtered_items # Maintain wrapper structure if used
+                  final_json = data
+              else:
+                  final_json = filtered_items
+
+              with open("$MANIFEST_PATH", "w", encoding="utf-8") as f:
+                  json.dump(final_json, f, indent=2, ensure_ascii=False)
+                  
+          except Exception as e:
+              print(f"Erro ao processar manifesto: {e}")
+              sys.exit(1)
+          PY_SCRIPT
+
+                    git add "$MANIFEST_PATH"
+                else
+                    echo "Manifesto não encontrado, apenas o arquivo foi removido."
+                fi
+
+                git commit -m "Cleanup (Corrupt PDF): $FILENAME"
                 git push
-                echo "CONFIRMED: Deleted from Hugging Face."
+                echo "SUCESSO: Arquivo removido e manifesto atualizado."
             else
-                echo "Artifact not found in Hugging Face (already deleted?)"
+                echo "AVISO: Arquivo $FILENAME não encontrado no repositório. Talvez já tenha sido removido?"
             fi
+            
             cd ..
             rm -rf hf_cleanup_repo
+
           ) 2>&1 | python3 logger.py
 
-      - name: Cleanup Pinecone
+      - name: Notify Completion
+        if: ${{ always() }}
         env:
-          WORKER_URL: https://maia-api-worker.willian-campos-ismart.workers.dev
-          GH_PAT: ${{ secrets.GH_PAT }}
-          PUSHER_APP_ID: ${{ secrets.PUSHER_APP_ID }}
-          PUSHER_KEY: ${{ secrets.PUSHER_KEY }}
-          PUSHER_SECRET: ${{ secrets.PUSHER_SECRET }}
-          PUSHER_CLUSTER: ${{ secrets.PUSHER_CLUSTER }}
+          JOB_STATUS: ${{ job.status }}
         run: |
           (
-             echo "Requesting Pinecone deletion for $SLUG..."
-             curl -X POST "$WORKER_URL/delete-pinecone-record" \
-                  -H "Content-Type: application/json" \
-                  -H "Authorization: Bearer $GH_PAT" \
-                  -d "{\"slug\": \"$SLUG\"}" \
-             || echo "Warning: Failed to call delete endpoint"
-             
-             echo "Cleanup process finished."
+            if [ "$JOB_STATUS" == "success" ]; then
+               echo "COMPLETED"
+            else
+               echo "FAILED"
+            fi
           ) 2>&1 | python3 logger.py

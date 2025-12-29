@@ -1133,73 +1133,175 @@ export function setupSearchLogic() {
         e.name === "InvalidPDFException" ||
         e.message?.includes("Invalid PDF structure")
       ) {
-        console.error(
-          "PDF Corrompido detectado! Iniciando protocolo de limpeza...",
-          e
-        );
+        console.error("PDF Corrompido detectado:", url, e);
+        const card = canvas.closest(".result-card");
+        if (card) {
+          // UI Update
+          card.style.pointerEvents = "none";
+          card.style.filter = "grayscale(100%)";
+          card.style.opacity = "0.8";
+          card.style.border = "2px solid var(--color-error)";
 
-        // Feedback Visual
-        const resultsContainer = document.querySelector(".results-container");
-        if (resultsContainer && currentSlug) {
-          resultsContainer.innerHTML = `
-             <div style="
-                color: var(--color-warning); 
-                padding: 40px; 
-                text-align: center; 
-                background: var(--color-surface); 
-                border-radius: var(--radius-lg); 
-                border: 1px solid var(--color-warning);
-                margin-top: 20px;
-                animation: fadeIn 0.5s ease;
-             ">
-                <h2 style="margin-bottom: 16px;">⚠️ Arquivo Corrompido Detectado</h2>
-                <p style="font-size: 1.1rem; color: var(--color-text-secondary); margin-bottom: 24px;">
-                    O PDF solicitado ("${url.split("/").pop()}") apresenta falhas estruturais graves.
-                </p>
-                <div style="
-                    background: rgba(255, 0, 0, 0.1); 
-                    padding: 16px; 
-                    border-radius: 8px; 
-                    display: inline-block;
-                    border: 1px solid rgba(255, 0, 0, 0.2);
-                ">
-                    <p style="margin: 0; font-weight: 500; color: var(--color-error);">
-                        🗑️ Iniciando processo de limpeza automática no servidor...
-                    </p>
-                    <p style="margin: 8px 0 0 0; font-size: 0.9rem; opacity: 0.8;">
-                       O registro será removido do banco de dados e do Hugging Face.
-                    </p>
-                </div>
-             </div>
-           `;
+          const overlay = document.createElement("div");
+          Object.assign(overlay.style, {
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(20, 20, 20, 0.9)",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 20,
+            padding: "20px",
+            textAlign: "center",
+            backdropFilter: "blur(2px)",
+          });
+          overlay.innerHTML = `
+            <div style="font-size: 2rem; margin-bottom: 12px;">⚠️</div>
+            <h4 style="color: var(--color-error); margin: 0 0 8px 0;">Arquivo Corrompido</h4>
+            <div style="font-size: 0.75rem; color: var(--color-warning);">Iniciando protocolo de auto-limpeza...</div>
+          `;
+          card.appendChild(overlay);
 
-          // Trigger Deletion
-          fetch(`${PROD_WORKER_URL}/delete-artifact`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ slug: currentSlug }),
-          })
-            .then((r) => r.json())
-            .then((d) => {
-              console.log("Resultado da limpeza:", d);
-              // Opcional: Recarregar ou voltar ao estado inicial após alguns segundos
-              setTimeout(() => {
-                if (
-                  confirm("Limpeza solicitada. Deseja voltar para a pesquisa?")
-                ) {
-                  const btnBack = document.getElementById("btnBackToSearch");
-                  if (btnBack) btnBack.click();
-                }
-              }, 2000);
-            })
-            .catch((err) => console.error("Erro ao solicitar limpeza:", err));
+          // Extract Filename
+          const filename = url.split("/").pop();
+          let relativeFilename = filename;
+          if (url.includes("/output/")) {
+            const parts = url.split(`/output/${currentSlug}/`);
+            if (parts[1]) relativeFilename = parts[1];
+          } else if (url.includes("/files/")) {
+            relativeFilename = `files/${filename}`;
+          }
+
+          triggerDeletionWorkflow(currentSlug, relativeFilename, card);
         }
-
-        return; // Stop further processing
+        return;
       }
 
       console.warn("Erro no thumbnail:", e);
       renderFallback(canvas);
+    }
+  };
+
+  /**
+   * TRIGGER DELETION WORKFLOW
+   */
+  const triggerDeletionWorkflow = async (slug, filename, cardElement) => {
+    // 1. Create Floating Terminal
+    const terminalId = `term-del-${Date.now()}`;
+    const overlay = document.createElement("div");
+    Object.assign(overlay.style, {
+      position: "fixed",
+      bottom: "20px",
+      right: "20px",
+      width: "450px",
+      height: "350px",
+      background: "#0d1117",
+      borderRadius: "12px",
+      boxShadow: "0 10px 30px rgba(0,0,0,0.5), 0 0 0 1px #30363d",
+      zIndex: 99999,
+      overflow: "hidden",
+      display: "flex",
+      flexDirection: "column",
+      animation: "slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+    });
+
+    if (!document.getElementById("anim-slide")) {
+      const style = document.createElement("style");
+      style.id = "anim-slide";
+      style.textContent = `@keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }`;
+      document.head.appendChild(style);
+    }
+
+    const headerObj = document.createElement("div");
+    Object.assign(headerObj.style, {
+      padding: "12px 16px",
+      background: "#161b22",
+      borderBottom: "1px solid #30363d",
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      color: "#e6edf3",
+      fontWeight: "600",
+      fontSize: "0.85rem",
+    });
+    headerObj.innerHTML = `
+        <div style="display:flex; align-items:center; gap:8px;">
+            <span style="color:var(--color-warning);">⚡ LIMPEZA AUTOMÁTICA</span>
+            <span style="font-weight:400; color:#8b949e;">| ${filename}</span>
+        </div>
+        <div style="font-size:0.7rem; color:#8b949e;">⚠️ NÃO FECHE</div>
+    `;
+
+    const termContainer = document.createElement("div");
+    termContainer.id = terminalId;
+    termContainer.style.flex = "1";
+    termContainer.style.overflow = "hidden";
+
+    overlay.appendChild(headerObj);
+    overlay.appendChild(termContainer);
+    document.body.appendChild(overlay);
+
+    const term = new TerminalUI(terminalId);
+    term.el.status.innerText = "ELIMINANDO_ARQUIVO";
+    term.el.stepText.innerText =
+      "Conectando ao sistema de arquivos distribuído...";
+    term.currentVirtualProgress = 5;
+    term.updateProgressBar();
+    if (term.el.cancelBtn) term.el.cancelBtn.style.display = "none";
+
+    let cleanupPusher = activePusher;
+    if (!cleanupPusher) {
+      const PusherClass = window.Pusher;
+      if (PusherClass) {
+        cleanupPusher = new PusherClass("6c9754ef715796096116", {
+          cluster: "sa1",
+        });
+      }
+    }
+
+    if (cleanupPusher) {
+      const channel = cleanupPusher.subscribe(slug);
+      channel.bind("log", (data) => {
+        const text =
+          data.message ||
+          (typeof data === "string" ? data : JSON.stringify(data));
+        term.processLogLine(text);
+        if (text.includes("COMPLETED")) {
+          term.finish();
+          term.el.status.innerText = "LIMPEZA_CONCLUÍDA";
+          setTimeout(() => {
+            overlay.style.transition = "transform 0.5s ease, opacity 0.5s ease";
+            overlay.style.transform = "translateY(50px)";
+            overlay.style.opacity = "0";
+            setTimeout(() => overlay.remove(), 500);
+            if (cardElement) cardElement.remove();
+
+            const hfBase =
+              "https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main";
+            loadResults(`${hfBase}/output/${slug}/manifest.json`);
+          }, 3500);
+        }
+      });
+    }
+
+    try {
+      const resp = await fetch(`${PROD_WORKER_URL}/delete-artifact`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug, filename }),
+      });
+      const json = await resp.json();
+      if (json.success) {
+        term.processLogLine(`[REQ] Solicitação enviada com sucesso.`);
+      } else {
+        term.processLogLine(`[REQ] Erro: ${json.error}`, "error");
+      }
+    } catch (e) {
+      term.fail(`Falha de conexão: ${e.message}`);
     }
   };
 
