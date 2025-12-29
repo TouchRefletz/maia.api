@@ -28,9 +28,8 @@ export class TerminalUI {
     // Progress Logic 2.0 State
     this.currentVirtualProgress = 0;
     this.lastLogTime = Date.now();
-    this.initialEstimatedDuration = 480; // ~8m
-    this.currentEstimatedDuration = this.initialEstimatedDuration;
-    this.lastEtaUpdate = 0;
+    this.initialEstimatedDuration = 480; // ~8m target
+    this.estimatedRemainingTime = this.initialEstimatedDuration; // Dynamic ETA
 
     // Cancellation State
     this.runId = null;
@@ -137,57 +136,35 @@ export class TerminalUI {
   tick() {
     if (this.state === this.MODES.DONE) return;
 
-    const now = Date.now();
-    const elapsedSeconds = (now - this.startTime) / 1000;
-    const timeSinceLastLog = now - this.lastLogTime;
+    // --- Visual Drift ---
+    this.bumpProgress(true);
 
-    // --- Smart ETA Logic ---
+    // --- Elastic ETA Logic ---
+    // 1. Natural Decay (Time passes)
+    this.estimatedRemainingTime -= 1;
 
-    // 1. Idle Penalty
-    if (timeSinceLastLog > 15000) {
-      this.currentEstimatedDuration += 1.1;
+    // 2. Idle Penalty ("Se não tiver log ele cresce")
+    // If > 4s since last log, start adding penalty
+    const idleSeconds = (Date.now() - this.lastLogTime) / 1000;
+    if (idleSeconds > 4) {
+      // Add 2s per tick -> Net change = +1s (grows)
+      // If it's been a LONG time, grow faster to show uncertainty
+      const penalty = idleSeconds > 10 ? 3 : 2;
+      this.estimatedRemainingTime += penalty;
     }
 
-    // 2. Overshoot Logic
-    if (elapsedSeconds > this.currentEstimatedDuration) {
-      const progressFraction = Math.max(
-        0.01,
-        this.currentVirtualProgress / 100
-      );
-      const newEstimate = elapsedSeconds / progressFraction;
-      if (newEstimate > this.currentEstimatedDuration) {
-        this.currentEstimatedDuration = newEstimate;
-      }
-    }
+    // Clamp to reasonable bounds (0 to 2x initial)
+    this.estimatedRemainingTime = Math.max(
+      0,
+      Math.min(9999, this.estimatedRemainingTime)
+    );
 
-    // Update Display every 5s
-    if (now - this.lastEtaUpdate > 5000) {
-      this.updateETADisplay(elapsedSeconds);
-      this.lastEtaUpdate = now;
-    }
+    this.updateETADisplay();
   }
 
-  updateETADisplay(elapsedSeconds) {
-    let remaining = Math.max(0, this.currentEstimatedDuration - elapsedSeconds);
-
-    // --- TIME LOCK LOGIC ---
-    // Prevent time from dropping below a floor based on task progress.
-    // Floor = InitialDuration * (1 - (completed + 1) / (total + 1))
-    // Example: 480s, 0 completed, 1 total (10% done). floor = 480 * (1 - 1/2) = 240.
-    // Example: 4 tasks. 0 completed. floor = 480 * (1 - 1/5) = 384s (6.4m).
-
-    const floorRaw =
-      this.initialEstimatedDuration *
-      (1 - (this.completedTasks + 1) / (this.totalTasks + 1));
-    const floor = Math.max(0, floorRaw);
-
-    // If calculated remaining is LESS than floor, snap to floor.
-    if (remaining < floor) {
-      remaining = floor;
-      // Optionally push actual estimate to match so it doesn't jump back
-      // But for visual stability just clamping display is fine
-    }
-
+  updateETADisplay() {
+    // Just render the current state
+    const remaining = Math.max(0, Math.floor(this.estimatedRemainingTime));
     const mins = Math.floor(remaining / 60);
     const secs = Math.floor(remaining % 60);
     this.el.eta.innerText = `TEMPO ESTIMADO: ${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
@@ -197,14 +174,10 @@ export class TerminalUI {
     if (!text) return;
 
     // 1. PRIORITY: Control Messages Parsing (Before Split)
-    // Handle multiple task lists (Standard Global Regex Loop)
-    // Relaxed Regex: Capture [...] block, ignoring what follows (comma, space, etc)
     const taskListRegex = /task_list=(\[[\s\S]*?\])/g;
     let match;
     let foundTask = false;
 
-    // Iterate all matches of task_list=[...]
-    // We treat the text as potentially containing multiple distinct updates.
     while ((match = taskListRegex.exec(text)) !== null) {
       if (match[1]) {
         foundTask = true;
@@ -215,10 +188,9 @@ export class TerminalUI {
     // 2. Check for Job URL
     if (text.includes("[SYSTEM_INFO] JOB_URL=")) {
       const urlPart = text.split("JOB_URL=")[1];
-      const url = urlPart ? urlPart.split(/\s/)[0] : null; // Take until whitespace
+      const url = urlPart ? urlPart.split(/\s/)[0] : null;
 
       if (url) {
-        // Extract Run ID using Regex to be safe against /job/ segments
         try {
           const matchId = url.match(/actions\/runs\/(\d+)/);
           if (matchId && matchId[1]) {
@@ -240,21 +212,26 @@ export class TerminalUI {
           this.el.logBtn.style.borderColor = "var(--color-primary)";
           this.el.logBtn.style.pointerEvents = "auto";
         }
-        // Don't discard the line, let it log as info
       }
     }
 
     // 3. Prepare Display Text
-    // If we found tasks, we strip them from the log to avoid giant JSON dumps
     let displayText = text;
     if (foundTask) {
       displayText = text
         .replace(taskListRegex, "[PLAN UPDATE RECEIVED]")
-        .replace(/\n\s*\n/g, "\n"); // Clean up empty lines left behind
+        .replace(/\n\s*\n/g, "\n");
     }
 
     // 4. Update Activity
     this.lastLogTime = Date.now();
+
+    // --- Progress Bump on Activity ---
+    this.bumpProgress(false);
+
+    // --- ETA Bonus on Activity ---
+    // "Vai caindo conforme tem novos logs"
+    this.estimatedRemainingTime -= 2; // Bonus drop per log line
 
     // 5. Completion/Failure Checks
     this.checkStateTransitions(displayText);
@@ -269,40 +246,50 @@ export class TerminalUI {
     } else {
       if (displayText.trim()) this.queueLog(displayText, type);
     }
-
-    // --- Micro-Growth Logic ---
-    this.updateVirtualProgress();
   }
 
-  // New helper to handle progress ticks separately from log structure
-  updateVirtualProgress() {
-    // BOOT MODE: 0 -> 10%
+  // --- New Aggressive Progress Logic with Strict Limits ---
+  bumpProgress(isDrift = false) {
+    if (this.state === this.MODES.DONE) return;
+
+    // 1. Calculate Strict Limit based on Current Stage
+    let maxAllowed = 0;
+
     if (this.state === this.MODES.BOOT) {
-      if (this.currentVirtualProgress < 10) {
-        this.currentVirtualProgress += 0.05;
-        this.updateProgressBar();
-      }
-    }
-    // EXEC MODE: 10 -> 90%
-    else if (this.state === this.MODES.EXEC) {
+      maxAllowed = 10;
+    } else if (this.state === this.MODES.EXEC) {
       const rangePerTask = 80 / (this.totalTasks || 1);
-      const currentTaskIndex = this.completedTasks;
-      const taskStartPercent = 10 + currentTaskIndex * rangePerTask;
-      const softCap = taskStartPercent + rangePerTask * 0.9;
+      maxAllowed = 10 + (this.completedTasks + 1) * rangePerTask;
 
-      if (
-        this.currentVirtualProgress >= 90 &&
-        this.currentVirtualProgress < 99.5
-      ) {
-        this.currentVirtualProgress += 0.0001;
-        this.updateProgressBar();
-      }
-
-      if (this.currentVirtualProgress < softCap) {
-        this.currentVirtualProgress += 0.0001;
-        this.updateProgressBar();
+      if (this.completedTasks + 1 === this.totalTasks) {
+        maxAllowed = Math.min(maxAllowed, 99);
       }
     }
+
+    const hardCap = Math.max(0, maxAllowed - 1.0); // Keep 1% buffer
+
+    // 2. Calculate Potential Progress
+    let bump = 0;
+    if (isDrift) {
+      bump = 0.05;
+    } else {
+      bump = 0.5;
+    }
+
+    let newProgress = this.currentVirtualProgress + bump;
+
+    // 3. Time-Based Minimum
+    const elapsed = (Date.now() - this.startTime) / 1000;
+    const timeProjected = (elapsed / this.initialEstimatedDuration) * 100;
+
+    if (newProgress < timeProjected) {
+      newProgress = Math.min(newProgress + 0.1, timeProjected);
+    }
+
+    // 4. Apply Strict Cap
+    this.currentVirtualProgress = Math.min(newProgress, hardCap);
+
+    this.updateProgressBar();
   }
 
   checkStateTransitions(text) {
@@ -374,19 +361,26 @@ export class TerminalUI {
     // Did we finish a task?
     if (completedCount > this.completedTasks) {
       const rangePerTask = 80 / (this.totalTasks || 1);
-      const newBaseline = 10 + completedCount * rangePerTask;
 
-      // Force Jump if we are behind
-      if (this.currentVirtualProgress < newBaseline) {
-        this.currentVirtualProgress = newBaseline;
-        this.updateProgressBar();
-        // Visual feedback for jump
-        this.queueLog(
-          `[PROGRESSO] Tarefa concluída! Avançando para ${newBaseline.toFixed(1)}%`,
-          "success"
-        );
-      }
+      // Calculate where we SHOULD be structurally
+      const newCalculatedBaseline = 10 + completedCount * rangePerTask;
+
+      // Drop nicely to the new correct state.
+      this.currentVirtualProgress = newCalculatedBaseline;
+      this.updateProgressBar();
+
+      this.queueLog(
+        `[SISTEMA] Sincronizando progresso: ${newCalculatedBaseline.toFixed(1)}%`,
+        "success"
+      );
     }
+
+    // --- MILESTONE SYNC FOR TIME ---
+    // "Quando chega em uma milestone... sincroniza IMEDIATAMENTE"
+    const remainingFraction = 1 - this.currentVirtualProgress / 100;
+    this.estimatedRemainingTime =
+      this.initialEstimatedDuration * remainingFraction;
+    this.updateETADisplay();
 
     this.completedTasks = completedCount;
     this.renderTaskList();
