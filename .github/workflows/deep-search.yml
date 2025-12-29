@@ -194,30 +194,47 @@ jobs:
                       print(f"[Logger] Task watcher error: {e}", flush=True)
                       pass
 
-          # Helper: Parse TASKS.md content
+          # Helper: Parse TASKS.md content (Supports Markdown Checklists & OpenHands Emojis)
           def parse_tasks_md(content):
               tasks = []
-              # Format: - [ ] Task Name
+              # Format 1: - [ ] Task Name
+              # Format 2: 1. ⏳ Task Name
               lines = content.split('\n')
               for i, line in enumerate(lines):
                   line = line.strip()
-                  # Regex to match "- [x] title", "- [ ] title", "- [/] title"
-                  # Support space, x, X, /
-                  match = re.match(r'- \[([ xX/])\] (.*)', line)
-                  if match:
-                      status_char = match.group(1).lower()
-                      title_raw = match.group(2)
-                      
-                      # Clean comments e.g. "<!-- id: 0 -->"
+                  
+                  # 1. Try Markdown Checklist
+                  match_md = re.match(r'- \[([ xX/])\] (.*)', line)
+                  if match_md:
+                      status_char = match_md.group(1).lower()
+                      title_raw = match_md.group(2)
                       title = re.sub(r'<!--.*-->', '', title_raw).strip()
                       
                       status = "todo"
-                      if status_char.lower() == 'x':
-                          status = "completed"
-                      elif status_char == '/':
-                          status = "in_progress"
+                      if status_char == 'x': status = "completed"
+                      elif status_char == '/': status = "in_progress"
                       
                       tasks.append({"id": i, "title": title, "status": status})
+                      continue
+
+                  # 2. Try Numbered List with Emojis (OpenHands style)
+                  # Matches: "1. ⏳ Task Title" or "1. Task Title"
+                  match_num = re.match(r'\d+\.\s+(?:([^\w\s]+)\s+)?(.*)', line)
+                  if match_num:
+                      icon = match_num.group(1) or ""
+                      title_raw = match_num.group(2)
+                      title = re.sub(r'<!--.*-->', '', title_raw).strip()
+                      
+                      status = "todo"
+                      if icon:
+                          if any(c in icon for c in ['✅', '✔', '☑']): status = "completed"
+                          elif any(c in icon for c in ['⏳', '▶', '🏃', '🚧']): status = "in_progress"
+                          elif any(c in icon for c in ['❌', '🚫']): status = "failed"
+                      
+                      # Avoid Description lines (heuristic: usually short titles)
+                      if len(title) < 200: 
+                         tasks.append({"id": f"num_{i}", "title": title, "status": status})
+
               return tasks
 
           # --- MAIN THREADS ---

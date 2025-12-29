@@ -343,24 +343,40 @@ export class TerminalUI {
     if (!text) return;
 
     // 1. HYBRID STRATEGY: Server Event + Log Parsing Fallback
-    // We try to detect standard task formats: "- [x] Title", "[x] Title", "* [x] Title"
-    let foundTask = false;
+    // We try to detect standard task formats:
+    // Format A: "- [x] Title"
+    // Format B: "1. ⏳ Title"
 
     // Cleaning: Remove common prefixes like "> ", "- ", "* "
     const cleanLine = text.trim().replace(/^[\-\*\>]\s+/, "");
-    // Regex for: [x] Title, [ ] Title, [/] Title
-    const taskMatch = cleanLine.match(/^\[([ xX/])\]\s+(.*)/);
 
-    if (taskMatch) {
-      foundTask = true;
-      const statusChar = taskMatch[1].toLowerCase();
-      const taskTitle = taskMatch[2].trim();
+    // Regex A: [x] Title
+    const matchA = cleanLine.match(/^\[([ xX/])\]\s+(.*)/);
+    // Regex B: 1. ⏳ Title
+    const matchB = cleanLine.match(/^\d+\.\s+(?:([^\w\s]+)\s+)?(.*)/);
+
+    if (matchA) {
+      const statusChar = matchA[1].toLowerCase();
+      const taskTitle = matchA[2].trim();
 
       let status = "todo";
       if (statusChar === "x") status = "completed";
       if (statusChar === "/") status = "in_progress";
 
-      // Update Local State (Idempotent)
+      this.updateTaskStateByName(taskTitle, status);
+    } else if (matchB) {
+      const icon = matchB[1] || "";
+      const taskTitle = matchB[2].trim();
+
+      let status = "todo";
+      if (icon) {
+        if (["✅", "✔", "☑", "☑️"].some((c) => icon.includes(c)))
+          status = "completed";
+        else if (["⏳", "▶", "🏃", "🚧"].some((c) => icon.includes(c)))
+          status = "in_progress";
+        else if (["❌", "🚫"].some((c) => icon.includes(c))) status = "failed";
+      }
+
       this.updateTaskStateByName(taskTitle, status);
     }
 
