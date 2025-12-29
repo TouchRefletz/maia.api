@@ -198,8 +198,8 @@ export class TerminalUI {
 
     // 1. PRIORITY: Control Messages Parsing (Before Split)
     // Handle multiple task lists (Standard Global Regex Loop)
-    // Use [\s\S] for dotAll to capture multi-line JSONs
-    const taskListRegex = /task_list=(\[[\s\S]*?\])(?=\s|$|task_list)/g;
+    // Relaxed Regex: Capture [...] block, ignoring what follows (comma, space, etc)
+    const taskListRegex = /task_list=(\[[\s\S]*?\])/g;
     let match;
     let foundTask = false;
 
@@ -330,17 +330,23 @@ export class TerminalUI {
   }
 
   parseTaskPlan(jsonStr) {
-    // Clean up Pythonisms if needed
-    let cleanJson = jsonStr
-      .replace(/'/g, '"')
+    // 1. Python constants to JS
+    // Replace Python-specific constants or None with JS equivalents
+    let cleanStr = jsonStr
       .replace(/None/g, "null")
       .replace(/True/g, "true")
       .replace(/False/g, "false");
+
+    // 2. JS Eval (Function constructor) handles single quotes validly
+    // This parses [{ 'id': '1', ... }] which JSON.parse fails on.
     try {
-      const plan = JSON.parse(cleanJson);
-      this.updatePlan(plan);
+      // eslint-disable-next-line
+      const plan = new Function("return " + cleanStr)();
+      if (Array.isArray(plan)) {
+        this.updatePlan(plan);
+      }
     } catch (e) {
-      // partial json or parse error
+      console.error("Failed to parse task plan:", e, jsonStr);
     }
   }
 
