@@ -129,9 +129,13 @@ jobs:
           # This thread actively asks Docker for the TASKS.md file
           # It is much more robust than parsing log lines.
           def task_watcher_worker():
+              print("[Logger] Task watcher thread started.", flush=True)
               last_known_tasks_hash = ""
               container_name = "openhands-app"
               tasks_path = None # Will find dynamically
+              
+              # Wait for container startup
+              time.sleep(5)
 
               while running:
                   time.sleep(2.0) # Poll every 2s
@@ -139,13 +143,13 @@ jobs:
                   try:
                       # 1. Locate TASKS.md if we haven't yet
                       if not tasks_path:
-                          # "find /workspace/sessions -name TASKS.md | head -n 1"
+                          # "find /workspace -name TASKS.md | head -n 1"
                           try:
-                              find_cmd = ["docker", "exec", container_name, "sh", "-c", "find /workspace/sessions -name TASKS.md 2>/dev/null | head -n 1"]
+                              find_cmd = ["docker", "exec", container_name, "sh", "-c", "find /workspace -name TASKS.md 2>/dev/null | head -n 1"]
                               res = subprocess.run(find_cmd, capture_output=True, text=True)
                               if res.returncode == 0 and res.stdout.strip():
                                   tasks_path = res.stdout.strip()
-                                  print(f"[Logger] Found active task file at: {tasks_path}")
+                                  print(f"[Logger] Found active task file at: {tasks_path}", flush=True)
                           except:
                               pass # Container might not be up yet
                       
@@ -164,12 +168,13 @@ jobs:
                                   parsed_tasks = parse_tasks_md(content)
                                   
                                   if parsed_tasks:
-                                      print(f"[Logger] Detected task update ({len(parsed_tasks)} items). Broadcasting...")
+                                      print(f"[Logger] Detected task update ({len(parsed_tasks)} items). Broadcasting...", flush=True)
                                       send_to_pusher("task_update", parsed_tasks)
                                       last_known_tasks_hash = current_hash
                                       
                   except Exception as e:
                       # Don't crash the logger if docker exec fails randomly
+                      print(f"[Logger] Task watcher error: {e}", flush=True)
                       pass
 
           # Helper: Parse TASKS.md content
