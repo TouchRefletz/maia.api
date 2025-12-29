@@ -434,6 +434,9 @@ jobs:
           if [ "$JOB_STATUS" == "success" ]; then
              MESSAGE="COMPLETED. Logs: $LOG_URL"
              EVENT_NAME="log"
+          elif [ "$JOB_STATUS" == "cancelled" ]; then
+             MESSAGE="CANCELLED. Job stopped by user. Logs: $LOG_URL"
+             EVENT_NAME="log"
           else
              MESSAGE="FAILED. Something went wrong. Logs: $LOG_URL"
              EVENT_NAME="log"

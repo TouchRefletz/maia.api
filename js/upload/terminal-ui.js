@@ -78,10 +78,10 @@ export class TerminalUI {
       <div class="term-log-header" style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; border-bottom: 1px solid #333; padding-bottom: 5px;">
         <span class="term-label" style="margin: 0px 0px 0px 8px;">LOGS EM TEMPO REAL</span>
         <div style="display: flex; align-items: center;">
-            <button id="term-btn-cancel" class="term-btn" style="font-size: 0.75rem; background: transparent; border: 1px solid #d32f2f; color: #d32f2f; padding: 2px 8px; border-radius: 4px; cursor: pointer; margin: 0px 8px 4px 0px; display: none; transition: all 0.2s;">
+            <button id="term-btn-cancel" class="term-btn cancel">
                 Cancelar
             </button>
-            <a href="#" target="_blank" id="term-btn-logs" class="term-btn disabled" style="font-size: 0.75rem; text-decoration: none; padding: 2px 8px; border: 1px solid #444; border-radius: 4px; color: #666; pointer-events: none; transition: all 0.2s; margin: 0px 8px 4px 0px;">
+            <a href="#" target="_blank" id="term-btn-logs" class="term-btn disabled">
                 Ver Logs no GitHub ↗
             </a>
         </div>
@@ -271,6 +271,8 @@ export class TerminalUI {
             text.includes("completed")))
       ) {
         this.finish();
+      } else if (text.includes("CANCELLED")) {
+        this.cancelFinished();
       } else if (
         text.includes("Job failed") ||
         text.includes("Job failed") ||
@@ -436,6 +438,29 @@ export class TerminalUI {
     this.el.stepText.style.color = "var(--color-error)";
 
     this.appendLog(`[ERRO CRÍTICO] ${reason}`, "error");
+
+    if (this.el.cancelBtn) {
+      this.el.cancelBtn.style.display = "none";
+    }
+  }
+
+  cancelFinished() {
+    this.state = this.MODES.DONE;
+    clearInterval(this.tickerInterval);
+
+    this.el.status.innerText = "CANCELADO";
+    this.el.status.classList.remove("active");
+    this.el.status.style.color = "var(--color-warning)"; // Orange/Yellow
+
+    this.el.eta.innerText = "TEMPO: CANCELADO";
+    this.el.stepText.innerText = "Operação cancelada pelo usuário.";
+    this.el.stepText.style.color = "var(--color-warning)"; // Orange/Yellow
+
+    // Fill bar with warning color
+    if (this.el.fill)
+      this.el.fill.style.backgroundColor = "var(--color-warning)";
+
+    this.appendLog(`[SISTEMA] Processo cancelado e encerrado.`, "warning");
 
     if (this.el.cancelBtn) {
       this.el.cancelBtn.style.display = "none";

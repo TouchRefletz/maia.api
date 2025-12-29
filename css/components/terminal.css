@@ -208,6 +208,49 @@
   transform: translateY(-1px);
 }
 
+/* Header Buttons */
+.term-btn {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin: 0px 8px 4px 0px;
+  transition: all 0.2s;
+  text-decoration: none;
+  display: inline-block;
+  font-family: var(--term-font);
+  border: 1px solid #444;
+  color: #666;
+  background: transparent;
+}
+
+.term-btn.disabled {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.term-btn.active-log {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+  pointer-events: auto;
+}
+
+.term-btn.cancel {
+  border-color: #d32f2f;
+  color: #d32f2f;
+  display: none; /* Initially Hidden */
+}
+
+.term-btn.cancel:hover {
+  background: rgba(211, 47, 47, 0.1);
+  box-shadow: 0 0 8px rgba(211, 47, 47, 0.4);
+}
+
+.term-btn.cancel:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
 /* Raw Log Section */
 .term-logs {
   height: 140px;
