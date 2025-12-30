@@ -832,7 +832,7 @@ jobs:
                     stage_3_finalize_manifest(os.path.join(local_dir, "manifest.json"), repo_dir)
                 else:
                     print(f"Directories not found: {local_dir} {repo_dir}")
-            EOF
+          EOF
 
             # Execute the new script
             # We pass output/$slug (fresh) and hf_repo/output/$slug (destination)
