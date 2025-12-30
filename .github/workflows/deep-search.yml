@@ -591,7 +591,7 @@ jobs:
 
             # --- DEDUPLICATION LOGIC ---
             echo "Running Deduplication on hf_repo/output/$slug..."
-            cat << 'EOF' | sed 's/^            //' > deduplicate.py
+            cat << 'EOF' | sed 's/^  //' > deduplicate.py
             import os
             import sys
             import hashlib
@@ -723,7 +723,7 @@ jobs:
                         clean_manifest(manifest_path, deleted)
                 else:
                     print(f"Target directory {target_dir} not found.")
-            EOF
+          EOF
 
             python3 deduplicate.py "hf_repo/output/$slug"
             rm deduplicate.py
