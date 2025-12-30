@@ -545,6 +545,7 @@ jobs:
                   size = os.path.getsize(filepath)
                   
                   # 1. Check LFS Pointer
+                  # LFS pointers are usually small (<200 bytes) and contain "oid sha256:"
                   if size < 500: 
                       try:
                           with open(filepath, 'r', encoding='utf-8') as f:
@@ -555,6 +556,7 @@ jobs:
                                           lfs_hash = line.strip().split(':')[1]
                                           # LFS pointers have NO content hash (cannot read text from pointer)
                                           # So we return (BinaryHash, ContentHash=None, ...)
+                                          print(f"  [DEBUG] Found LFS Pointer: {os.path.basename(filepath)} (OID: {lfs_hash[:8]})")
                                           return (lfs_hash, None, timestamp, size, True)
                       except Exception:
                           pass 
@@ -593,10 +595,11 @@ jobs:
                               content_hash = hashlib.sha256(clean_text.encode('utf-8')).hexdigest()
                           else:
                               # If no text (scanned/raster), use binary hash as fallback
+                              print(f"  [DEBUG] No text extracted from {os.path.basename(filepath)} (Scanned?). Using BinHash.")
                               content_hash = binary_hash 
                               
                       except Exception as e:
-                          print(f"DEBUG: Failed to extract text from {os.path.basename(filepath)}: {e}")
+                          print(f"  [DEBUG] Failed to extract text from {os.path.basename(filepath)}: {e}")
                           content_hash = binary_hash # Fallback
 
                   return (binary_hash, content_hash, timestamp, size, False)
@@ -794,7 +797,7 @@ jobs:
             cd hf_repo
             git lfs install
             echo "Pulling LFS files for output/$slug/files/..."
-            git lfs pull --include "output/$slug/files/*"
+            git lfs pull --include "output/$slug/files/**" --exclude ""
             cd ..
             # -------------------------------------------------------
             
