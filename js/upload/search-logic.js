@@ -176,7 +176,14 @@ export function setupSearchLogic() {
           result.exact_match ||
           (result.similar_candidates && result.similar_candidates.length > 0)
         ) {
-          showUnifiedDecisionModal(result, query, log, terminal);
+          showUnifiedDecisionModal(
+            result,
+            query,
+            log,
+            terminal,
+            force,
+            cleanup
+          );
           return; // Stop here, wait for user interact
         } else {
           // No match, auto-confirm
@@ -253,7 +260,9 @@ export function setupSearchLogic() {
     preflightData,
     originalQuery,
     log,
-    terminal
+    terminal,
+    force,
+    cleanup
   ) => {
     // Create Modal UI dynamically
     const modalId = "unified-decision-modal";
