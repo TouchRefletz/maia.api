@@ -517,25 +517,77 @@ jobs:
           name: deep-search-artifact
           path: output/${{ steps.deep_search.outputs.final_slug }}
 
-      - name: Push to Hugging Face Dataset
+      - name: Push to Hugging Face Dataset (Smart Merge)
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          MODE: ${{ github.event.client_payload.mode }}
         run: |
           (
-            echo "Starting upload to Hugging Face..."
+            echo "Starting upload to Hugging Face (Mode: $MODE)..."
             # Configure Git
             git config --global user.email "bot@maia.api"
             git config --global user.name "Maia Bot"
 
             # Clone HF Repo (using depth 1 for speed)
             git clone --depth 1 https://user:$HF_TOKEN@huggingface.co/datasets/toquereflexo/maia-deep-search hf_repo
+            
+            slug="${{ steps.deep_search.outputs.final_slug }}"
+            echo "Processing slug: $slug"
+            
+            # --- MANIFEST MERGING LOGIC ---
+            if [ "$MODE" == "update" ]; then
+                 echo "Update Mode: Attempting to merge manifest.json..."
+                 
+                 EXISTING_MANIFEST="hf_repo/output/$slug/manifest.json"
+                 NEW_MANIFEST="output/$slug/manifest.json"
+                 MERGED_MANIFEST="output/$slug/manifest_merged.json"
+                 
+                 # Debug: Check existence
+                 ls -l "hf_repo/output/$slug/" || echo "Directory not found in HF repo"
+
+                 if [ -f "$EXISTING_MANIFEST" ] && [ -f "$NEW_MANIFEST" ]; then
+                      echo "Found existing manifest. merging..."
+                      
+                      # Robust Merge Strategy:
+                      # 1. Normalize both inputs to Arrays (handle Arrays, Single Objects, or Objects with 'results'/'files')
+                      # 2. Add them together
+                      # 3. Unique by filename or url
+                      
+                      jq -s 'map(
+                        if type=="array" then . 
+                        elif type=="object" and has("results") then .results
+                        elif type=="object" and has("files") then .files
+                        else [.] 
+                        end
+                      ) | add | unique_by(.filename // .url)' "$EXISTING_MANIFEST" "$NEW_MANIFEST" > "$MERGED_MANIFEST"
+                      
+                      if [ -s "$MERGED_MANIFEST" ]; then
+                          echo "Merge successful. Overwriting new manifest with merged version."
+                          mv "$MERGED_MANIFEST" "output/$slug/manifest.json"
+                          
+                          # Copy Logic: We want to ensure we don't DELETE old files in the repo 
+                          # git add will add new ones, but we should probably copy old ones locally first?
+                          # Actually, we are copying output/$slug -> hf_repo. 
+                          # If we only copy new files, and the merged manifest lists old files, 
+                          # we need to make sure the old files are still there in hf_repo.
+                          # Since we cloned hf_repo, they ARE there. We just copy the new stuff ON TOP.
+                      else
+                          echo "⚠️ Merge produced empty file! Keeping NEW manifest only (Safety fallback)."
+                          # Optionally: cp "$EXISTING_MANIFEST" "output/$slug/manifest_backup.json"
+                      fi
+                 else
+                      echo "Existing manifest not found or new manifest missing. Skipping merge."
+                 fi
+            fi
+            # ------------------------------
 
             # Prepare Directories
-            slug="${{ steps.deep_search.outputs.final_slug }}"
             mkdir -p hf_repo/output/$slug
 
             # Copy Artifacts
-            cp -r output/$slug/* hf_repo/output/$slug/
+            # We copy FROM generated output TO the cloned repo
+            # This adds new files and updates changed ones
+            cp -r "output/$slug"/* "hf_repo/output/$slug/"
 
             # Commit and Push
             cd hf_repo
@@ -546,7 +598,7 @@ jobs:
             git add .gitattributes
 
             git add .
-            git commit -m "Add deep search results for $slug" || echo "No changes to commit"
+            git commit -m "Add/Update deep search results for $slug (Mode: $MODE)" || echo "No changes to commit"
             git push
             echo "Upload to Hugging Face completed."
           ) 2>&1 | python3 logger.py
