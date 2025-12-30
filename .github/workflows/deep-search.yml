@@ -597,21 +597,30 @@ jobs:
                   
                   if fhash:
                       if fhash not in files_by_hash: files_by_hash[fhash] = []
-                      files_by_hash[fhash].append({'name': f, 'path': path, 'mtime': mtime})
+                      files_by_hash[fhash].append({'name': f, 'path': path, 'mtime': mtime, 'size': size})
 
               files_removed = []
               for fhash, items in files_by_hash.items():
                   if len(items) > 1:
-                      # Keep Oldest
-                      items.sort(key=lambda x: (x['mtime'], len(x['name']), x['name']))
+                      # SORT PRIORITY:
+                      # 1. Size (Larger is better - prefer valid content over LFS pointers/empty files)
+                      # 2. Mtime (Oldest is better - stability)
+                      # 3. Name Length (Shortest is better)
+                      
+                      # We sort DESCENDING by Size (so largest is first), then ASCENDING by Mtime.
+                      # Since python sort is stable, we can chain or use tuples.
+                      # Tuple: (-size, mtime, len(name)) -> Min of this tuple is Best.
+                      
+                      items.sort(key=lambda x: (-x['size'], x['mtime'], len(x['name']), x['name']))
+                      
                       keeper = items[0]
                       duplicates = items[1:]
                       
                       print(f"Duplicate content found ({fhash[:8]}):")
-                      print(f"  KEEPING: {keeper['name']} (created {datetime.fromtimestamp(keeper['mtime'])})")
+                      print(f"  KEEPING: {keeper['name']} (Size: {keeper['size']}, Created: {datetime.fromtimestamp(keeper['mtime'])})")
                       
                       for dup in duplicates:
-                          print(f"  DELETING: {dup['name']} (created {datetime.fromtimestamp(dup['mtime'])})")
+                          print(f"  DELETING: {dup['name']} (Size: {dup['size']}, Created: {datetime.fromtimestamp(dup['mtime'])})")
                           try:
                               os.remove(dup['path'])
                               files_removed.append(dup['name'])
@@ -629,6 +638,18 @@ jobs:
           def stage_2_smart_copy(local_dir, repo_dir):
               print(f"\n--- Stage 2: Smart Copy ---")
               
+              # A. Copy Root Artifacts (index.md, slug.txt, zip, etc.)
+              print("Copying Root Artifacts...")
+              for f in os.listdir(local_dir):
+                  src_path = os.path.join(local_dir, f)
+                  dst_path = os.path.join(repo_dir, f)
+                  if os.path.isfile(src_path) and f != "manifest.json":
+                      # Always copy updated root artifacts (metadata, zips)
+                      # Except manifest which is handled specially
+                      shutil.copy2(src_path, dst_path)
+                      print(f"  Copied: {f}")
+
+              # B. Smart Copy 'files/' Subdirectory
               local_files_dir = os.path.join(local_dir, "files")
               repo_files_dir = os.path.join(repo_dir, "files")
               
@@ -658,7 +679,7 @@ jobs:
               for f in local_files:
                   local_path = os.path.join(local_files_dir, f)
                   
-                  fhash, _, _ = get_file_info(local_path)
+                  fhash, _, size = get_file_info(local_path)
                   
                   if fhash in repo_hashes:
                       existing_name = repo_hashes[fhash]

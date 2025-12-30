@@ -156,11 +156,20 @@ jobs:
             # Path Checks
             BASE_DIR="output/$SLUG"
             FILE_PATH="$BASE_DIR/$FILENAME"
+            FILES_SUBDIR_PATH="$BASE_DIR/files/$FILENAME"
             MANIFEST_PATH="$BASE_DIR/manifest.json"
 
+            TARGET_TO_REMOVE=""
+
             if [ -f "$FILE_PATH" ]; then
-                echo "Arquivo encontrado. Removendo: $FILE_PATH"
-                git rm "$FILE_PATH"
+                TARGET_TO_REMOVE="$FILE_PATH"
+            elif [ -f "$FILES_SUBDIR_PATH" ]; then
+                TARGET_TO_REMOVE="$FILES_SUBDIR_PATH"
+            fi
+
+            if [ -n "$TARGET_TO_REMOVE" ]; then
+                echo "Arquivo encontrado. Removendo: $TARGET_TO_REMOVE"
+                git rm "$TARGET_TO_REMOVE"
                 
                 if [ -f "$MANIFEST_PATH" ]; then
                     echo "Atualizando manifest.json..."
