@@ -622,8 +622,40 @@ jobs:
                     print(f"Error hashing {filepath}: {e}")
                     return None
 
-            def deduplicate(target_dir):
+            def load_manifest(manifest_path):
+                if not os.path.exists(manifest_path):
+                    return []
+                try:
+                    with open(manifest_path, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    
+                    if isinstance(data, list): return data
+                    if isinstance(data, dict):
+                        if 'results' in data: return data['results']
+                        if 'files' in data: return data['files']
+                    return []
+                except Exception as e:
+                    print(f"Error loading manifest: {e}")
+                    return []
+
+            def save_manifest(manifest_path, entries):
+                try:
+                    with open(manifest_path, 'w', encoding='utf-8') as f:
+                        json.dump(entries, f, indent=2, ensure_ascii=False)
+                    print("Manifest updated.")
+                except Exception as e:
+                    print(f"Error saving manifest: {e}")
+
+            def deduplicate_and_fix_manifest(target_dir):
                 print(f"Scanning {target_dir}...")
+                
+                manifest_path = os.path.join(target_dir, "manifest.json")
+                manifest_entries = load_manifest(manifest_path)
+                
+                # Index Manifest by Filename
+                # Map: filename -> entry object
+                entries_by_filename = {e.get('filename'): e for e in manifest_entries if e.get('filename')}
+
                 files_by_hash = {}
                 
                 # 1. Group files by hash
@@ -632,7 +664,7 @@ jobs:
                         if filename in ["manifest.json", "index.md", "slug.txt", "DOWNLOAD_URLS.txt"]:
                             continue
                         if filename.endswith(".json") or filename.endswith(".txt") or filename.endswith(".md"):
-                            continue # Focus on binaries/PDFs primarily, but safety checks good.
+                            continue 
 
                         filepath = os.path.join(root, filename)
                         file_hash = get_file_hash(filepath)
@@ -640,74 +672,64 @@ jobs:
                         if file_hash:
                             if file_hash not in files_by_hash:
                                 files_by_hash[file_hash] = []
-                            files_by_hash[file_hash].append(filepath)
+                            files_by_hash[file_hash].append(filename) # Store filename relative to dir (basename)
 
-                deleted_filenames = set()
-
-                # 2. Identify and delete duplicates
-                for fhash, paths in files_by_hash.items():
-                    if len(paths) > 1:
+                # Track changes
+                manifest_changed = False
+                final_entries = list(manifest_entries) # Start with copy
+                
+                # 2. Identify and resolve duplicates
+                for fhash, filenames in files_by_hash.items():
+                    if len(filenames) > 1:
                         # Sort: Prefer shortest filename length, then alphabetical
-                        paths.sort(key=lambda p: (len(os.path.basename(p)), os.path.basename(p)))
+                        filenames.sort(key=lambda n: (len(n), n))
                         
-                        keep = paths[0]
-                        remove = paths[1:]
+                        keep_filename = filenames[0]
+                        remove_filenames = filenames[1:]
                         
-                        # Tie-breaker safety: if filenames are same length/similar, ensure we are consistent.
-                        print(f"Duplicate found! Keeping: {os.path.basename(keep)}")
-                        for rm in remove:
-                            print(f"  Deleting: {os.path.basename(rm)}")
-                            try:
-                                os.remove(rm)
-                                deleted_filenames.add(os.path.basename(rm))
-                            except Exception as e:
-                                print(f"  Failed to delete {rm}: {e}")
-
-                return deleted_filenames
-
-            def clean_manifest(manifest_path, deleted_filenames):
-                if not os.path.exists(manifest_path):
-                    return
-
-                try:
-                    with open(manifest_path, 'r', encoding='utf-8') as f:
-                        data = json.load(f)
-                    
-                    entries = []
-                    is_dict = False
-                    if isinstance(data, list):
-                        entries = data
-                        final_data = [] # Placeholder
-                    elif isinstance(data, dict):
-                        is_dict = True
-                        if 'results' in data: entries = data['results']
-                        elif 'files' in data: entries = data['files']
-                    
-                    if not entries and not is_dict and not isinstance(data, list):
-                        print("Manifest format unrecognized.")
-                        return
-
-                    original_count = len(entries)
-                    # Filter out entries where filename Matches a deleted file
-                    new_entries = [e for e in entries if e.get('filename') not in deleted_filenames]
-                    
-                    if len(new_entries) < original_count:
-                        print(f"Removed {original_count - len(new_entries)} entries from manifest.")
+                        print(f"Duplicate group found. Keeping: {keep_filename}")
                         
-                        if is_dict:
-                            if 'results' in data: data['results'] = new_entries
-                            elif 'files' in data: data['files'] = new_entries
-                            final_data = data
-                        else:
-                            final_data = new_entries
+                        # --- METADATA MIGRATION LOGIC ---
+                        # Check if the 'keep' file has a valid manifest entry
+                        keep_entry = entries_by_filename.get(keep_filename)
+                        
+                        if not keep_entry:
+                            print(f"  Warning: Kept file '{keep_filename}' has NO manifest entry. Searching for orphan metadata...")
+                            # Try to find an entry from the files we are about to delete
+                            adopted_entry = None
+                            for rm_name in remove_filenames:
+                                if rm_name in entries_by_filename:
+                                    print(f"  Adopting metadata from deleted file: {rm_name}")
+                                    adopted_entry = entries_by_filename[rm_name]
+                                    break # Take the first valid one
                             
-                        with open(manifest_path, 'w', encoding='utf-8') as f:
-                            json.dump(final_data, f, indent=2, ensure_ascii=False)
-                        print("Manifest updated.")
-                    else:
-                        print("No manifest entries matched deleted files.")
-                except Exception as e:
-                    print(f"Error cleaning manifest: {e}")
+                            if adopted_entry:
+                                # Clone and rename
+                                new_entry = adopted_entry.copy()
+                                new_entry['filename'] = keep_filename
+                                final_entries.append(new_entry)
+                                entries_by_filename[keep_filename] = new_entry # Update index
+                                manifest_changed = True
+                        # --------------------------------
+                        
+                        # Delete files and remove their ORIGINAL entries
+                        for rm_name in remove_filenames:
+                            print(f"  Deleting: {rm_name}")
+                            full_path = os.path.join(target_dir, rm_name)
+                            try:
+                                if os.path.exists(full_path):
+                                    os.remove(full_path)
+                            except Exception as e:
+                                print(f"  Failed to delete {rm_name}: {e}")
+                            
+                            # Remove entry from final list
+                            final_entries = [e for e in final_entries if e.get('filename') != rm_name]
+                            manifest_changed = True
+
+                if manifest_changed:
+                    save_manifest(manifest_path, final_entries)
+                else:
+                    print("No manifest changes needed.")
 
             if __name__ == "__main__":
                 if len(sys.argv) < 2:
@@ -716,17 +738,10 @@ jobs:
                 
                 target_dir = sys.argv[1]
                 if os.path.exists(target_dir):
-                    deleted = deduplicate(target_dir)
-                    
-                    if deleted:
-                        manifest_path = os.path.join(target_dir, "manifest.json")
-                        clean_manifest(manifest_path, deleted)
+                    deduplicate_and_fix_manifest(target_dir)
                 else:
                     print(f"Target directory {target_dir} not found.")
           EOF
-
-            python3 deduplicate.py "hf_repo/output/$slug"
-            rm deduplicate.py
             # ---------------------------
 
             # Commit and Push
