@@ -78,6 +78,9 @@ export default {
 				case '/delete-pinecone-record':
 					return handlePineconeDelete(request, env);
 
+				case '/manual-upload':
+					return handleManualUpload(request, env);
+
 				case '/delete-artifact':
 					return handleDeleteArtifact(request, env);
 
@@ -1143,4 +1146,126 @@ async function executePineconeDelete(slug, env) {
 	}
 
 	return await response.json();
+}
+/**
+ * SERVICE: MANUAL UPLOAD (Sync to HF)
+ * 1. Uploads file to tmpfiles.org
+ * 2. Triggers GitHub Action manual-upload
+ */
+async function handleManualUpload(request, env) {
+	if (request.method !== 'POST') return new Response('Method Not Allowed', { status: 405, headers: corsHeaders });
+
+	const formData = await request.formData();
+	const title = formData.get('title');
+	const yearInput = formData.get('year');
+	const institution = formData.get('institution');
+	const phase = formData.get('phase');
+	const sourceUrlProva = formData.get('source_url_prova');
+	const sourceUrlGabarito = formData.get('source_url_gabarito');
+
+	const fileProva = formData.get('fileProva');
+	const fileGabarito = formData.get('fileGabarito');
+
+	if (!fileProva || !title || !yearInput || !institution || !phase) {
+		return new Response(JSON.stringify({ error: 'Prova, Title, Year, Institution and Phase are required' }), {
+			status: 400,
+			headers: corsHeaders,
+		});
+	}
+
+	// 1. Helper to upload to tmpfiles.org
+	// API: POST https://tmpfiles.org/api/v1/upload (multipart/form-data)
+	const uploadToTmp = async (file) => {
+		const fd = new FormData();
+		fd.append('file', file);
+		try {
+			const res = await fetch('https://tmpfiles.org/api/v1/upload', { method: 'POST', body: fd });
+			const json = await res.json();
+			if (json && json.status === 'success') {
+				// Convert to download URL (replace /file/ with /dl/)
+				// e.g. https://tmpfiles.org/file/123/name.pdf -> https://tmpfiles.org/dl/123/name.pdf
+				return json.data.url.replace('/file/', '/dl/');
+			}
+			return null;
+		} catch (e) {
+			console.error('Tmpfiles upload error:', e);
+			return null;
+		}
+	};
+
+	console.log(`[Manual Upload] Starting upload for: ${title}`);
+
+	// Parallel Uploads
+	const promises = [uploadToTmp(fileProva)];
+	if (fileGabarito) promises.push(uploadToTmp(fileGabarito));
+
+	const results = await Promise.all(promises);
+	const pdfUrl = results[0];
+	const gabUrl = fileGabarito ? results[1] : null;
+
+	if (!pdfUrl) {
+		return new Response(JSON.stringify({ error: 'Failed to upload PDF to temporary storage' }), {
+			status: 500,
+			headers: corsHeaders,
+		});
+	}
+
+	// 2. Generate Slug (Simple for now, or reuse logic)
+	// Let's use simple logic here to accept the user's input directly if it looks slug-like, or sanitize it.
+	// User said "slug é literalmente o nome da prova que o usuário colocou".
+	const slug = title
+		.toLowerCase()
+		.trim()
+		.replace(/[\s_]+/g, '-')
+		.replace(/[^a-z0-9-]/g, '');
+
+	const year = yearInput.trim(); // Use user provided year
+
+	console.log(`[Manual Upload] Slug: ${slug} | PDF: ${pdfUrl}`);
+
+	// 3. Dispatch GitHub Action
+	const githubPat = env.GITHUB_PAT;
+	const githubOwner = env.GITHUB_OWNER || 'TouchRefletz';
+	const githubRepo = env.GITHUB_REPO || 'maia.api';
+
+	const ghRes = await fetch(`https://api.github.com/repos/${githubOwner}/${githubRepo}/dispatches`, {
+		method: 'POST',
+		headers: {
+			Authorization: `Bearer ${githubPat}`,
+			Accept: 'application/vnd.github.v3+json',
+			'User-Agent': 'Cloudflare-Worker',
+		},
+		body: JSON.stringify({
+			event_type: 'manual-upload',
+			client_payload: {
+				slug,
+				title,
+				year,
+				institution,
+				phase,
+				source_url_prova: sourceUrlProva,
+				source_url_gabarito: sourceUrlGabarito,
+				pdf_url: pdfUrl,
+				gabarito_url: gabUrl,
+			},
+		}),
+	});
+
+	if (!ghRes.ok) {
+		const txt = await ghRes.text();
+		return new Response(JSON.stringify({ error: `GitHub Dispatch Failed: ${txt}` }), {
+			status: 500,
+			headers: corsHeaders,
+		});
+	}
+
+	return new Response(
+		JSON.stringify({
+			success: true,
+			slug,
+			message: 'Upload started. Syncing to Cloud...',
+			hf_url_preview: `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${slug}/files/prova.pdf`,
+		}),
+		{ headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+	);
 }

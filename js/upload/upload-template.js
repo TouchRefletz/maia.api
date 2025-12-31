@@ -54,10 +54,32 @@ export function getUploadInterfaceHTML() {
             </div>
 
         <form id="pdfUploadForm" style="width: 100%; max-width: 500px;">
+            <div style="display: flex; gap: 15px;">
+                <div class="form-group" style="flex: 1;">
+                    <label for="institutionInput" class="form-label">Instituição</label>
+                    <div class="input-wrapper">
+                         <input type="text" id="institutionInput" class="form-control" placeholder="Ex: FUVEST" required>
+                    </div>
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label for="phaseInput" class="form-label">Fase</label>
+                    <div class="input-wrapper">
+                         <input type="text" id="phaseInput" class="form-control" placeholder="Ex: 1ª Fase" required>
+                    </div>
+                </div>
+            </div>
+
             <div class="form-group">
                 <label for="pdfTitleInput" class="form-label">Título do material</label>
                 <div class="input-wrapper">
-                    <input type="text" id="pdfTitleInput" class="form-control" placeholder="Ex: FUVEST 2023" required>
+                    <input type="text" id="pdfTitleInput" class="form-control" placeholder="Ex: FUVEST 2023 1ª Fase" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="pdfYearInput" class="form-label">Ano da prova</label>
+                <div class="input-wrapper">
+                    <input type="number" id="pdfYearInput" class="form-control" placeholder="Ex: 2023" min="1900" max="2100" required>
                 </div>
             </div>
 
@@ -77,6 +99,19 @@ export function getUploadInterfaceHTML() {
                 </label>
                 <input type="file" id="gabaritoFileInput" accept=".pdf" style="display: none;">
                 <span id="gabaritoFileName" class="file-name-display">Nenhum arquivo selecionado</span>
+            </div>
+
+            <div class="form-group">
+                 <details>
+                    <summary style="cursor:pointer; color:var(--color-primary); font-size:0.9rem; margin-bottom:8px;">Adicionar Links de Origem (Opcional)</summary>
+                    <div style="margin-top:10px;">
+                        <label class="form-label" style="font-size:0.85rem;">Link da Prova (URL)</label>
+                        <input type="url" id="sourceUrlProva" class="form-control" placeholder="https://..." style="margin-bottom:10px;">
+                        
+                        <label class="form-label" style="font-size:0.85rem;">Link do Gabarito (URL)</label>
+                        <input type="url" id="sourceUrlGabarito" class="form-control" placeholder="https://...">
+                    </div>
+                 </details>
             </div>
 
             <div class="form-group checkbox-group">
