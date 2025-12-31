@@ -517,6 +517,19 @@ jobs:
 
           exit $EXIT_CODE
 
+      - name: Compute Visual Hashes
+        env:
+          SLUG: ${{ steps.deep_search.outputs.final_slug }}
+        run: |
+          (
+            echo "Installing dependencies for hashing..."
+            sudo apt-get update && sudo apt-get install -y build-essential libcairo2-dev libpango1.0-dev
+            npm install pdfjs-dist canvas
+            
+            echo "Computing visual hashes..."
+            node scripts/compute-hash.js "output/$SLUG"
+          ) 2>&1 | python3 logger.py
+
       - name: Generate Thumbnails
         env:
           SLUG: ${{ steps.deep_search.outputs.final_slug }}

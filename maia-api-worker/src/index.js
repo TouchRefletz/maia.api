@@ -1498,12 +1498,13 @@ async function handleManualUpload(request, env) {
 					mode: formData.get('mode') || 'overwrite',
 					// Consolidate metadata to avoid 10 property limit (GitHub 422)
 					metadata: {
-						institution: aiData.institution,
 						year: aiData.year,
 						phase: aiData.phase,
 						summary: aiData.summary,
 						source_url_prova: sourceUrlProva,
 						source_url_gabarito: sourceUrlGabarito,
+						visual_hash: formData.get('visual_hash_prova'),
+						visual_hash_gabarito: formData.get('visual_hash_gabarito'),
 					},
 				},
 			}),

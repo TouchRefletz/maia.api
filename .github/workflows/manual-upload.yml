@@ -39,6 +39,9 @@ jobs:
     timeout-minutes: 15
 
     steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
       - name: Setup Logger
         run: |
           cat << 'EOF' > logger.py
@@ -257,6 +260,19 @@ jobs:
 
           python3 update_manifest.py
           cat manifest.json
+
+      - name: Compute Visual Hashes
+        env:
+          SLUG: ${{ github.event.client_payload.slug || inputs.slug }}
+        run: |
+          (
+            echo "Installing dependencies for hashing..."
+            sudo apt-get update && sudo apt-get install -y build-essential libcairo2-dev libpango1.0-dev
+            npm install pdfjs-dist canvas
+            
+            echo "Computing visual hashes..."
+            node scripts/compute-hash.js "hf_repo/output/$SLUG"
+          ) 2>&1 | python3 logger.py
 
       - name: Generate Thumbnails
         env:
