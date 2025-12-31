@@ -637,7 +637,7 @@ jobs:
             
             # LFS Setup
             git lfs install
-            git lfs track "*.pdf" "*.zip" "*.rar" "*.doc" "*.docx"
+            git lfs track "*.pdf" "*.zip" "*.rar" "*.doc" "*.docx" "*.jpg" "*.jpeg"
             git add .gitattributes
 
             git add .
