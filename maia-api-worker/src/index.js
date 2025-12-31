@@ -206,14 +206,15 @@ Output JSON ONLY.`;
 
 	if (!force) {
 		try {
-			// A. Exact Match Check (using ID lookup if possible, or filter)
-			// Since we use 'slug' as ID in Pinecone (usually), we can try to fetch it.
-			// Or just query with vector + metadata filter.
-			// Ideally, we fetch by ID, but our helper `executePineconeQuery` uses vector search.
-			// Let's use a dummy vector query with filter to check existence of slug.
+			// A. Exact Match Check & Similar Candidates
+			// Modified: Use the CANONICAL SLUG for the embedding, effectively "searching by translation"
+			// This ensures "exame nacional 2019" -> "enem-2019" -> embedding("enem 2019")
+			const searchParam = canonicalSlug.replace(/-/g, ' ');
+
+			console.log(`[Pre-flight] Searching cache using translated term: "${searchParam}" (from "${query}")`);
 
 			// We need an embedding for the query anyway for similarity check
-			const embedding = await generateEmbedding(query, env.GOOGLE_GENAI_API_KEY);
+			const embedding = await generateEmbedding(searchParam, env.GOOGLE_GENAI_API_KEY);
 
 			if (embedding) {
 				const cacheResult = await executePineconeQuery(embedding, env, 10, { type: 'deep-search-result' }); // Get top 10
@@ -443,14 +444,17 @@ async function handleDeepSearchUpdate(request, env) {
 
 	try {
 		// Generate embedding
-		const embedding = await generateEmbedding(query, env.GOOGLE_GENAI_API_KEY);
+		// Modified: Use the CANONICAL SLUG for the stored embedding too.
+		// This ensures the vector represents the exam itself (e.g. "enem 2019")
+		// rather than the specific query used to find it ("provas do enem").
+		const embedding = await generateEmbedding(slug.replace(/-/g, ' '), env.GOOGLE_GENAI_API_KEY);
 
 		const vector = {
 			id: slug,
 			values: embedding,
 			metadata: {
 				...metadata,
-				query,
+				query, // We still keep the original query in metadata for reference
 				slug,
 				type: 'deep-search-result',
 				updated_at: new Date().toISOString(),
