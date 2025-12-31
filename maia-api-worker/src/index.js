@@ -1230,15 +1230,18 @@ async function handleManualUpload(request, env) {
 		// A. AI RESEARCH TASK
 		const aiTask = async () => {
 			try {
-				// Convert files to Base64 for AI context using arrayBuffer
+				// Convert files to Base64 efficiently
 				const fileToBase64 = async (file) => {
 					if (!file) return null;
 					const arrayBuffer = await file.arrayBuffer();
 					const uint8Array = new Uint8Array(arrayBuffer);
+
+					// Use chunks to avoid stack overflow with String.fromCharCode.apply AND avoid string accel overhead
 					let binary = '';
-					const len = uint8Array.byteLength;
-					for (let i = 0; i < len; i++) {
-						binary += String.fromCharCode(uint8Array[i]);
+					const chunkSize = 8192; // 8KB chunks
+					for (let i = 0; i < uint8Array.length; i += chunkSize) {
+						const chunk = uint8Array.subarray(i, Math.min(i + chunkSize, uint8Array.length));
+						binary += String.fromCharCode.apply(null, chunk);
 					}
 					return btoa(binary);
 				};
