@@ -7,9 +7,12 @@
  * and update 'manifest.json' with 'visual_hash' for each PDF.
  */
 
-const fs = require("fs");
-const path = require("path");
-const crypto = require("crypto");
+import crypto from "crypto";
+import fs from "fs";
+import { createRequire } from "module";
+import path from "path";
+import { fileURLToPath } from "url";
+
 const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
