@@ -5,6 +5,7 @@ const PROD_WORKER_URL =
 // Importa o visualizador
 import { AsyncQueue } from "../utils/queue.js";
 import { gerarVisualizadorPDF } from "../viewer/events.js";
+import { SearchToaster } from "./search-toaster.js";
 import { TerminalUI } from "./terminal-ui.js";
 
 // --- STATE ---
@@ -300,6 +301,7 @@ export function setupSearchLogic() {
       }
 
       log(`Conectando ao canal: ${slug}...`, "info");
+      SearchToaster.updateState("loading", "Conectando ao servidor...");
 
       let PusherClass = window.Pusher;
       if (!PusherClass) {
@@ -336,6 +338,7 @@ export function setupSearchLogic() {
 
         if (text.includes("COMPLETED")) {
           let isSuccess = true; // Scope var
+          SearchToaster.updateState("success", "Busca finalizada!");
           log(
             "Busca base finalizada. Iniciando verificação de integridade...",
             "success"
@@ -362,6 +365,7 @@ export function setupSearchLogic() {
         }
       });
     } catch (e) {
+      SearchToaster.updateState("error", "Erro na busca");
       log(`Erro Fatal: ${e.message}`, "error");
     }
   };
