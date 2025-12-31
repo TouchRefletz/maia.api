@@ -943,20 +943,50 @@ async function handleProxyPdf(request, env) {
 	}
 
 	try {
-		const headers = {
+		let currentUrl = targetUrl;
+		let response = null;
+		let headers = {
 			'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
 		};
+		if (env.HF_TOKEN) headers['Authorization'] = `Bearer ${env.HF_TOKEN}`;
 
-		if (env.HF_TOKEN) {
-			headers['Authorization'] = `Bearer ${env.HF_TOKEN}`;
+		// Manually follow Redirects (limit 5)
+		for (let i = 0; i < 5; i++) {
+			console.log(`[Proxy] Fetching: ${currentUrl}`);
+			response = await fetch(currentUrl, {
+				method: 'GET',
+				headers: headers,
+				redirect: 'manual', // We handle redirects to strip Auth
+			});
+
+			if (response.status >= 300 && response.status < 400) {
+				const location = response.headers.get('Location');
+				if (!location) break;
+
+				// If redirecting to a new host (likely storage), DROP AUTH
+				// Signed URLs (like Xet/S3) will fail if we send Bearer Token
+				currentUrl = location;
+				headers = {
+					'User-Agent': headers['User-Agent'],
+				};
+				continue;
+			}
+			break;
 		}
 
-		const response = await fetch(targetUrl, {
-			method: 'GET',
-			headers: headers,
-		});
+		if (!response) {
+			return new Response('Proxy Error: No response', { status: 500, headers: corsHeaders });
+		}
 
 		if (!response.ok) {
+			// Check if it's the HTML error page again
+			const contentType = response.headers.get('content-type');
+			if (contentType && contentType.includes('text/html')) {
+				return new Response(`Error: Upstream returned HTML (Status ${response.status}). Check HF_TOKEN.`, {
+					status: 401,
+					headers: corsHeaders,
+				});
+			}
 			return new Response(`Failed to fetch PDF: ${response.status}`, { status: response.status, headers: corsHeaders });
 		}
 
