@@ -15,9 +15,6 @@ export function setupFormLogic(elements, initialData) {
     pdfInput,
   } = elements;
 
-  // Manual element retrieval if not passed in elements object
-  const yearInput = document.getElementById("pdfYearInput");
-
   // A. Lógica de Checkbox (Esconder/Mostrar Gabarito)
   const toggleGabarito = () => {
     if (gabaritoCheck.checked) {

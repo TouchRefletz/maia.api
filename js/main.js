@@ -1,33 +1,46 @@
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js';
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
 import {
   getAuth,
-  signInAnonymously
-} from 'https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js';
-import { getDatabase } from 'https://www.gstatic.com/firebasejs/12.6.0/firebase-database.js';
-import { gerarTelaInicial, iniciarFluxoExtracao, iniciarModoEstudante } from './app/telas.js';
-import { aplicarFiltrosBanco, limparFiltros } from './banco/filtros-ui.js';
-import { abrirScanOriginal, toggleGabarito, verificarRespostaBanco } from './banco/interacoes.js';
-import { ativarModoRecorte, iniciarCapturaParaSlot, onClickImagemFinal, removerImagemFinal } from './cropper/mode.js';
-import { enviarDadosParaFirebase } from './firebase/envio.js';
-import { exibirModalOriginais } from './render/final/OriginaisModal.tsx';
-import { mountApiKeyModal } from './ui/ApiKeyModal.tsx';
-import { setupDragAndDrop } from './upload/drag-drop.js';
-import { setupFormLogic } from './upload/form-logic.js';
-import { setupSearchLogic } from './upload/search-logic.js';
-import { getUploadInterfaceHTML } from './upload/upload-template.js';
+  signInAnonymously,
+} from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
+import { getDatabase } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-database.js";
+import {
+  gerarTelaInicial,
+  iniciarFluxoExtracao,
+  iniciarModoEstudante,
+} from "./app/telas.js";
+import { aplicarFiltrosBanco, limparFiltros } from "./banco/filtros-ui.js";
+import {
+  abrirScanOriginal,
+  toggleGabarito,
+  verificarRespostaBanco,
+} from "./banco/interacoes.js";
+import {
+  ativarModoRecorte,
+  iniciarCapturaParaSlot,
+  onClickImagemFinal,
+  removerImagemFinal,
+} from "./cropper/mode.js";
+import { enviarDadosParaFirebase } from "./firebase/envio.js";
+import { exibirModalOriginais } from "./render/final/OriginaisModal.tsx";
+import { mountApiKeyModal } from "./ui/ApiKeyModal.tsx";
+import { setupDragAndDrop } from "./upload/drag-drop.js";
+import { setupFormLogic } from "./upload/form-logic.js";
+import { setupSearchLogic } from "./upload/search-logic.js";
+import { getUploadInterfaceHTML } from "./upload/upload-template.js";
 
 export const TIPOS_ESTRUTURA_VALIDOS = new Set([
-  'texto',
-  'imagem',
-  'citacao',
-  'titulo',
-  'subtitulo',
-  'lista',
-  'equacao',
-  'codigo',
-  'destaque',
-  'separador',
-  'fonte',
+  "texto",
+  "imagem",
+  "citacao",
+  "titulo",
+  "subtitulo",
+  "lista",
+  "equacao",
+  "codigo",
+  "destaque",
+  "separador",
+  "fonte",
 ]);
 
 window.__ultimaQuestaoExtraida = null;
@@ -49,7 +62,7 @@ export const TAMANHO_PAGINA = 20;
 
 // Variáveis de controle de IA
 export const aiState = {
-  lastThoughtSig: '',
+  lastThoughtSig: "",
   thoughtsBootstrapped: false,
 };
 
@@ -69,7 +82,7 @@ export const viewerState = {
   scrollPos: { top: 0, left: 0 },
 };
 window.__viewerArgs = null; // guarda os arquivos e title
-window.__modo = 'prova'; // "prova" | "gabarito"
+window.__modo = "prova"; // "prova" | "gabarito"
 window.__pdfUrls = { prova: null, gabarito: null };
 window.__preferirPdfGabarito = true; // por padrÃ£o, quando existir PDF do gabarito, troca
 
@@ -93,25 +106,25 @@ window.__target_alt_index = null;
 // Proteção contra múltiplas inicializações
 if (!window.__globalListenerRegistered) {
   window.__globalListenerRegistered = true;
-  console.log(' Inicializando Global Listener (Única vez)...');
+  console.log(" Inicializando Global Listener (Única vez)...");
 
-  document.addEventListener('click', function (e) {
+  document.addEventListener("click", function (e) {
     // --- CASO 1: BotÃµes de Captura de Slot ---
-    const gatilhoSlot = e.target.closest('.js-captura-trigger');
+    const gatilhoSlot = e.target.closest(".js-captura-trigger");
     if (gatilhoSlot) {
       iniciarCapturaParaSlot(gatilhoSlot.dataset.idx, gatilhoSlot.dataset.ctx);
       return;
     }
 
     // --- CASO 2: BotÃ£o de Recortar Final ---
-    const gatilhoRecorte = e.target.closest('.js-recortar-final');
+    const gatilhoRecorte = e.target.closest(".js-recortar-final");
     if (gatilhoRecorte) {
       onClickImagemFinal();
       return;
     }
 
     // --- CASO 3: BotÃ£o de Remover Imagem ---
-    const gatilhoRemover = e.target.closest('.js-remover-img');
+    const gatilhoRemover = e.target.closest(".js-remover-img");
     if (gatilhoRemover) {
       const { idx, ctx } = gatilhoRemover.dataset;
       removerImagemFinal(idx, ctx);
@@ -119,56 +132,56 @@ if (!window.__globalListenerRegistered) {
     }
 
     // --- CASO 4: BotÃ£o Ver Originais ---
-    const gatilhoOriginais = e.target.closest('.js-ver-originais');
+    const gatilhoOriginais = e.target.closest(".js-ver-originais");
     if (gatilhoOriginais) {
       exibirModalOriginais();
       return;
     }
 
     // --- CASO 5: BotÃ£o Confirmar e Enviar ---
-    const gatilhoEnvio = e.target.closest('.js-confirmar-envio');
+    const gatilhoEnvio = e.target.closest(".js-confirmar-envio");
     if (gatilhoEnvio) {
       enviarDadosParaFirebase();
       return;
     }
 
     // --- CASO 6: BotÃ£o Voltar (Tela Inicial) ---
-    const gatilhoVoltar = e.target.closest('.js-voltar-inicio');
+    const gatilhoVoltar = e.target.closest(".js-voltar-inicio");
     if (gatilhoVoltar) {
       gerarTelaInicial();
       return;
     }
 
     // --- CASO 7: Card Iniciar ExtraÃ§Ã£o ---
-    const gatilhoExtracao = e.target.closest('.js-iniciar-extracao');
+    const gatilhoExtracao = e.target.closest(".js-iniciar-extracao");
     if (gatilhoExtracao) {
       iniciarFluxoExtracao();
       return;
     }
 
     // --- CASO 8: Card Iniciar Modo Estudante ---
-    const gatilhoEstudante = e.target.closest('.js-iniciar-estudante');
+    const gatilhoEstudante = e.target.closest(".js-iniciar-estudante");
     if (gatilhoEstudante) {
       iniciarModoEstudante();
       return;
     }
 
     // --- CASO 9: BotÃ£o Limpar Filtros ---
-    const gatilhoLimpar = e.target.closest('.js-limpar-filtros');
+    const gatilhoLimpar = e.target.closest(".js-limpar-filtros");
     if (gatilhoLimpar) {
       limparFiltros();
       return;
     }
 
     // --- CASO 10: BotÃ£o Aplicar Filtros (Busca) ---
-    const gatilhoFiltrar = e.target.closest('.js-aplicar-filtros');
+    const gatilhoFiltrar = e.target.closest(".js-aplicar-filtros");
     if (gatilhoFiltrar) {
       aplicarFiltrosBanco();
       return;
     }
 
     // --- NOVO CASO 11: BotÃ£o Toggle Gabarito ---
-    const gatilhoGabarito = e.target.closest('.js-toggle-gabarito');
+    const gatilhoGabarito = e.target.closest(".js-toggle-gabarito");
     if (gatilhoGabarito) {
       // Recupera o ID que guardamos no HTML
       const cardId = gatilhoGabarito.dataset.cardId;
@@ -177,7 +190,7 @@ if (!window.__globalListenerRegistered) {
     }
 
     // --- NOVO CASO 12: Verificar Resposta (Alternativas) ---
-    const gatilhoResposta = e.target.closest('.js-verificar-resp');
+    const gatilhoResposta = e.target.closest(".js-verificar-resp");
     if (gatilhoResposta) {
       // Extrai os dados do dataset do botÃ£o clicado
       const { cardId, letra, correta } = gatilhoResposta.dataset;
@@ -188,7 +201,7 @@ if (!window.__globalListenerRegistered) {
     }
 
     // --- NOVO CASO 13: Ver Scan Original (Enunciado ou Gabarito) ---
-    const gatilhoScan = e.target.closest('.js-ver-scan');
+    const gatilhoScan = e.target.closest(".js-ver-scan");
     if (gatilhoScan) {
       // Passamos o prÃ³prio elemento HTML para a funÃ§Ã£o,
       // igual o 'this' fazia no onclick inline.
@@ -197,7 +210,7 @@ if (!window.__globalListenerRegistered) {
     }
 
     // --- NOVO CASO 14: Configurar API Key ---
-    const gatilhoApi = e.target.closest('.js-config-api');
+    const gatilhoApi = e.target.closest(".js-config-api");
     if (gatilhoApi) {
       mountApiKeyModal();
       return;
@@ -207,15 +220,15 @@ if (!window.__globalListenerRegistered) {
 
 // Listener Ãºnico para fechar menus de passos ao clicar fora
 if (!window._stepMenuGlobalListener) {
-  document.addEventListener('click', (e) => {
+  document.addEventListener("click", (e) => {
     // Se o clique NÃƒO foi num botÃ£o de abrir menu, fecha todos os menus de passos
     if (
-      !e.target.closest('.btn-toggle-step-add') &&
-      !e.target.closest('.step-menu-content')
+      !e.target.closest(".btn-toggle-step-add") &&
+      !e.target.closest(".step-menu-content")
     ) {
       document
-        .querySelectorAll('.step-menu-content')
-        .forEach((m) => m.classList.add('hidden'));
+        .querySelectorAll(".step-menu-content")
+        .forEach((m) => m.classList.add("hidden"));
     }
   });
   window._stepMenuGlobalListener = true;
@@ -245,10 +258,10 @@ export const db = getDatabase(app);
 export const auth = getAuth(app);
 signInAnonymously(auth)
   .then(() => {
-    console.log('Autenticado anonimamente no Firebase.');
+    console.log("Autenticado anonimamente no Firebase.");
   })
   .catch((error) => {
-    console.error('Erro na autenticaÃ§Ã£o anÃ´nima:', error);
+    console.error("Erro na autenticaÃ§Ã£o anÃ´nima:", error);
   });
 
 /**
@@ -257,8 +270,8 @@ signInAnonymously(auth)
  */
 window.generatePDFUploadInterface = function (initialData = null) {
   // Limpeza
-  document.body.innerHTML = '';
-  const viewer = document.getElementById('pdfViewerContainer');
+  document.body.innerHTML = "";
+  const viewer = document.getElementById("pdfViewerContainer");
   if (viewer) viewer.remove();
 
   // 1. Renderizar HTML
@@ -266,16 +279,17 @@ window.generatePDFUploadInterface = function (initialData = null) {
 
   // 2. Capturar Elementos
   const elements = {
-    titleInput: document.getElementById('pdfTitleInput'),
-    gabaritoCheck: document.getElementById('gabaritoNaProvaCheck'),
-    gabaritoGroup: document.getElementById('gabaritoInputGroup'),
-    gabaritoInput: document.getElementById('gabaritoFileInput'),
-    pdfInput: document.getElementById('pdfFileInput'),
-    fileNameDisplay: document.getElementById('fileName'),
-    gabaritoFileNameDisplay: document.getElementById('gabaritoFileName'),
-    dropZoneProva: document.getElementById('dropZoneProva'),
-    dropZoneGabarito: document.getElementById('dropZoneGabarito'),
-    form: document.getElementById('pdfUploadForm'),
+    titleInput: document.getElementById("pdfTitleInput"),
+    yearInput: document.getElementById("pdfYearInput"),
+    gabaritoCheck: document.getElementById("gabaritoNaProvaCheck"),
+    gabaritoGroup: document.getElementById("gabaritoInputGroup"),
+    gabaritoInput: document.getElementById("gabaritoFileInput"),
+    pdfInput: document.getElementById("pdfFileInput"),
+    fileNameDisplay: document.getElementById("fileName"),
+    gabaritoFileNameDisplay: document.getElementById("gabaritoFileName"),
+    dropZoneProva: document.getElementById("dropZoneProva"),
+    dropZoneGabarito: document.getElementById("dropZoneGabarito"),
+    form: document.getElementById("pdfUploadForm"),
   };
 
   // 3. Ativar Drag & Drop
@@ -298,7 +312,7 @@ window.generatePDFUploadInterface = function (initialData = null) {
 };
 
 window.iniciar_captura_para_slot_alternativa = function (letra, index) {
-  window.__target_alt_letra = String(letra || '')
+  window.__target_alt_letra = String(letra || "")
     .trim()
     .toUpperCase();
   window.__target_alt_index = Number(index);
@@ -309,7 +323,7 @@ window.iniciar_captura_para_slot_alternativa = function (letra, index) {
 
 window.iniciar_ocr_campo = function (elementId) {
   // Define o contexto global para o salvar lidar depois
-  window.__targetSlotContext = 'ocr_field_' + elementId;
+  window.__targetSlotContext = "ocr_field_" + elementId;
   window.__targetSlotIndex = null; // não usamos index numérico aqui, o ID já basta
 
   // Inicia o modo de recorte (mesma UI de sempre)
@@ -319,7 +333,7 @@ window.iniciar_ocr_campo = function (elementId) {
 // --- NOVO SISTEMA DE ZOOM DE IMAGEM (MODAL) ---
 window.expandirImagem = function (src) {
   // Remove modal anterior se existir
-  const oldModal = document.getElementById('imgZoomModal');
+  const oldModal = document.getElementById("imgZoomModal");
   if (oldModal) oldModal.remove();
 
   const modalHtml = `
@@ -330,7 +344,7 @@ window.expandirImagem = function (src) {
         </div>
     </div>`;
 
-  document.body.insertAdjacentHTML('beforeend', modalHtml);
+  document.body.insertAdjacentHTML("beforeend", modalHtml);
 };
 
 gerarTelaInicial(); // Chama inicial ao carregar
