@@ -33,7 +33,8 @@ export function inicializarContextoViewer(args) {
       if (
         fileOrUrl.startsWith("http") &&
         !fileOrUrl.includes("localhost") &&
-        !fileOrUrl.includes("127.0.0.1")
+        !fileOrUrl.includes("127.0.0.1") &&
+        !fileOrUrl.includes("/proxy-pdf")
       ) {
         const workerUrl =
           "https://maia-api-worker.willian-campos-ismart.workers.dev";
