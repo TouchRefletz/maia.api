@@ -245,5 +245,16 @@ export function gerarVisualizadorPDF(args) {
 
   atualizarUIViewerModo();
 
-  carregarDocumentoPDF(urlProva);
+  // Tenta carregar. Se der sucesso, fecha qualquer modal de conflito que ainda esteja na tela
+  // (Caso o usuário tenha vindo do conflito e o modal ficou aberto por algum motivo, ou "Processing" toaster)
+  const carregou = await carregarDocumentoPDF(urlProva);
+  
+  if (carregou) {
+    const modalConflict = document.getElementById('unified-decision-modal');
+    if (modalConflict) modalConflict.remove();
+
+    // Também fecha o toaster de processamento se houver
+    const toasterContainer = document.getElementById('search-toaster-container');
+    if (toasterContainer) toasterContainer.innerHTML = ''; 
+  }
 }
