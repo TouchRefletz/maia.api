@@ -943,11 +943,17 @@ async function handleProxyPdf(request, env) {
 	}
 
 	try {
+		const headers = {
+			'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+		};
+
+		if (env.HF_TOKEN) {
+			headers['Authorization'] = `Bearer ${env.HF_TOKEN}`;
+		}
+
 		const response = await fetch(targetUrl, {
 			method: 'GET',
-			headers: {
-				'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-			},
+			headers: headers,
 		});
 
 		if (!response.ok) {

@@ -152,8 +152,20 @@ export function setupFormLogic(elements, initialData) {
 
       // Polling Function
       const checkHgUrl = async () => {
-        const response = await fetch(hfUrl, { method: "HEAD" });
-        return response.status === 200;
+        try {
+          // We check headers to avoid HTML login pages (200 OK)
+          const response = await fetch(hfUrl, { method: "HEAD" });
+          if (response.status === 200) {
+            const type = response.headers.get("content-type");
+            if (type && type.includes("text/html")) {
+              return false;
+            }
+            return true;
+          }
+          return false;
+        } catch (e) {
+          return false;
+        }
       };
 
       let attempts = 0;
@@ -171,14 +183,18 @@ export function setupFormLogic(elements, initialData) {
 
             setTimeout(() => {
               progress.close();
+
+              // USE PROXY URL for Viewer to handle Auth/CORS
+              const proxyUrl = `${WORKER_URL}/proxy-pdf?url=${encodeURIComponent(hfUrl)}`;
+
               // OPEN REMOTE VIEWER
               gerarVisualizadorPDF({
                 title: data.ai_data?.institution
                   ? `${data.ai_data.institution} ${data.ai_data.year}`
                   : titleInput.value,
                 rawTitle: titleInput.value,
-                fileProva: hfUrl, // REMOTE URL
-                fileGabarito: data.ai_data?.gabarito_url || null, // Might need to infer or check exists
+                fileProva: proxyUrl, // USE PROXY
+                fileGabarito: data.ai_data?.gabarito_url || null,
                 gabaritoNaProva: gabaritoCheck.checked,
                 isManualLocal: false,
                 slug: slug,
