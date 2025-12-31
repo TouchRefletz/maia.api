@@ -139,7 +139,25 @@ jobs:
                 fi
                 
                 echo "Downloading $fname from $url..."
-                curl -L -o "output/$SLUG/files/$fname" "$url"
+                # Use --fail to exit code 22 on 404/500 errors
+                if ! curl -sL --fail -o "output/$SLUG/files/$fname" "$url"; then
+                     echo "::error::Download failed (HTTP Error) for $url"
+                     exit 1
+                fi
+                
+                # MIME TYPE CHECK
+                mime_type=$(file --mime-type -b "output/$SLUG/files/$fname")
+                echo "Detected MIME type: $mime_type"
+                
+                if [[ "$mime_type" != "application/pdf" ]]; then
+                    echo "::error::Invalid file type downloaded! Expected application/pdf, got $mime_type. URL: $url"
+                    # Cat the file to logs if it's text (likely an error message)
+                    if [[ "$mime_type" == text/* ]]; then
+                        cat "output/$SLUG/files/$fname"
+                    fi
+                    rm "output/$SLUG/files/$fname"
+                    exit 1
+                fi
             else
                 echo "Skipping $fname (No URL provided, preserving existing if any)."
             fi
@@ -332,6 +350,13 @@ jobs:
           PUSHER_CLUSTER: ${{ secrets.PUSHER_CLUSTER }}
         run: |
           cd hf_repo
+
+          # LFS Optimization for robustness
+          git config --global http.postBuffer 524288000
+          git config --global http.maxRequestBuffer 104857600
+          git config --global lfs.activitytimeout 300
+          git config --global lfs.dialtimeout 300
+
           git lfs install
           git lfs track "*.pdf" "*.jpg"
           git add .
