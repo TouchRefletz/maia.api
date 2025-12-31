@@ -127,6 +127,9 @@ export function setupSearchLogic() {
 
       const log = (text, type = "info") => terminal.processLogLine(text, type);
       log("Iniciando Verificação Pré-Busca...", "info");
+
+      // Wire Retry Logic
+      terminal.onRetry = () => showRetryConfirmationModal(log, terminal);
     } else {
       // Re-attach to existing terminal
       terminal = new TerminalUI("deep-search-terminal");
@@ -136,6 +139,10 @@ export function setupSearchLogic() {
           "⚠ MODO ATUALIZAÇÃO ATIVADO: Novos arquivos serão mesclados.",
           "warning"
         );
+
+      // Wire Retry Logic (Re-attach)
+      const log = (text, type = "info") => terminal.processLogLine(text, type);
+      terminal.onRetry = () => showRetryConfirmationModal(log, terminal);
     }
 
     // Internal Log helper
@@ -264,6 +271,83 @@ export function setupSearchLogic() {
     } catch (e) {
       log(`Erro Fatal: ${e.message}`, "error");
     }
+  };
+
+  const showRetryConfirmationModal = (log, terminal) => {
+    // Create Modal UI dynamically
+    const modalId = "retry-confirmation-modal";
+    let modal = document.getElementById(modalId);
+    if (modal) modal.remove();
+
+    modal = document.createElement("div");
+    modal.id = modalId;
+    Object.assign(modal.style, {
+      position: "fixed",
+      top: 0,
+      left: 0,
+      width: "100%",
+      height: "100%",
+      backgroundColor: "rgba(0,0,0,0.8)",
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      zIndex: 10000,
+      backdropFilter: "blur(4px)",
+    });
+
+    const content = document.createElement("div");
+    Object.assign(content.style, {
+      backgroundColor: "var(--color-surface)",
+      padding: "32px",
+      borderRadius: "var(--radius-xl)",
+      maxWidth: "500px",
+      width: "90%",
+      border: "1px solid var(--color-border)",
+      boxShadow: "var(--shadow-2xl)",
+      textAlign: "center",
+    });
+
+    content.innerHTML = `
+          <div style="font-size: 3rem; margin-bottom: 16px;">⚠️</div>
+          <h2 style="font-size: 1.5rem; margin-bottom: 8px;">Tentar Novamente?</h2>
+          <p style="color: var(--color-text-secondary); margin-bottom: 24px;">
+              Isso irá <strong>apagar todos os dados</strong> da pesquisa atual no backend e iniciará uma nova busca do zero.
+              <br><br>
+              O cache será ignorado para garantir resultados frescos.
+          </p>
+          
+          <div style="display: flex; gap: 12px; justify-content: center;">
+              <button id="btn-cancel-retry" style="
+                  background: transparent; border: 1px solid var(--color-border); color: var(--color-text);
+                  padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; flex: 1;
+              ">Cancelar</button>
+              
+              <button id="btn-confirm-retry" style="
+                  background: var(--color-error); color: white; border: none; padding: 12px 24px;
+                  border-radius: 8px; font-weight: 600; cursor: pointer; flex: 1;
+              ">Apagar e Reiniciar</button>
+          </div>
+      `;
+
+    modal.appendChild(content);
+    document.body.appendChild(modal);
+
+    // Handlers
+    document.getElementById("btn-cancel-retry").onclick = () => {
+      modal.remove();
+    };
+
+    document.getElementById("btn-confirm-retry").onclick = () => {
+      modal.remove();
+      if (terminal)
+        terminal.queueLog(
+          "[SISTEMA] Reiniciando busca (Cache Ignorado)...",
+          "warning"
+        );
+
+      // Trigger Force Search: force=true, cleanup=true, confirm=true, mode="overwrite"
+      doSearch(true, true, true, "overwrite");
+    };
   };
 
   const showUnifiedDecisionModal = (
