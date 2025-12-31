@@ -152,11 +152,12 @@ jobs:
 
       - name: Update Manifest (Merge Strategy)
         env:
+          # Access nested metadata or fallbacks
           SLUG: ${{ github.event.client_payload.slug || inputs.slug }}
           TITLE: ${{ github.event.client_payload.title || inputs.title }}
-          YEAR: ${{ github.event.client_payload.year || inputs.year }}
-          INSTITUTION: ${{ github.event.client_payload.institution || inputs.institution }}
-          PHASE: ${{ github.event.client_payload.phase || inputs.phase }}
+          YEAR: ${{ github.event.client_payload.metadata.year || inputs.year }}
+          INSTITUTION: ${{ github.event.client_payload.metadata.institution || inputs.institution }}
+          PHASE: ${{ github.event.client_payload.metadata.phase || inputs.phase }}
 
           # Only add entries for what we actually downloaded
           HAS_PDF: ${{ github.event.client_payload.pdf_url != '' && github.event.client_payload.pdf_url != 'null' }}

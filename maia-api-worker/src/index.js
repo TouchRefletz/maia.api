@@ -1426,20 +1426,18 @@ async function handleManualUpload(request, env) {
 				client_payload: {
 					slug,
 					title,
-					// Use AI Data
-					institution: aiData.institution,
-					year: aiData.year,
-					phase: aiData.phase,
-					summary: aiData.summary,
-
-					source_url_prova: sourceUrlProva,
-					source_url_gabarito: sourceUrlGabarito,
-
-					// LOGIC UPDATE: Use overrides if present (and not empty)
 					pdf_url: formData.get('pdf_url_override') || pdfUrl,
 					gabarito_url: formData.get('gabarito_url_override') || gabUrl,
-
 					mode: formData.get('mode') || 'overwrite',
+					// Consolidate metadata to avoid 10 property limit (GitHub 422)
+					metadata: {
+						institution: aiData.institution,
+						year: aiData.year,
+						phase: aiData.phase,
+						summary: aiData.summary,
+						source_url_prova: sourceUrlProva,
+						source_url_gabarito: sourceUrlGabarito,
+					},
 				},
 			}),
 		});
