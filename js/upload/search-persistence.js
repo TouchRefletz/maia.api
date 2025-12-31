@@ -31,6 +31,30 @@ export class SearchPersistence {
     }
   }
 
+  static saveManifest(manifest) {
+    try {
+      // Limit check: specific for huge datasets, but sessionStorage usually handles 5MB.
+      sessionStorage.setItem(
+        this.KEY_PREFIX + "manifest",
+        JSON.stringify(manifest)
+      );
+    } catch (e) {
+      console.warn(
+        "SearchPersistence: Error saving manifest (quota exceeded?)",
+        e
+      );
+    }
+  }
+
+  static getManifest() {
+    try {
+      const data = sessionStorage.getItem(this.KEY_PREFIX + "manifest");
+      return data ? JSON.parse(data) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   static getSession() {
     try {
       return {
@@ -50,5 +74,6 @@ export class SearchPersistence {
     sessionStorage.removeItem(this.KEY_PREFIX + "status");
     sessionStorage.removeItem(this.KEY_PREFIX + "tasks");
     sessionStorage.removeItem(this.KEY_PREFIX + "start_time");
+    sessionStorage.removeItem(this.KEY_PREFIX + "manifest");
   }
 }

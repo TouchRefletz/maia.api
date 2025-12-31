@@ -35,6 +35,57 @@ export function setupSearchLogic() {
 
   const btnVoltarInicio = document.querySelector(".js-voltar-inicio");
 
+  // --- STATE RESTORATION (Persistence) ---
+  const savedSession = SearchPersistence.getSession();
+  const savedManifest = SearchPersistence.getManifest();
+
+  if (savedSession && savedSession.slug) {
+    console.log("[RESTORE] Found saved session:", savedSession);
+    currentSlug = savedSession.slug;
+
+    // 1. Restore Terminal (if we have tasks or if we have results)
+    // We restore terminal if there's a session, to show log history/status.
+    if (
+      (savedSession.tasks && savedSession.tasks.length > 0) ||
+      savedManifest
+    ) {
+      if (searchResults) {
+        searchResults.innerHTML = ""; // Clear placeholders
+        const consoleContainer = document.createElement("div");
+        consoleContainer.id = "deep-search-terminal";
+        searchResults.appendChild(consoleContainer);
+
+        terminalInstance = new TerminalUI(consoleContainer);
+        // Save Global Ref
+        // Re-attach expand handler since we just created it
+        terminalInstance.onExpandRequest = () => {
+          if (document.getElementById("btnBackToSearch"))
+            document.getElementById("btnBackToSearch").click();
+        };
+
+        if (savedSession.tasks) {
+          terminalInstance.updateTaskFromEvent(savedSession.tasks);
+        }
+
+        // Apply Status
+        if (savedSession.status === "completed" || savedManifest) {
+          terminalInstance.state = "DONE";
+          terminalInstance.finish(true);
+        } else if (savedSession.status === "running") {
+          // If it was running, we might leave it as is or mark as interrupted/unknown
+          // For now, let's keep it open.
+        }
+      }
+    }
+
+    // 2. Restore Results
+    if (savedManifest && savedManifest.length > 0) {
+      console.log("[RESTORE] Restoring results manifest...");
+      currentManifest = savedManifest;
+      renderResultsNewUI(savedManifest);
+    }
+  }
+
   // Helper to Float Terminal (EXPORTED LOGIC)
   // We attach this to window or export it. Since we are in a module, we should export it.
   // But setupSearchLogic is the main export. We will add a secondary export at the bottom or modify the module structure.
@@ -116,7 +167,7 @@ export function setupSearchLogic() {
           searchResults;
         // Ensure we don't duplicate
         if (!originalParent.contains(terminalInstance.container)) {
-          originalParent.appendChild(terminalInstance.container);
+          originalParent.prepend(terminalInstance.container);
         }
       }
     });
@@ -795,6 +846,9 @@ export function setupSearchLogic() {
 
       currentManifest = validItems;
       renderResultsNewUI(validItems);
+
+      // AUTO-PERSIST RESULTS
+      SearchPersistence.saveManifest(validItems);
     } catch (e) {
       if (terminal) terminal.fail(e.message);
       log(`Erro ao carregar resultados: ${e.message}`, "error");
