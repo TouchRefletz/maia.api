@@ -32,6 +32,30 @@ export function setupSearchLogic() {
     "manualUploadContainer"
   );
 
+  const btnVoltarInicio = document.querySelector(".js-voltar-inicio");
+
+  // Helper to Float Terminal
+  const floatTerminal = () => {
+    // FLOATING MODE: If terminal exists and job running, float it.
+    if (terminalInstance && terminalInstance.state !== "DONE") {
+      terminalInstance.setFloatMode(true);
+
+      // Ensure Wrapper
+      let wrapper = document.getElementById("floating-term-wrapper");
+      if (!wrapper) {
+        wrapper = document.createElement("div");
+        wrapper.id = "floating-term-wrapper";
+        wrapper.style.position = "fixed";
+        wrapper.style.zIndex = "99999";
+        document.body.appendChild(wrapper);
+      }
+
+      // Move container to wrapper (Reparenting)
+      wrapper.appendChild(terminalInstance.container);
+      wrapper.style.display = "block";
+    }
+  };
+
   // --- Toggles de Interface ---
   if (btnShowUpload) {
     btnShowUpload.addEventListener("click", () => {
@@ -41,27 +65,17 @@ export function setupSearchLogic() {
       manualUploadContainer.style.display = "flex";
       manualUploadContainer.classList.add("fade-in-centralized");
 
-      // FLOATING MODE: If terminal exists and job running, float it.
-      if (terminalInstance && terminalInstance.state !== "DONE") {
-        terminalInstance.setFloatMode(true);
-        // O terminal já está dentro de searchResults, que está dentro de searchContainer.
-        // Se searchContainer está hidden, o terminal também fica.
-        // Precisamos mover o terminal para o body temporariamente ou usar fixed que ignora pais hidden (não funciona se pai for display:none).
-        // SOLUÇÃO: Mover para wrapper flutuante no body.
+      floatTerminal();
+    });
+  }
 
-        if (!document.getElementById("floating-term-wrapper")) {
-          const wrapper = document.createElement("div");
-          wrapper.id = "floating-term-wrapper";
-          wrapper.style.position = "fixed"; // Fallback
-          wrapper.style.zIndex = "99999";
-          document.body.appendChild(wrapper);
-        }
-        document
-          .getElementById("floating-term-wrapper")
-          .appendChild(terminalInstance.container);
-        document.getElementById("floating-term-wrapper").style.display =
-          "block";
-      }
+  // Bind to Global Back Button (js-voltar-inicio)
+  if (btnVoltarInicio) {
+    btnVoltarInicio.addEventListener("click", () => {
+      // If we are navigating away from search, trigger float
+      // But what does this button do? It usually goes back to Home.
+      // If so, we probably want to float the terminal if search is active.
+      floatTerminal();
     });
   }
 
@@ -81,7 +95,10 @@ export function setupSearchLogic() {
         const originalParent =
           document.getElementById("deep-search-terminal-container") ||
           searchResults;
-        originalParent.appendChild(terminalInstance.container);
+        // Ensure we don't duplicate
+        if (!originalParent.contains(terminalInstance.container)) {
+          originalParent.appendChild(terminalInstance.container);
+        }
       }
     });
   }
@@ -181,7 +198,7 @@ export function setupSearchLogic() {
       const consoleContainer = document.createElement("div");
       consoleContainer.id = "deep-search-terminal";
       searchResults.appendChild(consoleContainer);
-      terminal = new TerminalUI("deep-search-terminal");
+      terminal = new TerminalUI(consoleContainer);
       terminalInstance = terminal; // Save Global Ref
       terminal.onExpandRequest = handleExpandRequest; // Link expand logic
 
@@ -192,7 +209,8 @@ export function setupSearchLogic() {
       terminal.onRetry = () => showRetryConfirmationModal(log, terminal);
     } else {
       // Re-attach to existing terminal
-      terminal = new TerminalUI("deep-search-terminal");
+      const existingEl = document.getElementById("deep-search-terminal");
+      terminal = new TerminalUI(existingEl || "deep-search-terminal");
       terminalInstance = terminal; // Save Global Ref
       terminal.onExpandRequest = handleExpandRequest;
 

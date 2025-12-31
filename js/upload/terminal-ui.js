@@ -1,9 +1,27 @@
 export class TerminalUI {
-  constructor(containerId, options = {}) {
-    this.container = document.getElementById(containerId);
+  constructor(containerIdOrElement, options = {}) {
+    // State Enums (Define FIRST to prevent partial initialization errors)
+    this.MODES = {
+      BOOT: "BOOT", // 0-10%
+      EXEC: "EXEC", // 10-90%
+      VERIFY: "VERIFY", // 90-99%
+      DONE: "DONE", // 100%
+    };
+
+    // Resolve Container
+    if (typeof containerIdOrElement === "string") {
+      this.container = document.getElementById(containerIdOrElement);
+    } else {
+      this.container = containerIdOrElement;
+    }
+
     if (!this.container) {
-      console.error(`Terminal container ${containerId} not found`);
-      return;
+      console.error(`Terminal container not found`, containerIdOrElement);
+      // We must still initialize state to prevent crashes
+      this.state = this.MODES.BOOT;
+      this.tasks = [];
+      this.logs = [];
+      return; // Return but at least 'this.MODES' exists
     }
 
     // Options
@@ -23,14 +41,6 @@ export class TerminalUI {
       },
     };
     this.notifyEnabled = false;
-
-    // State Enums
-    this.MODES = {
-      BOOT: "BOOT", // 0-10%
-      EXEC: "EXEC", // 10-90%
-      VERIFY: "VERIFY", // 90-99%
-      DONE: "DONE", // 100%
-    };
 
     // Core State
     this.state = this.MODES.BOOT;
