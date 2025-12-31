@@ -349,6 +349,11 @@ export function setupSearchLogic() {
           );
           const existSlug = result.exact_match.slug || result.canonical_slug;
           currentSlug = existSlug;
+
+          // Persist Session for "Exact Match" immediately
+          SearchPersistence.startSession(existSlug);
+          SearchPersistence.finishSession(true);
+
           // Load immediately
           const hfBase =
             "https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main";
@@ -772,6 +777,11 @@ export function setupSearchLogic() {
           const r = await fetch(`${manifestUrl}?t=${bust}`);
           if (r.ok) {
             manifest = await r.json();
+
+            // Save valid manifest to persistence
+            if (manifest) {
+              SearchPersistence.saveManifest(manifest);
+            }
             break;
           }
         } catch (e) {

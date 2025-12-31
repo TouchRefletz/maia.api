@@ -1,12 +1,15 @@
 export class SearchPersistence {
+  // INTERNAL IN-MEMORY STORAGE (Lost on Page Reload)
+  // User explicitly requested: "se eu recarregar a página eu QUERO perder o histórico"
+  static _memoryStorage = {};
   static KEY_PREFIX = "maia_search_";
 
   static startSession(slug) {
     if (!slug) return;
     try {
-      sessionStorage.setItem(this.KEY_PREFIX + "active_slug", slug);
-      sessionStorage.setItem(this.KEY_PREFIX + "status", "running");
-      sessionStorage.setItem(this.KEY_PREFIX + "start_time", Date.now());
+      this._memoryStorage[this.KEY_PREFIX + "active_slug"] = slug;
+      this._memoryStorage[this.KEY_PREFIX + "status"] = "running";
+      this._memoryStorage[this.KEY_PREFIX + "start_time"] = Date.now();
     } catch (e) {
       console.warn("SearchPersistence: Error starting session", e);
     }
@@ -14,18 +17,15 @@ export class SearchPersistence {
 
   static saveTasks(tasks) {
     try {
-      sessionStorage.setItem(this.KEY_PREFIX + "tasks", JSON.stringify(tasks));
-    } catch (e) {
-      // ignore quota exceeded etc
-    }
+      this._memoryStorage[this.KEY_PREFIX + "tasks"] = JSON.stringify(tasks);
+    } catch (e) {}
   }
 
   static finishSession(isSuccess = true) {
     try {
-      sessionStorage.setItem(
-        this.KEY_PREFIX + "status",
-        isSuccess ? "completed" : "failed"
-      );
+      this._memoryStorage[this.KEY_PREFIX + "status"] = isSuccess
+        ? "completed"
+        : "failed";
     } catch (e) {
       console.warn("SearchPersistence: Error finishing session", e);
     }
@@ -33,22 +33,16 @@ export class SearchPersistence {
 
   static saveManifest(manifest) {
     try {
-      // Limit check: specific for huge datasets, but sessionStorage usually handles 5MB.
-      sessionStorage.setItem(
-        this.KEY_PREFIX + "manifest",
-        JSON.stringify(manifest)
-      );
+      this._memoryStorage[this.KEY_PREFIX + "manifest"] =
+        JSON.stringify(manifest);
     } catch (e) {
-      console.warn(
-        "SearchPersistence: Error saving manifest (quota exceeded?)",
-        e
-      );
+      console.warn("SearchPersistence: Error saving manifest", e);
     }
   }
 
   static getManifest() {
     try {
-      const data = sessionStorage.getItem(this.KEY_PREFIX + "manifest");
+      const data = this._memoryStorage[this.KEY_PREFIX + "manifest"];
       return data ? JSON.parse(data) : null;
     } catch (e) {
       return null;
@@ -58,10 +52,10 @@ export class SearchPersistence {
   static getSession() {
     try {
       return {
-        slug: sessionStorage.getItem(this.KEY_PREFIX + "active_slug"),
-        status: sessionStorage.getItem(this.KEY_PREFIX + "status"),
+        slug: this._memoryStorage[this.KEY_PREFIX + "active_slug"],
+        status: this._memoryStorage[this.KEY_PREFIX + "status"],
         tasks: JSON.parse(
-          sessionStorage.getItem(this.KEY_PREFIX + "tasks") || "[]"
+          this._memoryStorage[this.KEY_PREFIX + "tasks"] || "[]"
         ),
       };
     } catch (e) {
@@ -70,10 +64,6 @@ export class SearchPersistence {
   }
 
   static clear() {
-    sessionStorage.removeItem(this.KEY_PREFIX + "active_slug");
-    sessionStorage.removeItem(this.KEY_PREFIX + "status");
-    sessionStorage.removeItem(this.KEY_PREFIX + "tasks");
-    sessionStorage.removeItem(this.KEY_PREFIX + "start_time");
-    sessionStorage.removeItem(this.KEY_PREFIX + "manifest");
+    this._memoryStorage = {};
   }
 }
