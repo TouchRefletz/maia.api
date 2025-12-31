@@ -132,8 +132,8 @@ jobs:
             local fname="$2"
             
             if [ -n "$url" ] && [ "$url" != "null" ]; then
-                # STRICT CHECK: If file exists, FAIL.
-                if [ -f "output/$SLUG/files/$fname" ]; then
+                # STRICT CHECK: If file exists AND mode is NOT overwrite, FAIL.
+                if [ -f "output/$SLUG/files/$fname" ] && [ "$MODE" != "overwrite" ]; then
                     echo "::error::CONFLICT: File 'output/$SLUG/files/$fname' already exists. Cannot overwrite in strict mode."
                     exit 1
                 fi

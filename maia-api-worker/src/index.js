@@ -948,7 +948,12 @@ async function handleProxyPdf(request, env) {
 		let headers = {
 			'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
 		};
-		if (env.HF_TOKEN) headers['Authorization'] = `Bearer ${env.HF_TOKEN}`;
+
+		// Only add HF_TOKEN if targeting huggingface.co and NOT a redirected storage URL
+		// This prevents leaking tokens to S3/CDN if we followed a redirect previously (though logic here is fresh per request)
+		if (currentUrl.includes('huggingface.co') && env.HF_TOKEN) {
+			headers['Authorization'] = `Bearer ${env.HF_TOKEN}`;
+		}
 
 		// Manually follow Redirects (limit 5)
 		for (let i = 0; i < 5; i++) {
@@ -978,10 +983,15 @@ async function handleProxyPdf(request, env) {
 			return new Response('Proxy Error: No response', { status: 500, headers: corsHeaders });
 		}
 
-		const contentType = response.headers.get('content-type');
-		if (contentType && contentType.includes('text/html')) {
-			return new Response(`Error: Upstream returned HTML (Status ${response.status}). Check HF_TOKEN or URL validity.`, {
-				status: 401,
+		const contentType = response.headers.get('content-type') || '';
+
+		// Check for obvious error types disguised as 200 OK or legitimate errors
+		if (contentType.includes('text/html') || contentType.includes('application/xml') || contentType.includes('text/xml')) {
+			// Read body to see error
+			const textBody = await response.text();
+			console.warn(`[Proxy] Upstream returned non-PDF (${contentType}):`, textBody.substring(0, 500));
+			return new Response(`Error: Upstream returned ${contentType} (Status ${response.status}). Body: ${textBody.substring(0, 200)}`, {
+				status: 502, // Bad Gateway equivalent
 				headers: corsHeaders,
 			});
 		}
@@ -990,13 +1000,13 @@ async function handleProxyPdf(request, env) {
 			return new Response(`Failed to fetch PDF: ${response.status}`, { status: response.status, headers: corsHeaders });
 		}
 
-		const pdfBlob = await response.blob();
-
-		return new Response(pdfBlob, {
+		// Stream the response body directly
+		return new Response(response.body, {
 			headers: {
 				...corsHeaders,
-				'Content-Type': 'application/pdf',
+				'Content-Type': 'application/pdf', // Force PDF if we are reasonably sure, or use response contentType
 				'Cache-Control': 'public, max-age=3600',
+				'Content-Disposition': response.headers.get('Content-Disposition') || 'inline; filename="document.pdf"',
 			},
 		});
 	} catch (e) {
