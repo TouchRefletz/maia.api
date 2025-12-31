@@ -339,6 +339,11 @@ export function setupSearchLogic() {
 
     document.getElementById("btn-confirm-retry").onclick = () => {
       modal.remove();
+
+      // Hide/Remove existing results to avoid confusion
+      const existingResults = document.querySelector(".results-container");
+      if (existingResults) existingResults.remove();
+
       if (terminal)
         terminal.queueLog(
           "[SISTEMA] Reiniciando busca (Cache Ignorado)...",
