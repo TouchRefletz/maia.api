@@ -651,46 +651,46 @@ jobs:
 
             # --- MANIFEST MERGE LOGIC START ---
             # Create merge script to avoid indentation issues
-            cat << 'EOF' > merge_manifests.py
-            import json
-            import os
-            import sys
+          cat << 'EOF' > merge_manifests.py
+          import json
+          import os
+          import sys
 
-            slug = os.environ.get('SLUG')
-            local_manifest_path = f'output/{slug}/manifest.json'
-            remote_manifest_path = f'hf_repo/output/{slug}/manifest.json'
+          slug = os.environ.get('SLUG')
+          local_manifest_path = f'output/{slug}/manifest.json'
+          remote_manifest_path = f'hf_repo/output/{slug}/manifest.json'
 
-            if os.path.exists(local_manifest_path) and os.path.exists(remote_manifest_path):
-                print(f'[Merge] Found both local and remote manifests for {slug}. Merging...')
-                try:
-                    with open(local_manifest_path, 'r', encoding='utf-8') as f:
-                        local_data = json.load(f)
-                    with open(remote_manifest_path, 'r', encoding='utf-8') as f:
-                        remote_data = json.load(f)
+          if os.path.exists(local_manifest_path) and os.path.exists(remote_manifest_path):
+              print(f'[Merge] Found both local and remote manifests for {slug}. Merging...')
+              try:
+                  with open(local_manifest_path, 'r', encoding='utf-8') as f:
+                      local_data = json.load(f)
+                  with open(remote_manifest_path, 'r', encoding='utf-8') as f:
+                      remote_data = json.load(f)
 
-                    # Normalize to lists
-                    local_items = local_data if isinstance(local_data, list) else local_data.get('results', [])
-                    remote_items = remote_data if isinstance(remote_data, list) else remote_data.get('results', [])
+                  # Normalize to lists
+                  local_items = local_data if isinstance(local_data, list) else local_data.get('results', [])
+                  remote_items = remote_data if isinstance(remote_data, list) else remote_data.get('results', [])
 
-                    merged_items = remote_items[:] # Start with old
-                    
-                    # Create a map of existing filenames to avoid naive duplicates
-                    for item in local_items:
-                        fname = item.get('filename') or item.get('path', '').split('/')[-1]
-                        
-                        # Remove existing entry with same filename then append new
-                        merged_items = [i for i in merged_items if (i.get('filename') or i.get('path', '').split('/')[-1]) != fname]
-                        merged_items.append(item)
+                  merged_items = remote_items[:] # Start with old
+                  
+                  # Create a map of existing filenames to avoid naive duplicates
+                  for item in local_items:
+                      fname = item.get('filename') or item.get('path', '').split('/')[-1]
+                      
+                      # Remove existing entry with same filename then append new
+                      merged_items = [i for i in merged_items if (i.get('filename') or i.get('path', '').split('/')[-1]) != fname]
+                      merged_items.append(item)
 
-                    # Save back to LOCAL manifest (which will be cp'd over)
-                    with open(local_manifest_path, 'w', encoding='utf-8') as f:
-                        json.dump(merged_items, f, indent=2, ensure_ascii=False)
-                    
-                    print(f'[Merge] Success. Total items: {len(merged_items)}')
-                except Exception as e:
-                    print(f'[Merge] Error: {e}')
-            else:
-                 print('[Merge] Manifests not found in both locations. Skipping merge.')
+                  # Save back to LOCAL manifest (which will be cp'd over)
+                  with open(local_manifest_path, 'w', encoding='utf-8') as f:
+                      json.dump(merged_items, f, indent=2, ensure_ascii=False)
+                  
+                  print(f'[Merge] Success. Total items: {len(merged_items)}')
+              except Exception as e:
+                  print(f'[Merge] Error: {e}')
+          else:
+               print('[Merge] Manifests not found in both locations. Skipping merge.')
           EOF
             
             # Run the merge script
