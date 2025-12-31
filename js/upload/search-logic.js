@@ -1115,7 +1115,7 @@ export function setupSearchLogic() {
       card.style.boxShadow = "var(--shadow-sm)";
     };
 
-    // Thumbnail
+    // Thumbnail Logic (Priority: Backend > Frontend)
     const thumbContainer = document.createElement("div");
     Object.assign(thumbContainer.style, {
       height: "220px",
@@ -1126,13 +1126,46 @@ export function setupSearchLogic() {
       borderBottom: "1px solid var(--color-border)",
     });
 
-    const canvas = document.createElement("canvas");
-    canvas.style.width = "100%";
-    canvas.style.objectFit = "contain";
-    thumbContainer.appendChild(canvas);
+    if (item.thumbnail && !item.thumbnail.includes("undefined")) {
+      // Backend Generation (Fast)
+      const img = document.createElement("img");
+      const thumbUrl = `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${currentSlug}/${item.thumbnail}`;
 
-    // Load Thumbnail
-    registerPdfThumbnail(finalUrl, canvas);
+      Object.assign(img.style, {
+        width: "100%",
+        height: "100%",
+        objectFit: "cover",
+        objectPosition: "top",
+        display: "block",
+      });
+      img.src = thumbUrl;
+      img.loading = "lazy";
+
+      // Fallback if backend image fails (404)
+      img.onerror = () => {
+        // console.warn("Backend thumbnail failed, falling back to canvas:", thumbUrl);
+        img.remove();
+        // Create Canvas Fallback
+        const canvas = document.createElement("canvas");
+        canvas.style.width = "100%";
+        canvas.style.height = "100%";
+        canvas.style.objectFit = "cover";
+        canvas.style.objectPosition = "top";
+        thumbContainer.appendChild(canvas);
+        registerPdfThumbnail(finalUrl, canvas);
+      };
+
+      thumbContainer.appendChild(img);
+    } else {
+      // Frontend Generation (Fallback/Legacy)
+      const canvas = document.createElement("canvas");
+      canvas.style.width = "100%";
+      canvas.style.height = "100%";
+      canvas.style.objectFit = "cover";
+      canvas.style.objectPosition = "top";
+      thumbContainer.appendChild(canvas);
+      registerPdfThumbnail(finalUrl, canvas);
+    }
 
     // Badge
     const typeLabel = (item.tipo || "Arquivo").toUpperCase();
