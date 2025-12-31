@@ -1201,7 +1201,9 @@ async function handleManualUpload(request, env) {
 		const fileProva = formData.get('fileProva');
 		const fileGabarito = formData.get('fileGabarito');
 
-		if (!fileProva || !title) {
+		const confirmOverride = formData.get('confirm_override') === 'true';
+
+		if ((!fileProva && !confirmOverride) || !title) {
 			return new Response(JSON.stringify({ error: 'Prova and Title are required' }), {
 				status: 400,
 				headers: corsHeaders,
@@ -1212,6 +1214,7 @@ async function handleManualUpload(request, env) {
 
 		// 1. UPLOAD FILES FIRST (Parallel)
 		const uploadToTmp = async (file) => {
+			if (!file) return null;
 			const fd = new FormData();
 			fd.append('file', file);
 			try {
@@ -1362,7 +1365,7 @@ async function handleManualUpload(request, env) {
 		const pdfUrl = uploadResults[0];
 		const gabUrl = fileGabarito ? uploadResults[1] : null;
 
-		if (!pdfUrl) {
+		if (!pdfUrl && !confirmOverride) {
 			return new Response(JSON.stringify({ error: 'Failed to upload PDF to temporary storage' }), {
 				status: 500,
 				headers: corsHeaders,
@@ -1383,7 +1386,7 @@ async function handleManualUpload(request, env) {
 		}
 
 		// 3. DUPLICATE CHECK (Unless Override)
-		const confirmOverride = formData.get('confirm_override') === 'true';
+		// 3. DUPLICATE CHECK (Unless Override)
 
 		if (!confirmOverride) {
 			try {
