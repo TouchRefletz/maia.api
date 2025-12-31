@@ -112,24 +112,81 @@ export class TerminalUI {
           70% { box-shadow: 0 0 0 10px rgba(255, 193, 7, 0); }
           100% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0); }
         }
-        /* Floating Mode CSS */
+        /* Floating Mode CSS - LEFT SIDE */
         .term-floating {
            position: fixed !important;
            bottom: 20px !important;
-           right: 20px !important;
-           width: 380px !important;
+           left: 20px !important; /* Left side */
+           right: auto !important;
+           width: 90vw !important; /* Grandão */
+           max-width: 600px !important;
            height: auto !important;
-           max-height: 180px !important;
+           max-height: 80vh !important;
            z-index: 99999 !important;
            border-radius: 12px !important;
            box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
            background: var(--color-surface, #1e1e2e) !important;
            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
            overflow: hidden !important;
+           display: flex;
+           flex-direction: column;
+        }
+
+        /* MINIMIZED STATE (Button with Ring) */
+        .term-floating.term-minimized {
+            width: 60px !important;
+            height: 60px !important;
+            border-radius: 50% !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+            cursor: pointer !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            background: var(--color-surface, #1e1e2e) !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important;
+        }
+
+        /* Hide internal elements when minimized */
+        .term-floating.term-minimized > *:not(.term-minimized-btn) {
+            display: none !important;
+        }
+
+        /* The Toggle Button (only visible when minimized) */
+        .term-minimized-btn {
+            display: none;
+            width: 100%;
+            height: 100%;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .term-floating.term-minimized .term-minimized-btn {
+            display: flex;
+        }
+
+        /* Spinner Ring */
+        .term-ring-spinner {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 4px solid transparent;
+            border-top-color: var(--color-primary, #00d2ff);
+            animation: spin 1s linear infinite;
         }
         
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
         .term-floating .term-logs {
-            display: none !important;
+            /* In expanded floating mode, we show logs but maybe smaller? User said "aparece todo o terminal" */
+             display: block !important;
+             flex: 1; /* Fill space */
+             max-height: 300px;
+             overflow-y: auto;
         }
         
         .term-floating .term-header {
@@ -138,7 +195,7 @@ export class TerminalUI {
         }
         
         .term-floating:hover {
-            transform: translateY(-5px);
+            transform: translateY(-2px);
         }
 
         .term-floating .term-tasks {
@@ -146,22 +203,7 @@ export class TerminalUI {
             overflow: hidden;
         }
         
-        /* Add an "EXPAND" hint overlay on hover or always */
-        .term-floating::after {
-            content: '⤢ Clique para Expandir';
-            position: absolute;
-            top: 10px;
-            right: 50%;
-            transform: translateX(50%);
-            font-size: 0.7rem;
-            color: rgba(255,255,255,0.5);
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.2s;
-        }
-        .term-floating:hover::after {
-            opacity: 1;
-        }
+
 
         .term-btn-notify {
           background: transparent;
@@ -232,6 +274,12 @@ export class TerminalUI {
         </div>
       </div>
       <div class="term-logs ${simpleClass}" id="term-logs-stream"></div>
+      
+      <!-- Minimized Toggle Button -->
+      <div class="term-minimized-btn">
+          <div class="term-ring-spinner"></div>
+          <span style="font-size: 1.2rem; z-index: 2;">💻</span>
+      </div>
     `;
 
     this.el.fill = this.container.querySelector(".term-bar-fill");
@@ -269,10 +317,29 @@ export class TerminalUI {
       });
     }
 
-    // Float Mode Expansion Click
-    this.container.addEventListener("click", () => {
+    // Float Mode Expansion Click (Toggle Minimized)
+    this.container.addEventListener("click", (e) => {
       if (this.container.classList.contains("term-floating")) {
-        if (this.onExpandRequest) this.onExpandRequest();
+        // If click target is inside header or minimized button, toggle
+        // If it's already expanded and we click logs, don't minimize.
+        // Logic: If minimized, expand. If expanded, clicking header minimizes.
+
+        const isMinimized = this.container.classList.contains("term-minimized");
+        if (isMinimized) {
+          this.container.classList.remove("term-minimized");
+        } else {
+          // Only minimize if clicking header or specific close area?
+          // User said "clicando nele todo o terminal aparece".
+          // He didn't say how to close. Let's assume clicking header toggles.
+          if (e.target.closest(".term-header")) {
+            // this.container.classList.add("term-minimized");
+            // Actually usually users want to see it. Let's add a minimize button in header?
+            // For now, let's just let the external logic handle "Back to Search" for Docking.
+            // But for pure floating toggle, we might want a minimize button.
+            // Let's make the container toggle on header click.
+            this.container.classList.add("term-minimized");
+          }
+        }
       }
     });
   }
@@ -280,8 +347,11 @@ export class TerminalUI {
   setFloatMode(isFloating) {
     if (isFloating) {
       this.container.classList.add("term-floating");
+      // Default to minimized when floating starts
+      this.container.classList.add("term-minimized");
     } else {
       this.container.classList.remove("term-floating");
+      this.container.classList.remove("term-minimized");
     }
   }
 

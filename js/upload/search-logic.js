@@ -6,7 +6,6 @@ const PROD_WORKER_URL =
 import { AsyncQueue } from "../utils/queue.js";
 import { gerarVisualizadorPDF } from "../viewer/events.js";
 import { SearchPersistence } from "./search-persistence.js";
-import { SearchToaster } from "./search-toaster.js";
 import { TerminalUI } from "./terminal-ui.js";
 
 // --- STATE ---
@@ -330,7 +329,7 @@ export function setupSearchLogic() {
       }
 
       log(`Conectando ao canal: ${slug}...`, "info");
-      SearchToaster.updateState("loading", "Conectando ao servidor...");
+      // SearchToaster.updateState("loading", "Conectando ao servidor...");
 
       let PusherClass = window.Pusher;
       if (!PusherClass) {
@@ -353,8 +352,9 @@ export function setupSearchLogic() {
 
           // Update Toaster with latest task
           const running = data.find((t) => t.status === "in_progress");
-          if (running)
-            SearchToaster.updateState(undefined, undefined, running.title);
+          if (running) {
+            // SearchToaster.updateState(undefined, undefined, running.title); // DISABLED TOASTER
+          }
         }
       });
 
@@ -367,7 +367,7 @@ export function setupSearchLogic() {
 
         if (text.includes("COMPLETED")) {
           let isSuccess = true; // Scope var
-          SearchToaster.updateState("success", "Busca finalizada!");
+          // SearchToaster.updateState("success", "Busca finalizada!");
           log(
             "Busca base finalizada. Iniciando verificação de integridade...",
             "success"
@@ -394,7 +394,7 @@ export function setupSearchLogic() {
         }
       });
     } catch (e) {
-      SearchToaster.updateState("error", "Erro na busca");
+      // SearchToaster.updateState("error", "Erro na busca");
       log(`Erro Fatal: ${e.message}`, "error");
     }
   };
@@ -1770,22 +1770,24 @@ export function setupSearchLogic() {
   }
 }
 
-
 /* --- EXPORTED HELPER FOR GLOBAL NAVIGATION --- */
 export function checkAndRestoreFloatingTerminal() {
-  if (terminalInstance && terminalInstance.state !== 'DONE') {
+  if (terminalInstance && terminalInstance.state !== "DONE") {
     terminalInstance.setFloatMode(true);
-    let wrapper = document.getElementById('floating-term-wrapper');
+    let wrapper = document.getElementById("floating-term-wrapper");
     if (!wrapper) {
-      wrapper = document.createElement('div');
-      wrapper.id = 'floating-term-wrapper';
-      wrapper.style.position = 'fixed';
-      wrapper.style.zIndex = '99999';
+      wrapper = document.createElement("div");
+      wrapper.id = "floating-term-wrapper";
+      wrapper.style.position = "fixed";
+      wrapper.style.zIndex = "99999";
       document.body.appendChild(wrapper);
     }
-    if (terminalInstance.container && !wrapper.contains(terminalInstance.container)) {
-        wrapper.appendChild(terminalInstance.container);
+    if (
+      terminalInstance.container &&
+      !wrapper.contains(terminalInstance.container)
+    ) {
+      wrapper.appendChild(terminalInstance.container);
     }
-    wrapper.style.display = 'block';
+    wrapper.style.display = "block";
   }
 }
