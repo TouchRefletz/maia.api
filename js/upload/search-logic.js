@@ -49,8 +49,91 @@ export function setupSearchLogic() {
       searchContainer.classList.remove("hidden");
       searchContainer.style.display = "flex";
       searchContainer.classList.add("fade-in-centralized");
+      SearchToaster.hide(); // Hide Toaster when returning
     });
   }
+
+  // --- NEW: Toaster & Persistence Init ---
+  SearchPersistence._init();
+
+  // Reopen Logic (Called by Toaster or Page Load)
+  const handleReopen = () => {
+    // Ensure UI is visible
+    manualUploadContainer.classList.add("hidden");
+    manualUploadContainer.style.display = "none";
+    searchContainer.classList.remove("hidden");
+    searchContainer.style.display = "flex";
+
+    // Restore Session
+    restoreSession();
+  };
+
+  const handleCancel = () => {
+    // Trigger cancel button if exists
+    const btnCancel = document.getElementById("term-btn-cancel");
+    if (btnCancel) btnCancel.click();
+    SearchPersistence.finishSession(false);
+  };
+
+  SearchToaster.init({
+    onReopen: handleReopen,
+    onCancel: handleCancel,
+  });
+
+  // Watch for Visibility Changes (Simulated by UI toggles)
+  // We hook into the buttons above, but also check periodically or via mutation observer if needed.
+  // For now, the buttons above control visibility effectively.
+
+  // Page Unload Warning
+  window.addEventListener("beforeunload", (e) => {
+    if (SearchPersistence.isActive()) {
+      e.preventDefault();
+      e.returnValue =
+        "Existem tarefas em andamento. Se você sair, poderá perder o histórico da busca.";
+      return e.returnValue;
+    }
+  });
+
+  // Restore on Load logic
+  setTimeout(() => {
+    if (SearchPersistence.isActive()) {
+      console.log("[RESTORE] Found active session, restoring...");
+      handleReopen();
+    }
+  }, 500);
+
+  const restoreSession = () => {
+    const session = SearchPersistence.getSession();
+    if (!session || !session.isActive) return;
+
+    currentSlug = session.slug;
+
+    // Ensure Terminal Exists
+    let terminal = document.getElementById("deep-search-terminal");
+    if (!terminal) {
+      searchResults.innerHTML = "";
+      const consoleContainer = document.createElement("div");
+      consoleContainer.id = "deep-search-terminal";
+      searchResults.appendChild(consoleContainer);
+      // Re-instantiate UI wrapper
+      // But we need the instance... accessible?
+      // We'll create a new one, but we need to populate it.
+    }
+
+    // We need to re-attach logic. Ideally `doSearch` handles this, but here we just want to RECONNECT.
+    // So we call doSearch with a special flag or just re-run the connection logic?
+    // Better: Re-run doSearch but skip "trigger" and go straight to "connect".
+    // However, doSearch is local. Let's make a specialized "reconnect" function or
+    // modify doSearch to accept "recover" mode.
+
+    // For simplicity, we trigger doSearch with recover=true
+    // But we need to define doSearch first (it's below).
+    // So we will just call it inside the setTimeout above if needed,
+    // OR we move doSearch up.
+    // Actually, since this is inside setupSearchLogic, doSearch is defined below.
+    // We can call it freely.
+    doSearch(false, false, true, "recover");
+  };
 
   // --- Disclaimer Modal Logic ---
   const btnDisclaimerInfo = document.getElementById("btnDisclaimerInfo");
@@ -145,8 +228,41 @@ export function setupSearchLogic() {
       terminal.onRetry = () => showRetryConfirmationModal(log, terminal);
     }
 
+    // Recovery Mode
+    if (mode === "recover") {
+      if (!terminal) {
+        terminal = new TerminalUI("deep-search-terminal");
+        terminal.processLogLine("🔄 Recuperando sessão...", "warning");
+      }
+
+      // Replay Logs
+      const session = SearchPersistence.getSession();
+      if (session && session.logs) {
+        session.logs.forEach((l) => terminal.processLogLine(l.text, l.type));
+        if (session.tasks) terminal.updateTaskFromEvent(session.tasks);
+        if (session.progress)
+          terminal.currentVirtualProgress = session.progress;
+
+        // Sync Toaster
+        SearchToaster.updateState(session.progress, session.status);
+        SearchToaster.show(); // Show momentarily or valid logic?
+        // Actually, if we are recovering, we probably just opened the page.
+        // If the user is staring at the terminal, we hide the toaster.
+        SearchToaster.hide();
+      }
+    }
+
     // Internal Log helper
-    const log = (text, type = "info") => terminal?.processLogLine(text, type);
+    const log = (text, type = "info") => {
+      terminal?.processLogLine(text, type);
+      SearchToaster.updateState(terminal?.currentVirtualProgress, null, text);
+      SearchPersistence.saveLog(text, type);
+      if (terminal)
+        SearchPersistence.updateState(
+          terminal.currentVirtualProgress,
+          terminal.state
+        ); // Sync Status
+    };
 
     // Pusher Config
     const pusherKey = "6c9754ef715796096116";
@@ -154,21 +270,29 @@ export function setupSearchLogic() {
 
     try {
       // Step 1 & 2: Call Worker (Pre-flight OR Trigger)
-      const response = await fetch(`${PROD_WORKER_URL}/trigger-deep-search`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          query,
-          // slug: Manual slug gen removed!
-          force,
-          cleanup,
-          confirm,
-          mode,
-          apiKey: sessionStorage.getItem("GOOGLE_GENAI_API_KEY"),
-        }),
-      });
-
-      const result = await response.json();
+      // IF RECOVER: Skip trigger, just connect to currentSlug (which must be set)
+      let result = null;
+      if (mode === "recover") {
+        if (!currentSlug) {
+          log("Erro: Slug perdido na recuperação.", "error");
+          return;
+        }
+        result = { final_slug: currentSlug }; // Mock result for connection flow
+      } else {
+        const response = await fetch(`${PROD_WORKER_URL}/trigger-deep-search`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query,
+            force,
+            cleanup,
+            confirm,
+            mode,
+            apiKey: sessionStorage.getItem("GOOGLE_GENAI_API_KEY"),
+          }),
+        });
+        result = await response.json();
+      }
 
       // --- HANDLE PRE-FLIGHT ---
       if (result.preflight) {
@@ -213,6 +337,11 @@ export function setupSearchLogic() {
       const slug = result.final_slug;
       currentSlug = slug;
 
+      // Start Persistence Session
+      if (mode !== "recover") {
+        SearchPersistence.startSession(slug);
+      }
+
       log(`Conectando ao canal: ${slug}...`, "info");
 
       let PusherClass = window.Pusher;
@@ -232,6 +361,12 @@ export function setupSearchLogic() {
           // Filter out cleanup tasks if mode is update?
           // The backend might not send them if we skip the steps in GH Action.
           terminal.updateTaskFromEvent(data);
+          SearchPersistence.saveTasks(data);
+
+          // Update Toaster with latest task
+          const running = data.find((t) => t.status === "in_progress");
+          if (running)
+            SearchToaster.updateState(undefined, undefined, running.title);
         }
       });
 
@@ -249,6 +384,7 @@ export function setupSearchLogic() {
             "success"
           );
           activePusher.unsubscribe(slug);
+          SearchPersistence.finishSession(true); // Mark Done
 
           const finalSlug = data.new_slug || slug;
           currentSlug = finalSlug;
