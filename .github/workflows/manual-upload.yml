@@ -250,17 +250,21 @@ jobs:
           items_map = {item.get('filename'): item for item in items if item.get('filename')}
 
           # 3. Prepare Payloads (Using FINAL filenames)
+          try:
+              year_int = int(year)
+          except:
+              year_int = year
+
           if has_pdf and pdf_fname:
                items_map[pdf_fname] = {
                   "nome": title,
                   "tipo": "Prova",
-                  "ano": year,
+                  "ano": year_int,
                   "instituicao": inst,
                   "fase": phase,
                   "link_origem": "manual-upload",
                   "status": "downloaded",
                   "filename": pdf_fname,
-                  "path": f"output/{slug}/files/{pdf_fname}",
                   "visual_hash": v_hash
               }
 
@@ -268,13 +272,12 @@ jobs:
                items_map[gab_fname] = {
                   "nome": f"{title} (Gabarito)",
                   "tipo": "Gabarito",
-                  "ano": year,
+                  "ano": year_int,
                   "instituicao": inst,
                   "fase": phase,
                   "link_origem": "manual-upload",
                   "status": "downloaded",
                   "filename": gab_fname,
-                  "path": f"output/{slug}/files/{gab_fname}",
                   "visual_hash": v_hash_gab
               }
 
