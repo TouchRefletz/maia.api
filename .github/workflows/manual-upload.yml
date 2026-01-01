@@ -137,10 +137,10 @@ jobs:
             local fname="$2"
             
             if [ -n "$url" ] && [ "$url" != "null" ]; then
-                # STRICT CHECK: If file exists AND mode is NOT overwrite, FAIL.
-                if [ -f "output/$SLUG/files/$fname" ] && [ "$MODE" != "overwrite" ]; then
-                    echo "::error::CONFLICT: File 'output/$SLUG/files/$fname' already exists. Cannot overwrite in strict mode."
-                    exit 1
+                # SAFE MERGE: If file exists, SKIP IT to preserve cloud version.
+                if [ -f "output/$SLUG/files/$fname" ]; then
+                     echo "::warning::File 'output/$SLUG/files/$fname' already exists. SKIPPING download to preserve cloud version."
+                     return 0
                 fi
                 
                 echo "Downloading $fname from $url..."
@@ -164,7 +164,7 @@ jobs:
                     exit 1
                 fi
             else
-                echo "Skipping $fname (No URL provided, preserving existing if any)."
+                echo "Skipping $fname (No URL provided)."
             fi
           }
 
@@ -213,19 +213,27 @@ jobs:
           manifest_path = "manifest.json"
           items = []
 
-          # Load existing if available
+          # 1. Load Existing (Fail Safe)
           if os.path.exists(manifest_path):
               try:
                   with open(manifest_path, 'r', encoding='utf-8') as f:
-                      items = json.load(f)
-              except:
-                  items = []
-                  
-          # Prepare New Entries
-          new_items = []
+                      content = f.read().strip()
+                      if content:
+                          items = json.loads(content)
+                          if isinstance(items, dict) and 'results' in items:
+                              items = items['results']
+              except Exception as e:
+                  print(f"::error::Failed to read existing manifest: {e}")
+                  # CRITICAL: Do NOT overwrite if read fails. Exit to preserve data.
+                  sys.exit(1)
 
+          # 2. Build Dictionary for Upsert (Key = filename)
+          # This allows us to update existing entries and add new ones without duplicates
+          items_map = {item.get('filename'): item for item in items if item.get('filename')}
+
+          # 3. Prepare Payloads
           if has_pdf:
-               new_items.append({
+               items_map[pdf_fname] = {
                   "nome": title,
                   "tipo": "Prova",
                   "ano": year,
@@ -233,14 +241,13 @@ jobs:
                   "fase": phase,
                   "link_origem": "manual-upload",
                   "status": "downloaded",
-                  "status": "downloaded",
                   "filename": pdf_fname,
                   "path": f"output/{slug}/files/{pdf_fname}",
                   "visual_hash": v_hash
-              })
+              }
 
           if has_gab:
-               new_items.append({
+               items_map[gab_fname] = {
                   "nome": f"{title} (Gabarito)",
                   "tipo": "Gabarito",
                   "ano": year,
@@ -248,28 +255,19 @@ jobs:
                   "fase": phase,
                   "link_origem": "manual-upload",
                   "status": "downloaded",
-                  "status": "downloaded",
                   "filename": gab_fname,
                   "path": f"output/{slug}/files/{gab_fname}",
                   "visual_hash": v_hash_gab
-              })
+              }
 
-          # Merge: Append new items to list
-          # Optional: Check for duplicates in JSON to be safe? 
-          # For now, we trust the file check failed the job if physical conflict existed.
-          # But for metadata, we just append.
+          # 4. Reconstruct List (preserving potential old items that weren't touched)
+          final_items = list(items_map.values())
 
-          if not new_items and not os.path.exists(manifest_path):
-              # If we have nothing to add and no manifest exists, we probably shouldn't require one?
-              # But let's create empty to be safe.
-              pass
-
-          items.extend(new_items)
-
+          # 5. Write Back
           with open(manifest_path, "w", encoding="utf-8") as f:
-              json.dump(items, f, indent=2, ensure_ascii=False)
+              json.dump(final_items, f, indent=2, ensure_ascii=False)
               
-          print(f"Manifest updated. Total items: {len(items)}")
+          print(f"Manifest updated. Total items: {len(final_items)}")
           EOF
 
           python3 update_manifest.py
@@ -362,13 +360,20 @@ jobs:
         env:
           SLUG: ${{ github.event.client_payload.slug || inputs.slug }}
           TITLE: ${{ github.event.client_payload.title || inputs.title }}
+          PDF_FILENAME: ${{ github.event.client_payload.metadata.pdf_filename || 'prova.pdf' }}
+          GAB_FILENAME: ${{ github.event.client_payload.metadata.gabarito_filename || 'gabarito.pdf' }}
         run: |
           cd hf_repo/output/$SLUG
           echo "# $TITLE" > index.md
           echo "" >> index.md
-          echo "- [Prova](https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/$SLUG/files/prova.pdf)" >> index.md
-          if [ -f "files/gabarito.pdf" ]; then
-             echo "- [Gabarito](https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/$SLUG/files/gabarito.pdf)" >> index.md
+
+          # Fix: Use dynamic filenames
+          if [ -f "files/$PDF_FILENAME" ]; then
+              echo "- [Prova](https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/$SLUG/files/$PDF_FILENAME)" >> index.md
+          fi
+
+          if [ -f "files/$GAB_FILENAME" ]; then
+             echo "- [Gabarito](https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/$SLUG/files/$GAB_FILENAME)" >> index.md
           fi
 
       - name: Push to Hugging Face
