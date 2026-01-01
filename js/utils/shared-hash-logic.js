@@ -5,8 +5,8 @@
 
 export const CONFIG = {
   GRID_SIZE: 16,
-  SCALE_FACTOR: 0.1, // Performance optimization
-  TARGET_WIDTH: 128, // Reference, but we use fixed scale currently
+  SCALE_FACTOR: 1.0, // Increased from 0.1 to 1.0 to reduce aliasing differences between Node/Browser
+  TARGET_WIDTH: 128,
 };
 
 /**
@@ -26,6 +26,12 @@ export function computeDHash(sourceCanvas, width, height, createCanvasFn) {
   // Handle both {canvas, ctx} return or just canvas return
   const tempCanvas = tempObj.canvas || tempObj;
   const tempCtx = tempObj.context || tempCanvas.getContext("2d");
+
+  // Enforce consistent smoothing settings
+  tempCtx.imageSmoothingEnabled = true;
+  if (tempCtx.imageSmoothingQuality) {
+    tempCtx.imageSmoothingQuality = "high";
+  }
 
   // Draw and resize
   try {
