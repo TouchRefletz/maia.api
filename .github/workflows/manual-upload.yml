@@ -349,6 +349,10 @@ jobs:
                   updated_count = 0
                   for item in items:
                       fname = item.get('filename')
+                      # Skip if thumbnail already exists to preserve legacy/manual edits
+                      if 'thumbnail' in item:
+                          continue
+
                       if fname and fname.lower().endswith('.pdf'):
                           pdf_path = base_dir / "files" / fname
                           
@@ -361,7 +365,8 @@ jobs:
                                       thumb_path = thumbs_dir / thumb_name
                                       images[0].save(thumb_path, 'JPEG', quality=80)
                                       
-                                      item['thumbnail'] = f"output/{slug}/thumbnails/{thumb_name}"
+                                      # Use relative path (standard)
+                                      item['thumbnail'] = f"thumbnails/{thumb_name}"
                                       updated_count += 1
                                       print(f"[Thumb] Generated: {thumb_name}")
                               except Exception as e:
@@ -372,7 +377,7 @@ jobs:
                           json.dump(items, f, indent=2, ensure_ascii=False)
                       print(f"[Thumb] Success. Generated {updated_count} thumbnails.")
                   else:
-                      print("[Thumb] No thumbnails generated.")
+                      print("[Thumb] No new thumbnails needed.")
 
               except Exception as e:
                   print(f"[Thumb] Critical Error: {e}")
