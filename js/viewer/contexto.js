@@ -49,6 +49,9 @@ export function inicializarContextoViewer(args) {
   window.__pdfUrls.prova = getUrl(args.fileProva);
   window.__pdfUrls.gabarito = getUrl(args.fileGabarito);
 
+  // Persist raw gabarito file/url as requested
+  window.__fileGabarito = args.fileGabarito;
+
   // Retorna a URL inicial para quem chamou usar
   return window.__pdfUrls.prova;
 }

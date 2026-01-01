@@ -119,57 +119,75 @@ jobs:
           git config --global user.name "Maia Bot"
           git clone --depth 1 https://user:$HF_TOKEN@huggingface.co/datasets/toquereflexo/maia-deep-search hf_repo
 
-      - name: Download Files & Structure (Strict Merge)
+      - name: Download Files & Structure (Smart Rename)
+        id: download
         env:
           SLUG: ${{ github.event.client_payload.slug || inputs.slug }}
           PDF_URL: ${{ github.event.client_payload.pdf_url || inputs.pdf_url }}
           GAB_URL: ${{ github.event.client_payload.gabarito_url || inputs.gabarito_url }}
+          # Use provided filename or fallback, but allow renaming
           PDF_FILENAME: ${{ github.event.client_payload.metadata.pdf_filename || 'prova.pdf' }}
           GAB_FILENAME: ${{ github.event.client_payload.metadata.gabarito_filename || 'gabarito.pdf' }}
-          MODE: ${{ github.event.client_payload.mode || 'overwrite' }}
         run: |
           cd hf_repo
           mkdir -p "output/$SLUG/files"
 
-          # Function to check and download
-          download_strict() {
+          # Function to check, rename if needed, and download
+          # Exports variable: final_pdf_name, final_gab_name
+          download_smart() {
             local url="$1"
             local fname="$2"
+            local type="$3" # "pdf" or "gab"
+            
+            local final_name="$fname"
             
             if [ -n "$url" ] && [ "$url" != "null" ]; then
-                # SAFE MERGE: If file exists, SKIP IT to preserve cloud version.
-                if [ -f "output/$SLUG/files/$fname" ]; then
-                     echo "::warning::File 'output/$SLUG/files/$fname' already exists. SKIPPING download to preserve cloud version."
-                     return 0
-                fi
+                # SMART RENAMING LOOP
+                # If file exists, try file-1.pdf, file-2.pdf, etc.
+                local base="${fname%.*}"
+                local ext="${fname##*.}"
+                local counter=1
                 
-                echo "Downloading $fname from $url..."
-                # Use --fail to exit code 22 on 404/500 errors
-                if ! curl -sL --fail -o "output/$SLUG/files/$fname" "$url"; then
+                while [ -f "output/$SLUG/files/$final_name" ]; do
+                    # Collision detected!
+                    # Check if it's visually identical? (Optional optimization, but user asked to keep it if different)
+                    # For now, simplistic approach: Collision = Rename. 
+                    # We assume visual hash check happened BEFORE in frontend/worker if we wanted to avoid upload.
+                    
+                    counter=$((counter + 1))
+                    final_name="${base}-${counter}.${ext}"
+                done
+                
+                if [ "$fname" != "$final_name" ]; then
+                     echo "::notice::Collision resolved: Renaming '$fname' -> '$final_name'"
+                fi
+
+                echo "Downloading $final_name from $url..."
+                
+                if ! curl -sL --fail -o "output/$SLUG/files/$final_name" "$url"; then
                      echo "::error::Download failed (HTTP Error) for $url"
                      exit 1
                 fi
                 
-                # MIME TYPE CHECK
-                mime_type=$(file --mime-type -b "output/$SLUG/files/$fname")
-                echo "Detected MIME type: $mime_type"
-                
+                # MIME CHECK
+                mime_type=$(file --mime-type -b "output/$SLUG/files/$final_name")
                 if [[ "$mime_type" != "application/pdf" ]]; then
-                    echo "::error::Invalid file type downloaded! Expected application/pdf, got $mime_type. URL: $url"
-                    # Cat the file to logs if it's text (likely an error message)
-                    if [[ "$mime_type" == text/* ]]; then
-                        cat "output/$SLUG/files/$fname"
-                    fi
-                    rm "output/$SLUG/files/$fname"
+                    echo "::error::Invalid file type! Expected pdf, got $mime_type"
+                    rm "output/$SLUG/files/$final_name"
                     exit 1
                 fi
             else
-                echo "Skipping $fname (No URL provided)."
+                echo "Skipping $type (No URL provided)."
+                final_name="" 
             fi
+            
+            # Export to GitHub Output
+            echo "final_${type}_name=$final_name" >> $GITHUB_OUTPUT
+            echo "::notice::Final $type Name: $final_name"
           }
 
-          download_strict "$PDF_URL" "$PDF_FILENAME"
-          download_strict "$GAB_URL" "$GAB_FILENAME"
+          download_smart "$PDF_URL" "$PDF_FILENAME" "pdf"
+          download_smart "$GAB_URL" "$GAB_FILENAME" "gab"
 
           ls -R "output/$SLUG"
 
@@ -181,14 +199,15 @@ jobs:
           YEAR: ${{ github.event.client_payload.metadata.year || inputs.year }}
           INSTITUTION: ${{ github.event.client_payload.metadata.institution || inputs.institution }}
           PHASE: ${{ github.event.client_payload.metadata.phase || inputs.phase }}
-          PDF_FILENAME: ${{ github.event.client_payload.metadata.pdf_filename || 'prova.pdf' }}
-          GAB_FILENAME: ${{ github.event.client_payload.metadata.gabarito_filename || 'gabarito.pdf' }}
+          # CRITICAL: Use the FINAL RENAMED FILENAMES from the download step
+          PDF_FILENAME: ${{ steps.download.outputs.final_pdf_name }}
+          GAB_FILENAME: ${{ steps.download.outputs.final_gab_name }}
           VISUAL_HASH: ${{ github.event.client_payload.metadata.visual_hash }}
           VISUAL_HASH_GABARITO: ${{ github.event.client_payload.metadata.visual_hash_gabarito }}
 
-          # Only add entries for what we actually downloaded
-          HAS_PDF: ${{ github.event.client_payload.pdf_url != '' && github.event.client_payload.pdf_url != 'null' }}
-          HAS_GAB: ${{ github.event.client_payload.gabarito_url != '' && github.event.client_payload.gabarito_url != 'null' }}
+          # Only add entries for what we actually downloaded (if filename is not empty)
+          HAS_PDF: ${{ steps.download.outputs.final_pdf_name != '' }}
+          HAS_GAB: ${{ steps.download.outputs.final_gab_name != '' }}
         run: |
           cd hf_repo/output/$SLUG
 
@@ -224,15 +243,13 @@ jobs:
                               items = items['results']
               except Exception as e:
                   print(f"::error::Failed to read existing manifest: {e}")
-                  # CRITICAL: Do NOT overwrite if read fails. Exit to preserve data.
                   sys.exit(1)
 
           # 2. Build Dictionary for Upsert (Key = filename)
-          # This allows us to update existing entries and add new ones without duplicates
           items_map = {item.get('filename'): item for item in items if item.get('filename')}
 
-          # 3. Prepare Payloads
-          if has_pdf:
+          # 3. Prepare Payloads (Using FINAL filenames)
+          if has_pdf and pdf_fname:
                items_map[pdf_fname] = {
                   "nome": title,
                   "tipo": "Prova",
@@ -246,7 +263,7 @@ jobs:
                   "visual_hash": v_hash
               }
 
-          if has_gab:
+          if has_gab and gab_fname:
                items_map[gab_fname] = {
                   "nome": f"{title} (Gabarito)",
                   "tipo": "Gabarito",
@@ -260,7 +277,7 @@ jobs:
                   "visual_hash": v_hash_gab
               }
 
-          # 4. Reconstruct List (preserving potential old items that weren't touched)
+          # 4. Reconstruct List
           final_items = list(items_map.values())
 
           # 5. Write Back
@@ -360,19 +377,19 @@ jobs:
         env:
           SLUG: ${{ github.event.client_payload.slug || inputs.slug }}
           TITLE: ${{ github.event.client_payload.title || inputs.title }}
-          PDF_FILENAME: ${{ github.event.client_payload.metadata.pdf_filename || 'prova.pdf' }}
-          GAB_FILENAME: ${{ github.event.client_payload.metadata.gabarito_filename || 'gabarito.pdf' }}
+          PDF_FILENAME: ${{ steps.download.outputs.final_pdf_name }}
+          GAB_FILENAME: ${{ steps.download.outputs.final_gab_name }}
         run: |
           cd hf_repo/output/$SLUG
           echo "# $TITLE" > index.md
           echo "" >> index.md
 
-          # Fix: Use dynamic filenames
-          if [ -f "files/$PDF_FILENAME" ]; then
+          # Fix: Use dynamic FINAL filenames
+          if [ -n "$PDF_FILENAME" ] && [ -f "files/$PDF_FILENAME" ]; then
               echo "- [Prova](https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/$SLUG/files/$PDF_FILENAME)" >> index.md
           fi
 
-          if [ -f "files/$GAB_FILENAME" ]; then
+          if [ -n "$GAB_FILENAME" ] && [ -f "files/$GAB_FILENAME" ]; then
              echo "- [Gabarito](https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/$SLUG/files/$GAB_FILENAME)" >> index.md
           fi
 

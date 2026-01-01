@@ -197,6 +197,7 @@ export function realizarLimpezaCompleta() {
 
   // 4. Reset das Variáveis Globais (Estado)
   window.__pdfUrls = { prova: null, gabarito: null };
+  window.__fileGabarito = null;
   window.__viewerArgs = null;
   window.__modo = "prova";
   window.modo = "prova";
