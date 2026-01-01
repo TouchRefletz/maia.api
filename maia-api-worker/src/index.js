@@ -1510,6 +1510,7 @@ async function handleManualUpload(request, env) {
 					// Consolidate metadata to avoid 10 property limit (GitHub 422)
 					metadata: {
 						year: aiData.year,
+						institution: aiData.institution,
 						phase: aiData.phase,
 						summary: aiData.summary,
 						source_url_prova: sourceUrlProva,

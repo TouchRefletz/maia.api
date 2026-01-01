@@ -284,14 +284,18 @@ export function setupFormLogic(elements, initialData) {
 
       const formData = new FormData();
       formData.append("title", titleInput.value);
+
       if (srcProvaVal) formData.append("source_url_prova", srcProvaVal);
       if (srcGabVal) formData.append("source_url_gabarito", srcGabVal);
 
       // Pass the RENAMED file
       formData.append("fileProva", fileProva, finalNameProva);
+      // EXPLICIT CUSTOM NAME FIELD FOR WORKER PRIORITY
+      formData.append("pdf_custom_name", finalNameProva);
 
       if (fileGabarito && finalNameGab) {
         formData.append("fileGabarito", fileGabarito, finalNameGab);
+        formData.append("gabarito_custom_name", finalNameGab);
       }
 
       if (localHashProva) formData.append("visual_hash", localHashProva);

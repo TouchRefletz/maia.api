@@ -294,10 +294,11 @@ jobs:
         env:
           SLUG: ${{ github.event.client_payload.slug || inputs.slug }}
         run: |
+          set -o pipefail
           (
             echo "Installing dependencies for hashing..."
             sudo apt-get update && sudo apt-get install -y build-essential libcairo2-dev libpango1.0-dev
-            npm install pdfjs-dist@3.11.174 canvas@2.11.2
+            npm install pdfjs-dist@3.11.174 @napi-rs/canvas@0.1.44
             
             echo "Computing visual hashes..."
             # Check if directory exists first
