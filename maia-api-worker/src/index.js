@@ -1486,18 +1486,19 @@ async function handleManualUpload(request, env) {
 		const githubOwner = env.GITHUB_OWNER || 'TouchRefletz';
 		const githubRepo = env.GITHUB_REPO || 'maia.api';
 
-		const pdfCustomName = formData.get('pdf_custom_name');
-		const gabCustomName = formData.get('gabarito_custom_name');
+		// SANITIZE & FORCE
+		const pdfCustomName = (formData.get('pdf_custom_name') || '').trim();
+		const gabCustomName = (formData.get('gabarito_custom_name') || '').trim();
 
-		// DEBUG LOGS
-		console.log('[Manual Upload] Received Keys:', [...formData.keys()]);
-		console.log(`[Manual Upload] pdf_custom_name="${pdfCustomName}", gab_custom_name="${gabCustomName}"`);
-		console.log(`[Manual Upload] fileProva.name="${fileProva ? fileProva.name : 'null'}"`);
+		// DEBUG LOGS (Force visible)
+		console.log('[Worker] Keys:', [...formData.keys()]);
+		console.log(`[Worker] CustomNames: PDF="${pdfCustomName}", GAB="${gabCustomName}"`);
 
-		const pdfFinalName = pdfCustomName || (fileProva ? fileProva.name || 'prova.pdf' : 'prova.pdf');
-		const gabFinalName = gabCustomName || (fileGabarito ? fileGabarito.name || 'gabarito.pdf' : null);
+		// Priority: Custom Name > File Name > CANARY FALLBACK (to prove code update)
+		const pdfFinalName = pdfCustomName || (fileProva && fileProva.name ? fileProva.name : 'FALLBACK_ERROR_PDF.pdf');
+		const gabFinalName = gabCustomName || (fileGabarito && fileGabarito.name ? fileGabarito.name : null);
 
-		console.log(`[Manual Upload] FINAL DECISION: pdf="${pdfFinalName}", gab="${gabFinalName}"`);
+		console.log(`[Worker] FINAL DECISION: pdf="${pdfFinalName}"`);
 
 		const ghRes = await fetch(`https://api.github.com/repos/${githubOwner}/${githubRepo}/dispatches`, {
 			method: 'POST',
