@@ -1260,7 +1260,14 @@ async function handleManualUpload(request, env) {
 				const fd = new FormData();
 				fd.append('file', file);
 				try {
-					const res = await fetch('https://tmpfiles.org/api/v1/upload', { method: 'POST', body: fd });
+					const res = await fetch('https://tmpfiles.org/api/v1/upload', {
+						method: 'POST',
+						body: fd,
+						headers: {
+							'User-Agent':
+								'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+						},
+					});
 					const json = await res.json();
 					if (json && json.status === 'success') {
 						let url = json.data.url;
@@ -1271,6 +1278,7 @@ async function handleManualUpload(request, env) {
 						}
 						return url;
 					}
+					console.error(`[Upload Error] Tmpfiles response:`, JSON.stringify(json));
 					throw new Error(JSON.stringify(json));
 				} catch (e) {
 					console.error(`Tmpfiles attempt ${attempt} failed:`, e);
