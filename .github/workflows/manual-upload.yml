@@ -183,6 +183,8 @@ jobs:
           PHASE: ${{ github.event.client_payload.metadata.phase || inputs.phase }}
           PDF_FILENAME: ${{ github.event.client_payload.metadata.pdf_filename || 'prova.pdf' }}
           GAB_FILENAME: ${{ github.event.client_payload.metadata.gabarito_filename || 'gabarito.pdf' }}
+          VISUAL_HASH: ${{ github.event.client_payload.metadata.visual_hash }}
+          VISUAL_HASH_GABARITO: ${{ github.event.client_payload.metadata.visual_hash_gabarito }}
 
           # Only add entries for what we actually downloaded
           HAS_PDF: ${{ github.event.client_payload.pdf_url != '' && github.event.client_payload.pdf_url != 'null' }}
@@ -202,6 +204,8 @@ jobs:
           phase = os.environ.get("PHASE")
           pdf_fname = os.environ.get("PDF_FILENAME")
           gab_fname = os.environ.get("GAB_FILENAME")
+          v_hash = os.environ.get("VISUAL_HASH")
+          v_hash_gab = os.environ.get("VISUAL_HASH_GABARITO")
 
           has_pdf = os.environ.get("HAS_PDF") == 'true'
           has_gab = os.environ.get("HAS_GAB") == 'true'
@@ -229,8 +233,10 @@ jobs:
                   "fase": phase,
                   "link_origem": "manual-upload",
                   "status": "downloaded",
+                  "status": "downloaded",
                   "filename": pdf_fname,
-                  "path": f"output/{slug}/files/{pdf_fname}"
+                  "path": f"output/{slug}/files/{pdf_fname}",
+                  "visual_hash": v_hash
               })
 
           if has_gab:
@@ -242,8 +248,10 @@ jobs:
                   "fase": phase,
                   "link_origem": "manual-upload",
                   "status": "downloaded",
+                  "status": "downloaded",
                   "filename": gab_fname,
-                  "path": f"output/{slug}/files/{gab_fname}"
+                  "path": f"output/{slug}/files/{gab_fname}",
+                  "visual_hash": v_hash_gab
               })
 
           # Merge: Append new items to list

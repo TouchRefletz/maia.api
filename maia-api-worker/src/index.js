@@ -1505,7 +1505,7 @@ async function handleManualUpload(request, env) {
 						source_url_gabarito: sourceUrlGabarito,
 						visual_hash: formData.get('visual_hash'), // Corrected key name to match form-logic
 						visual_hash_gabarito: formData.get('visual_hash_gabarito'),
-						pdf_filename: fileProva.name || 'prova.pdf',
+						pdf_filename: fileProva ? fileProva.name || 'prova.pdf' : 'prova.pdf',
 						gabarito_filename: fileGabarito ? fileGabarito.name || 'gabarito.pdf' : null,
 					},
 				},
