@@ -5,7 +5,7 @@
 
 export const CONFIG = {
   GRID_SIZE: 16,
-  TARGET_WIDTH: 128, // Common width for initial rendering to reduce aliasing
+  TARGET_WIDTH: 512, // Higher res for better stability when downscaling
 };
 
 /**
@@ -16,60 +16,90 @@ export const CONFIG = {
  * @param {Function} createCanvasFn - Function(w, h) -> { canvas, context } OR canvas (if context available via getContext)
  * @returns {string} The binary hash string
  */
-export function computeDHash(sourceCanvas, width, height, createCanvasFn) {
-  const w = CONFIG.GRID_SIZE + 1;
-  const h = CONFIG.GRID_SIZE;
+/**
+ * Deterministic Box Downscaling
+ * @param {Uint8ClampedArray} srcData
+ * @param {number} srcW
+ * @param {number} srcH
+ * @param {number} dstW
+ * @param {number} dstH
+ * @returns {Uint8ClampedArray}
+ */
+function boxDownscale(srcData, srcW, srcH, dstW, dstH) {
+  const dstData = new Uint8ClampedArray(dstW * dstH * 4);
 
-  // Create temporary canvas for resizing
-  const tempObj = createCanvasFn(w, h);
-  // Handle both {canvas, ctx} return or just canvas return
-  const tempCanvas = tempObj.canvas || tempObj;
-  const tempCtx = tempObj.context || tempCanvas.getContext("2d");
+  // Precompute row offsets to avoid float drift/overlaps
+  const getY = (y) => Math.floor((y * srcH) / dstH);
+  const getX = (x) => Math.floor((x * srcW) / dstW);
 
-  // Enforce consistent smoothing settings
-  tempCtx.imageSmoothingEnabled = true;
-  if (tempCtx.imageSmoothingQuality) {
-    tempCtx.imageSmoothingQuality = "high";
-  }
+  for (let y = 0; y < dstH; y++) {
+    const srcYStart = getY(y);
+    const srcYEnd = getY(y + 1);
 
-  // Draw and resize
-  try {
-    tempCtx.drawImage(
-      sourceCanvas.canvas || sourceCanvas, // Handle if source is context or canvas
-      0,
-      0,
-      width,
-      height,
-      0,
-      0,
-      w,
-      h
-    );
-  } catch (e) {
-    console.error("Error in computeDHash drawImage:", e);
-    throw e;
-  }
+    for (let x = 0; x < dstW; x++) {
+      const srcXStart = getX(x);
+      const srcXEnd = getX(x + 1);
 
-  // Get Pixels
-  const imageData = tempCtx.getImageData(0, 0, w, h);
-  const data = imageData.data;
-  let hash = "";
+      let r = 0,
+        g = 0,
+        b = 0,
+        count = 0;
 
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w - 1; x++) {
-      const index = (y * w + x) * 4;
-      const brightness =
-        data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114;
+      for (let sy = srcYStart; sy < srcYEnd; sy++) {
+        for (let sx = srcXStart; sx < srcXEnd; sx++) {
+          const srcIdx = (sy * srcW + sx) * 4;
+          r += srcData[srcIdx];
+          g += srcData[srcIdx + 1];
+          b += srcData[srcIdx + 2];
+          count++;
+        }
+      }
 
-      const indexNext = (y * w + (x + 1)) * 4;
-      const brightnessNext =
-        data[indexNext] * 0.299 +
-        data[indexNext + 1] * 0.587 +
-        data[indexNext + 2] * 0.114;
-
-      hash += brightness > brightnessNext ? "1" : "0";
+      const dstIdx = (y * dstW + x) * 4;
+      if (count > 0) {
+        dstData[dstIdx] = Math.floor(r / count);
+        dstData[dstIdx + 1] = Math.floor(g / count);
+        dstData[dstIdx + 2] = Math.floor(b / count);
+        dstData[dstIdx + 3] = 255;
+      }
     }
   }
+  return dstData;
+}
+
+export function computeDHash(sourceCanvas, width, height, createCanvasFn) {
+  const w = CONFIG.GRID_SIZE; // Still using config (try 8 or 16)
+  const h = CONFIG.GRID_SIZE;
+
+  // Get Source Pixels
+  const ctx = sourceCanvas.context || sourceCanvas.getContext("2d");
+  const srcImageData = ctx.getImageData(0, 0, width, height);
+
+  // Manual Deterministic Downscale
+  const data = boxDownscale(srcImageData.data, width, height, w, h);
+
+  // Aggressive Quantization (Posterization)
+  // Divide 0-255 into 4 buckets: 0, 1, 2, 3
+  // Bucket size = 64
+  // This ignores subtle rendering differences (gamma, antialiasing)
+  // and captures only the macro layout (Text vs White Space).
+
+  let hash = "";
+
+  for (let i = 0; i < w * h; i++) {
+    const idx = i * 4;
+    // Grayscale
+    const val = Math.floor(
+      data[idx] * 0.299 + data[idx + 1] * 0.587 + data[idx + 2] * 0.114
+    );
+
+    // 4 levels: 0-63, 64-127, 128-191, 192-255
+    // Math.min(3, ...) ensures 255 doesn't overflow if we did floor(256/64)=4
+    const bucket = Math.min(3, Math.floor(val / 64));
+
+    hash += bucket.toString();
+  }
+
   return hash;
 }
 
@@ -105,16 +135,17 @@ export async function computePdfDocHash(
       const scale = CONFIG.TARGET_WIDTH / unscaledViewport.width;
       const scaledViewport = page.getViewport({ scale });
 
-      const renderObj = createCanvasFn(
-        scaledViewport.width,
-        scaledViewport.height
-      );
+      // Explicitly floor dimensions to ensure integer canvas size matches on all platforms
+      const renderWidth = Math.floor(scaledViewport.width);
+      const renderHeight = Math.floor(scaledViewport.height);
+
+      const renderObj = createCanvasFn(renderWidth, renderHeight);
       const renderCanvas = renderObj.canvas || renderObj;
       const renderCtx = renderObj.context || renderCanvas.getContext("2d");
 
       // Ensure white background
       renderCtx.fillStyle = "#FFFFFF";
-      renderCtx.fillRect(0, 0, renderCanvas.width, renderCanvas.height);
+      renderCtx.fillRect(0, 0, renderWidth, renderHeight);
 
       // Render parameters
       // Note: Backend might need 'canvasFactory' passed to render(), but that's pdfjs-dist specific.
@@ -128,8 +159,8 @@ export async function computePdfDocHash(
 
       const hash = computeDHash(
         renderCanvas,
-        renderCanvas.width,
-        renderCanvas.height,
+        renderWidth,
+        renderHeight,
         createCanvasFn
       );
       combinedVisualData += hash;

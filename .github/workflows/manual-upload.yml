@@ -297,6 +297,8 @@ jobs:
       - name: Compute Visual Hashes
         env:
           SLUG: ${{ github.event.client_payload.slug || inputs.slug }}
+          PDF_FILENAME: ${{ steps.download.outputs.final_pdf_name }}
+          GAB_FILENAME: ${{ steps.download.outputs.final_gab_name }}
         run: |
           set -o pipefail
           (
@@ -308,7 +310,8 @@ jobs:
             echo "Computing visual hashes..."
             # Check if directory exists first
             if [ -d "hf_repo/output/$SLUG" ]; then
-                node scripts/compute-hash.js "hf_repo/output/$SLUG"
+                # Pass specific filenames to avoid re-hashing the whole world
+                node scripts/compute-hash.js "hf_repo/output/$SLUG" "$PDF_FILENAME" "$GAB_FILENAME"
             else
                 echo "::error::Directory hf_repo/output/$SLUG not found!"
                 exit 1
