@@ -1255,37 +1255,34 @@ async function handleManualUpload(request, env) {
 		// 1. UPLOAD FILES FIRST (Parallel)
 		const uploadToTmp = async (file) => {
 			if (!file) return null;
-			const fd = new FormData();
-			fd.append('file', file);
-			try {
-				const res = await fetch('https://tmpfiles.org/api/v1/upload', { method: 'POST', body: fd });
-				const json = await res.json();
-				if (json && json.status === 'success') {
-					let url = json.data.url;
-					// Fix: Ensure we use the /dl/ endpoint for raw file
-					if (url.includes('/file/')) {
-						url = url.replace('/file/', '/dl/');
-					} else if (!url.includes('/dl/')) {
-						// Assume format tmpfiles.org/ID/FILENAME -> tmpfiles.org/dl/ID/FILENAME
-						url = url.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
-					}
 
-					// Verify (HEAD check) to ensure it's accessible and not HTML
-					/*
-					try {
-						const check = await fetch(url, { method: 'HEAD' });
-						if (check.ok && check.headers.get('content-type')?.includes('text/html')) {
-							console.warn('[TmpFile] Generated URL returned HTML. Retrying or assuming failure.');
+			const uploadAttempt = async (attempt) => {
+				const fd = new FormData();
+				fd.append('file', file);
+				try {
+					const res = await fetch('https://tmpfiles.org/api/v1/upload', { method: 'POST', body: fd });
+					const json = await res.json();
+					if (json && json.status === 'success') {
+						let url = json.data.url;
+						if (url.includes('/file/')) {
+							url = url.replace('/file/', '/dl/');
+						} else if (!url.includes('/dl/')) {
+							url = url.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
 						}
-					} catch (e) {} 
-					*/
-					return url;
+						return url;
+					}
+					throw new Error(JSON.stringify(json));
+				} catch (e) {
+					console.error(`Tmpfiles attempt ${attempt} failed:`, e);
+					if (attempt < 3) {
+						await new Promise((r) => setTimeout(r, 1000 * attempt)); // Backoff
+						return uploadAttempt(attempt + 1);
+					}
+					return null;
 				}
-				return null;
-			} catch (e) {
-				console.error('Tmpfiles upload error:', e);
-				return null;
-			}
+			};
+
+			return uploadAttempt(1);
 		};
 
 		const uploadPromises = [uploadToTmp(fileProva)];
