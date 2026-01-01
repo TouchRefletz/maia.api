@@ -415,6 +415,12 @@ export function setupFormLogic(elements, initialData) {
           if (srcProvaVal) newFormData.append("source_url_prova", srcProvaVal);
           if (srcGabVal) newFormData.append("source_url_gabarito", srcGabVal);
 
+          // FIX: Persist custom filenames in merge flow so Worker doesn't fallback to defaults
+          newFormData.append("pdf_custom_name", finalNameProva);
+          if (finalNameGab) {
+            newFormData.append("gabarito_custom_name", finalNameGab);
+          }
+
           // LOGIC:
           // If Prova Mismatch -> Send Local Temp URL
           if (!matchProva && data.temp_pdf_url) {
