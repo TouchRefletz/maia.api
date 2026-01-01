@@ -98,7 +98,9 @@ export function setupFormLogic(elements, initialData) {
       };
     };
 
-    const progress = showProgressModal("Iniciando upload e análise de IA...");
+    const progress = showProgressModal(
+      "Calculando identidade visual do arquivo..."
+    );
 
     // Reusable Polling Function (Moved Up)
     const startPollingAndOpenViewer = (hfUrl, slug, aiData) => {
@@ -169,6 +171,22 @@ export function setupFormLogic(elements, initialData) {
     };
 
     try {
+      // 1. Calculate Visual Hash Local
+      let localHash = null;
+      try {
+        // Import dynamic to avoid top-level await issues if bundle not ready
+        const { computePdfHash } = await import("../utils/pdf-hash.js");
+        localHash = await computePdfHash(fileProva, (status) => {
+          progress.update(status);
+        });
+        console.log("[Manual] Local Visual Hash:", localHash);
+      } catch (err) {
+        console.warn("[Manual] Failed to compute hash:", err);
+        progress.update("Erro no hash. Prosseguindo...");
+      }
+
+      progress.update("Enviando para análise...");
+
       const srcProvaVal = document.getElementById("sourceUrlProva").value;
       const srcGabVal = document.getElementById("sourceUrlGabarito").value;
 
@@ -180,6 +198,8 @@ export function setupFormLogic(elements, initialData) {
       formData.append("fileProva", fileProva);
       if (fileGabarito) formData.append("fileGabarito", fileGabarito);
 
+      if (localHash) formData.append("visual_hash", localHash);
+
       const WORKER_URL =
         "https://maia-api-worker.willian-campos-ismart.workers.dev";
 
@@ -190,90 +210,123 @@ export function setupFormLogic(elements, initialData) {
       const data = await res.json();
 
       if (data.status === "conflict") {
-        progress.close();
-        // ... Conflict Logic (omitted for brevity, handled by existing catch-all or we can re-implement if needed)
-        // For now, let's keep simple: existing logic handled conflict by just warning.
-        // If we want conflict support, we need to adapt it.
-        // Let's re-use the import logic but clean.
-
+        // --- VISUAL HASH AUTO-RESOLUTION ---
         console.warn("[Manual] Conflict detected!", data);
-        import("./search-logic.js").then((module) => {
-          module.showConflictResolutionModal(data, (overrideData) => {
-            // RE-INITIALIZE PROGRESS for Conflict Flow
-            const progressConflict = showProgressModal(
-              "Resolvendo conflito e mesclando dados..."
+
+        let matchFound = null;
+        if (localHash && data.remote_manifest) {
+          const items = Array.isArray(data.remote_manifest)
+            ? data.remote_manifest
+            : data.remote_manifest.results || data.remote_manifest.files || [];
+
+          matchFound = items.find((item) => item.visual_hash === localHash);
+        }
+
+        if (matchFound) {
+          console.log(
+            "[Manual] Visual Match Found! Auto-resolving using remote file.",
+            matchFound
+          );
+          progress.update(
+            "Match visual encontrado! Usando arquivo existente..."
+          );
+
+          // Wait brief moment for UX
+          setTimeout(() => {
+            // Determine remote URL
+            let remoteUrl = matchFound.url;
+            if (!remoteUrl) {
+              // Metadata fallback logic (same as search-logic normalize)
+              let path = matchFound.path || matchFound.filename;
+              if (path && !path.startsWith("http")) {
+                if (path.startsWith("files/"))
+                  path = path.replace("files/", "");
+                remoteUrl = `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${data.slug}/files/${path}`;
+              }
+            }
+
+            // Close modal and open viewer
+            progress.close();
+            // Pass ai_data from conflict if available, or construct partial
+            startPollingAndOpenViewer(
+              remoteUrl,
+              data.slug,
+              data.ai_data || {
+                institution: matchFound.instituicao || matchFound.institution,
+                year: matchFound.ano || matchFound.year,
+              }
             );
+          }, 1000);
+          return;
+        }
 
-            // Prepare FormData for Override (similar to before but concise)
-            const newFormData = new FormData();
-            newFormData.append("title", titleInput.value);
-            if (srcProvaVal)
-              newFormData.append("source_url_prova", srcProvaVal);
-            if (srcGabVal) newFormData.append("source_url_gabarito", srcGabVal);
-            newFormData.append("confirm_override", "true");
-            newFormData.append("mode", "update"); // Merge mode
+        // If NO MATCH -> Show Modal (OR Auto-Merge if user implies "se não tiver igual tu posta")
+        // The user said: "se não tiver igual tu posta na nuvem"
+        // This implies skipping the modal entirely?
+        // But the modal lets them choose to MERGE as a new file ("Seu Upload").
+        // If we skip the modal, we default to "Overwrite" or "Update"?
+        // "Posta na nuvem" implies we KEEP the local file.
+        // If the slug matches (conflict), we must be in UPDATE mode to avoid overwrite error if filename matches?
+        // Wait, if filename matches strictly, backend threw conflict.
+        // If we want to post "na nuvem", we need to override.
+        // Let's keep the modal for NON-MATCHES for safety unless user insists on full automation.
+        // User text: "essa tela não é pra aparecer ... se tiver igual usa back ... se não igual posta nuvem".
+        // This strongly suggests handling the "não igual" case automatically too.
+        // Automatic "Post to Cloud" = Override/Merge.
 
-            // Handle URLs from selection
-            const hasLocalPdf =
-              overrideData.pdfUrl &&
-              overrideData.pdfUrl.includes("tmpfiles.org");
-            const hasLocalGab =
-              overrideData.gabUrl &&
-              overrideData.gabUrl.includes("tmpfiles.org");
+        console.log(
+          "[Manual] No hash match. Auto-posting to cloud as per user preference (Force Update)."
+        );
 
-            if (hasLocalPdf)
-              newFormData.append("pdf_url_override", overrideData.pdfUrl);
-            if (hasLocalGab)
-              newFormData.append("gabarito_url_override", overrideData.gabUrl);
+        // AUTO-MERGE LOGIC (Skip Modal)
+        import("./search-logic.js").then((module) => {
+          // We don't need module.showConflictResolutionModal anymore if we auto-merge.
+          // We just proceed to the Override Request.
 
-            // If User chose REMOTE for PDF, we need to pass that too or let backend infer?
-            // Backend uses 'overwrite' or 'update'. If update, and no override, it keeps existing.
-            // But we might need to tell correct URL for Polling later.
+          progress.update("Arquivo novo detectado. Atualizando nuvem...");
 
-            // Actually, the Worker response (data) contains the correct slug/hf_url.
-            // We just need to trigger the merge action.
+          const newFormData = new FormData();
+          newFormData.append("title", titleInput.value);
+          if (srcProvaVal) newFormData.append("source_url_prova", srcProvaVal);
+          if (srcGabVal) newFormData.append("source_url_gabarito", srcGabVal);
 
-            fetch(`${WORKER_URL}/manual-upload`, {
-              method: "POST",
-              body: newFormData,
+          // Crucial: We need to re-send the files because the worker is stateless?
+          // Or does the worker keep temp files?
+          // The worker `manual-upload` usually expects files in body.
+          // But for override, we might need to send them again OR pass the temp URL if worker supports it.
+          // Looking at previous code, `showConflictResolutionModal` passed `temp_pdf_url`.
+          // But `newFormData` in previous implementation didn't append `fileProva` again!
+          // It used `pdf_url_override` with `data.temp_pdf_url`.
+
+          // Let's use the temp URL provided by the conflict response.
+          const tempPdf = data.temp_pdf_url;
+          const tempGab = data.temp_gabarito_url;
+
+          if (tempPdf) newFormData.append("pdf_url_override", tempPdf);
+          if (tempGab) newFormData.append("gabarito_url_override", tempGab);
+
+          newFormData.append("confirm_override", "true");
+          newFormData.append("mode", "update"); // Use Update to merge, not overwrite/fail
+
+          fetch(`${WORKER_URL}/manual-upload`, {
+            method: "POST",
+            body: newFormData,
+          })
+            .then((r) => r.json())
+            .then((d) => {
+              if (d.success) {
+                startPollingAndOpenViewer(d.hf_url_preview, d.slug, d.ai_data);
+              } else {
+                progress.close();
+                alert("Erro ao realizar fusão automática: " + d.error);
+              }
             })
-              .then((r) => r.json())
-              .then((d) => {
-                if (d.success) {
-                  // CONFLICT RESOLVED -> START POLLING
-                  // We need to use the SAME polling logic.
-                  // But 'progress' variable is local to main scope.
-                  // We can reuse the function if we hoist it or pass the progress object?
-                  // Actually, 'showProgressModal' creates a singleton DOM element.
-                  // So we can just update it.
-
-                  // FIX: Use explicit ID removal safely
-                  try {
-                    const modalEl = document.getElementById(
-                      "upload-progress-modal"
-                    );
-                    if (modalEl) modalEl.remove();
-                  } catch (e) {
-                    // Ignore
-                  }
-
-                  startPollingAndOpenViewer(
-                    d.hf_url_preview,
-                    d.slug,
-                    d.ai_data
-                  );
-                } else {
-                  progressConflict.close();
-                  alert("Erro na resolução: " + d.error);
-                }
-              })
-              .catch((err) => {
-                progressConflict.close();
-                console.error(err);
-                alert("Erro de conexão.");
-              });
-          });
+            .catch((err) => {
+              progress.close();
+              alert("Erro de fusão automática: " + err.message);
+            });
         });
+
         return;
       }
 
@@ -282,11 +335,8 @@ export function setupFormLogic(elements, initialData) {
       }
 
       // SUCCESS START
-      // Now we poll Hugging Face
       const hfUrl = data.hf_url_preview;
       const slug = data.slug;
-
-      // Main Flow Use
       startPollingAndOpenViewer(data.hf_url_preview, data.slug, data.ai_data);
     } catch (e) {
       if (progress && progress.close) progress.close();
