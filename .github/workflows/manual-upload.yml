@@ -124,6 +124,8 @@ jobs:
           SLUG: ${{ github.event.client_payload.slug || inputs.slug }}
           PDF_URL: ${{ github.event.client_payload.pdf_url || inputs.pdf_url }}
           GAB_URL: ${{ github.event.client_payload.gabarito_url || inputs.gabarito_url }}
+          PDF_FILENAME: ${{ github.event.client_payload.metadata.pdf_filename || 'prova.pdf' }}
+          GAB_FILENAME: ${{ github.event.client_payload.metadata.gabarito_filename || 'gabarito.pdf' }}
           MODE: ${{ github.event.client_payload.mode || 'overwrite' }}
         run: |
           cd hf_repo
@@ -166,8 +168,8 @@ jobs:
             fi
           }
 
-          download_strict "$PDF_URL" "prova.pdf"
-          download_strict "$GAB_URL" "gabarito.pdf"
+          download_strict "$PDF_URL" "$PDF_FILENAME"
+          download_strict "$GAB_URL" "$GAB_FILENAME"
 
           ls -R "output/$SLUG"
 
@@ -179,6 +181,8 @@ jobs:
           YEAR: ${{ github.event.client_payload.metadata.year || inputs.year }}
           INSTITUTION: ${{ github.event.client_payload.metadata.institution || inputs.institution }}
           PHASE: ${{ github.event.client_payload.metadata.phase || inputs.phase }}
+          PDF_FILENAME: ${{ github.event.client_payload.metadata.pdf_filename || 'prova.pdf' }}
+          GAB_FILENAME: ${{ github.event.client_payload.metadata.gabarito_filename || 'gabarito.pdf' }}
 
           # Only add entries for what we actually downloaded
           HAS_PDF: ${{ github.event.client_payload.pdf_url != '' && github.event.client_payload.pdf_url != 'null' }}
@@ -196,6 +200,8 @@ jobs:
           year = os.environ.get("YEAR")
           inst = os.environ.get("INSTITUTION")
           phase = os.environ.get("PHASE")
+          pdf_fname = os.environ.get("PDF_FILENAME")
+          gab_fname = os.environ.get("GAB_FILENAME")
 
           has_pdf = os.environ.get("HAS_PDF") == 'true'
           has_gab = os.environ.get("HAS_GAB") == 'true'
@@ -223,8 +229,8 @@ jobs:
                   "fase": phase,
                   "link_origem": "manual-upload",
                   "status": "downloaded",
-                  "filename": "prova.pdf",
-                  "path": f"output/{slug}/files/prova.pdf"
+                  "filename": pdf_fname,
+                  "path": f"output/{slug}/files/{pdf_fname}"
               })
 
           if has_gab:
@@ -236,8 +242,8 @@ jobs:
                   "fase": phase,
                   "link_origem": "manual-upload",
                   "status": "downloaded",
-                  "filename": "gabarito.pdf",
-                  "path": f"output/{slug}/files/gabarito.pdf"
+                  "filename": gab_fname,
+                  "path": f"output/{slug}/files/{gab_fname}"
               })
 
           # Merge: Append new items to list

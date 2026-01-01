@@ -103,9 +103,11 @@ export function setupFormLogic(elements, initialData) {
     );
 
     // Reusable Polling Function (Moved Up)
-    const startPollingAndOpenViewer = (hfUrl, slug, aiData) => {
+    const startPollingAndOpenViewer = (hfUrl, slug, aiData, hfUrlGabarito) => {
       progress.update("Upload iniciado! Sincronizando com a Nuvem...");
-      console.log(`[Manual] Polling HF for: ${hfUrl}`);
+      console.log(
+        `[Manual] Polling HF for: ${hfUrl} (and Gabarito: ${hfUrlGabarito})`
+      );
 
       const WORKER_URL =
         "https://maia-api-worker.willian-campos-ismart.workers.dev"; // Re-declaration access
@@ -147,13 +149,20 @@ export function setupFormLogic(elements, initialData) {
 
               // USE PROXY
               const proxyUrl = `${WORKER_URL}/proxy-pdf?url=${encodeURIComponent(hfUrl)}`;
+
+              // Prepare Gabarito URL (if exists)
+              let proxyGabUrl = null;
+              if (hfUrlGabarito) {
+                proxyGabUrl = `${WORKER_URL}/proxy-pdf?url=${encodeURIComponent(hfUrlGabarito)}`;
+              }
+
               gerarVisualizadorPDF({
                 title: aiData?.institution
                   ? `${aiData.institution} ${aiData.year}`
                   : titleInput.value,
                 rawTitle: titleInput.value,
                 fileProva: proxyUrl,
-                fileGabarito: aiData?.gabarito_url || null,
+                fileGabarito: proxyGabUrl || aiData?.gabarito_url || null,
                 gabaritoNaProva: gabaritoCheck.checked,
                 isManualLocal: false,
                 slug: slug,
@@ -281,7 +290,8 @@ export function setupFormLogic(elements, initialData) {
               data.ai_data || {
                 institution: matchProva.instituicao,
                 year: matchProva.ano,
-              }
+              },
+              remoteUrlGab // Pass Gabarito URL
             );
           }, 1000);
           return;
@@ -321,7 +331,19 @@ export function setupFormLogic(elements, initialData) {
             .then((r) => r.json())
             .then((d) => {
               if (d.success) {
-                startPollingAndOpenViewer(d.hf_url_preview, d.slug, d.ai_data);
+                // Determine Gabarito URL from response (if provided) or construct it
+                const hfUrlGab =
+                  d.hf_url_gabarito ||
+                  (d.gabarito_filename
+                    ? `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${d.slug}/files/${d.gabarito_filename}`
+                    : null);
+
+                startPollingAndOpenViewer(
+                  d.hf_url_preview,
+                  d.slug,
+                  d.ai_data,
+                  hfUrlGab
+                );
               } else {
                 progress.close();
                 alert("Erro ao realizar fusão automática: " + d.error);
@@ -343,7 +365,28 @@ export function setupFormLogic(elements, initialData) {
       // SUCCESS START
       const hfUrl = data.hf_url_preview;
       const slug = data.slug;
-      startPollingAndOpenViewer(data.hf_url_preview, data.slug, data.ai_data);
+
+      // Determine Gabarito URL from response (need to be cleaner with filenames)
+      // Worker currently returns only hf_url_preview.
+      // We can infer it if we know the filename, OR we should update Worker to return it.
+      // For now, let's construct it if we have metadata, otherwise default to gabarito.pdf logic?
+      // Better: Use what we sent or got back from Worker.
+
+      let hfUrlGab = data.hf_url_gabarito;
+      if (!hfUrlGab && data.ai_data && data.ai_data.gabarito_filename) {
+        hfUrlGab = `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${slug}/files/${data.ai_data.gabarito_filename}`;
+      } else if (!hfUrlGab && fileGabarito) {
+        // Fallback guess
+        const gName = fileGabarito.name || "gabarito.pdf";
+        hfUrlGab = `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${slug}/files/${gName}`;
+      }
+
+      startPollingAndOpenViewer(
+        data.hf_url_preview,
+        data.slug,
+        data.ai_data,
+        hfUrlGab
+      );
     } catch (e) {
       if (progress && progress.close) progress.close();
       console.error("[Manual] Error triggering upload:", e);

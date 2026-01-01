@@ -1503,8 +1503,10 @@ async function handleManualUpload(request, env) {
 						summary: aiData.summary,
 						source_url_prova: sourceUrlProva,
 						source_url_gabarito: sourceUrlGabarito,
-						visual_hash: formData.get('visual_hash_prova'),
+						visual_hash: formData.get('visual_hash'), // Corrected key name to match form-logic
 						visual_hash_gabarito: formData.get('visual_hash_gabarito'),
+						pdf_filename: fileProva.name || 'prova.pdf',
+						gabarito_filename: fileGabarito ? fileGabarito.name || 'gabarito.pdf' : null,
 					},
 				},
 			}),
