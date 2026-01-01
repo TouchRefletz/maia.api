@@ -217,21 +217,84 @@ export function setupFormLogic(elements, initialData) {
         progress.update("Erro no hash. Prosseguindo...");
       }
 
-      progress.update("Enviando para análise...");
+      console.log("[Manual] Prepare to upload...");
 
-      const srcProvaVal = document.getElementById("sourceUrlProva").value;
-      const srcGabVal = document.getElementById("sourceUrlGabarito").value;
+      // --- NEW NAMING LOGIC START ---
+      const getSafeName = (fileInputName, type, fallbackTitle) => {
+        const forbidden = [
+          "prova.pdf",
+          "gabarito.pdf",
+          "nenhum arquivo selecionado",
+          "",
+        ];
+
+        // 1. Try to get from UI display element if available
+        let uiName = "";
+        if (type === "prova") {
+          const el = document.getElementById("fileName");
+          if (el) uiName = el.textContent.trim();
+        } else if (type === "gabarito") {
+          const el = document.getElementById("gabaritoFileName");
+          if (el) uiName = el.textContent.trim();
+        }
+
+        console.log(
+          `[Manual] Naming Check (${type}): UI="${uiName}", Input="${fileInputName}"`
+        );
+
+        // Check if UI name is valid and NOT forbidden
+        if (uiName && !forbidden.includes(uiName.toLowerCase())) {
+          console.log(`[Manual] Using UI filename: ${uiName}`);
+          return uiName;
+        }
+
+        // 2. If generic or missing, use Slugified Title
+        const slug = fallbackTitle
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "") // Remove accents
+          .replace(/[^a-z0-9]+/g, "-") // Replace non-alphanum with dash
+          .replace(/^-+|-+$/g, ""); // Trim dashes
+
+        const suffix = type === "gabarito" ? "-gabarito.pdf" : ".pdf";
+        const finalName = slug + suffix;
+        console.log(
+          `[Manual] Using Slug Fallback: ${finalName} (ORIGINAL WAS: ${fileInputName})`
+        );
+        return finalName;
+      };
+
+      const finalNameProva = getSafeName(
+        fileProva.name,
+        "prova",
+        titleInput.value
+      );
+      let finalNameGab = null;
+      if (fileGabarito) {
+        finalNameGab = getSafeName(
+          fileGabarito.name,
+          "gabarito",
+          titleInput.value
+        );
+      }
+      // --- NEW NAMING LOGIC END ---
 
       const formData = new FormData();
       formData.append("title", titleInput.value);
       if (srcProvaVal) formData.append("source_url_prova", srcProvaVal);
       if (srcGabVal) formData.append("source_url_gabarito", srcGabVal);
 
-      formData.append("fileProva", fileProva);
-      if (fileGabarito) formData.append("fileGabarito", fileGabarito);
+      // Pass the RENAMED file
+      formData.append("fileProva", fileProva, finalNameProva);
+
+      if (fileGabarito && finalNameGab) {
+        formData.append("fileGabarito", fileGabarito, finalNameGab);
+      }
 
       if (localHashProva) formData.append("visual_hash", localHashProva);
       if (localHashGab) formData.append("visual_hash_gabarito", localHashGab);
+
+      console.log("[Manual] FormData prepared. Dispatching to Worker...");
 
       const WORKER_URL =
         "https://maia-api-worker.willian-campos-ismart.workers.dev";
@@ -241,6 +304,13 @@ export function setupFormLogic(elements, initialData) {
         body: formData,
       });
       const data = await res.json();
+      console.log("[Manual] Worker Response:", data);
+
+      if (data.ai_data) {
+        console.log("[Manual] AI Data received:", data.ai_data);
+      } else {
+        console.warn("[Manual] No AI Data received in response!");
+      }
 
       if (data.status === "conflict") {
         // --- VISUAL HASH SMART AUTO-RESOLUTION ---
