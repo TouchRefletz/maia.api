@@ -1,10 +1,8 @@
 /**
  * Node.js Script to Compute Visual Hash for PDFs
- * Matches the logic in js/utils/pdf-hash.js exactly.
+ * Uses shared logic from js/utils/shared-hash-logic.js
  *
  * Usage: node scripts/compute-hash.js [directory_path]
- * It will scan the directory for 'files/' subdirectory (standard structure)
- * and update 'manifest.json' with 'visual_hash' for each PDF.
  */
 
 import crypto from "crypto";
@@ -12,116 +10,109 @@ import fs from "fs";
 import { createRequire } from "module";
 import path from "path";
 import { fileURLToPath } from "url";
+import { computePdfDocHash } from "../js/utils/shared-hash-logic.js";
 
 const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// CJS Dependencies (using require for safety)
+// CJS Dependencies
 const { createCanvas } = require("@napi-rs/canvas");
 const pdfjsLib = require("pdfjs-dist/legacy/build/pdf.js");
 
-// Constants matching Frontend
-const TARGET_WIDTH = 128;
-const GRID_SIZE = 16;
-
-// Helper: dHash
-function computeDHash(sourceCanvas, width, height) {
-  const w = GRID_SIZE + 1;
-  const h = GRID_SIZE;
-
-  const tempCanvas = createCanvas(w, h);
-  const tempCtx = tempCanvas.getContext("2d");
-
-  // Draw and resize
-  // node-canvas supports different patterns, default is usually good.
-  try {
-    tempCtx.drawImage(sourceCanvas, 0, 0, width, height, 0, 0, w, h);
-  } catch (e) {
-    console.error("Error in computeDHash drawImage:");
-    console.error(
-      "sourceCanvas type:",
-      sourceCanvas ? sourceCanvas.constructor.name : "null/undefined"
-    );
-    // console.error("sourceCanvas:", sourceCanvas); // May be too verbose for binary
-    throw e;
-  }
-
-  const imageData = tempCtx.getImageData(0, 0, w, h);
-  const data = imageData.data;
-  let hash = "";
-
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w - 1; x++) {
-      const index = (y * w + x) * 4;
-      const brightness =
-        data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114;
-
-      const indexNext = (y * w + (x + 1)) * 4;
-      const brightnessNext =
-        data[indexNext] * 0.299 +
-        data[indexNext + 1] * 0.587 +
-        data[indexNext + 2] * 0.114;
-
-      hash += brightness > brightnessNext ? "1" : "0";
+// --- NodeCanvasFactory Fix for pdfjs-dist + napi-rs/canvas ---
+class NodeCanvasFactory {
+  create(width, height) {
+    if (width <= 0 || height <= 0) {
+      width = 1;
+      height = 1;
     }
+    const canvas = createCanvas(width, height);
+    const context = canvas.getContext("2d");
+    return {
+      canvas: canvas,
+      context: context,
+    };
   }
-  return hash;
-}
 
-// Helper: SHA256
-function sha256(message) {
-  return crypto.createHash("sha256").update(message).digest("hex");
-}
+  reset(canvasAndContext, width, height) {
+    if (!canvasAndContext.canvas) return;
+    if (width <= 0 || height <= 0) {
+      width = 1;
+      height = 1;
+    }
+    canvasAndContext.canvas.width = width;
+    canvasAndContext.canvas.height = height;
+  }
 
-// Main Hash Function
+  destroy(canvasAndContext) {
+    if (!canvasAndContext.canvas) return;
+    // Clearing references; avoid setting width=0 if it causes issues
+    canvasAndContext.canvas.width = 1;
+    canvasAndContext.canvas.height = 1;
+    canvasAndContext.canvas = null;
+    canvasAndContext.context = null;
+  }
+}
+// -----------------------------------------------------------
+
+// Adapter for shared-hash-logic
+const canvasFn = (w, h) => {
+  const canvas = createCanvas(w, h);
+  return {
+    canvas,
+    context: canvas.getContext("2d"),
+  };
+};
+
+const sha256Fn = async (msg) => {
+  return crypto.createHash("sha256").update(msg).digest("hex");
+};
+
 export async function computeFileHash(filePath) {
   try {
     const data = new Uint8Array(fs.readFileSync(filePath));
+
+    // Pass custom factory to getDocument to fix crashes
     const pdf = await pdfjsLib.getDocument({
       data: data,
       standardFontDataUrl: path.join(
         __dirname,
         "../node_modules/pdfjs-dist/standard_fonts/"
       ),
+      canvasFactory: new NodeCanvasFactory(),
     }).promise;
 
-    let combinedVisualData = "";
-
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-
-      // const viewport = page.getViewport({ scale: 1.0 });
-      // const scale = TARGET_WIDTH / viewport.width;
-      const scale = 0.1; // Performance optimization
-      const scaledViewport = page.getViewport({ scale });
-
-      const canvas = createCanvas(scaledViewport.width, scaledViewport.height);
-      const ctx = canvas.getContext("2d");
-
-      // Ensure consistent white background (avoids transparency diffs)
-      ctx.fillStyle = "#FFFFFF";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      await page.render({ canvasContext: ctx, viewport: scaledViewport })
-        .promise;
-
-      const hash = computeDHash(canvas, canvas.width, canvas.height);
-      combinedVisualData += hash;
-    }
-
-    return sha256(combinedVisualData);
+    return await computePdfDocHash(pdf, canvasFn, sha256Fn);
   } catch (e) {
     console.error(`Failed to process ${filePath}:`, e.message);
     return null;
   }
 }
 
-// Main Execution Logic
+// Main Execution
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   (async () => {
-    const targetDir = process.argv[2];
+    // If user provides a single file path as argument (for testing), handle it
+    const arg = process.argv[2];
+    if (
+      arg &&
+      arg.toLowerCase().endsWith(".pdf") &&
+      fs.statSync(arg).isFile()
+    ) {
+      console.log(`Hashing single file: ${arg}...`);
+      console.time("Hashing");
+      const hash = await computeFileHash(arg);
+      console.timeEnd("Hashing");
+      console.log(`Hash: ${hash}`);
+      process.exit(0);
+    }
+
+    // Default Directory Mode
+    const targetDir = arg;
     if (!targetDir) {
-      console.error("Usage: node compute-hash.js <directory_path>");
+      console.error(
+        "Usage: node compute-hash.js <directory_path> OR <pdf_file>"
+      );
       process.exit(1);
     }
 
@@ -137,18 +128,22 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       let updated = false;
 
       for (const item of items) {
-        // Only process PDFs if hash is missing
         if (item.filename && item.filename.toLowerCase().endsWith(".pdf")) {
-          // if (item.visual_hash) continue; // Optional: Skip if exists? No, enforce update.
+          // Always update/recompute to ensure consistency with new logic
+          // if (item.visual_hash) continue;
 
           const filePath = path.join(targetDir, "files", item.filename);
           if (fs.existsSync(filePath)) {
             console.log(`Hashing: ${item.filename}...`);
             const hash = await computeFileHash(filePath);
             if (hash) {
-              item.visual_hash = hash;
-              updated = true;
-              console.log(`  > Hash: ${hash.substring(0, 16)}...`);
+              if (item.visual_hash !== hash) {
+                console.log(`  > Updated Hash: ${hash.substring(0, 16)}...`);
+                item.visual_hash = hash;
+                updated = true;
+              } else {
+                console.log(`  > Hash verified.`);
+              }
             }
           }
         }
@@ -158,7 +153,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
         fs.writeFileSync(manifestPath, JSON.stringify(items, null, 2));
         console.log("Manifest updated with visual hashes.");
       } else {
-        console.log("No hashes updated.");
+        console.log("No hashes changed.");
       }
     } catch (e) {
       console.error("Critical Error:", e);
