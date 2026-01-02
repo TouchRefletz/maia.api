@@ -434,7 +434,7 @@
 .term-chain-node {
   position: relative;
   padding-left: 20px; /* Adjusted since we use img now */
-  padding-bottom: 20px; /* Replaces Flex Gap */
+  padding-bottom: 40px; /* Replaces Flex Gap */
   color: var(--term-text);
   font-size: 1rem; /* User asked for bigger */
   line-height: 1.5;
