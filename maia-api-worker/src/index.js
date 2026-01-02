@@ -1500,13 +1500,14 @@ async function handleManualUpload(request, env) {
 					if (inputVisualHash) {
 						const match = items.find((item) => item.visual_hash === inputVisualHash);
 						if (match) {
-							console.log(`[Worker] Dedup: Prova found (${match.filename}). Using hosted URL.`);
+							console.log(`[Worker] Dedup: Prova found (${match.filename}). Skipping upload.`);
 							foundProva = true;
-							// Use hosted URL instead of tmpfiles
+							// Hosted file exists. We send NULL to Action so it skips download/overwrite.
+							pdfUrlToDispatch = null;
+
 							const fname = match.filename || match.path;
 							if (fname) {
-								pdfUrlToDispatch = `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${slug}/files/${fname}`;
-								pdfFinalNameForMeta = fname; // PRESERVE EXISTING FILENAME
+								pdfFinalNameForMeta = fname; // PRESERVE EXISTING FILENAME for metadata
 							}
 						}
 					}
@@ -1515,19 +1516,20 @@ async function handleManualUpload(request, env) {
 					if (inputVisualHashGab) {
 						const matchGab = items.find((item) => item.visual_hash === inputVisualHashGab);
 						if (matchGab) {
-							console.log(`[Worker] Dedup: Gabarito found (${matchGab.filename}). Using hosted URL.`);
+							console.log(`[Worker] Dedup: Gabarito found (${matchGab.filename}). Skipping upload.`);
 							foundGab = true;
+							// Hosted file exists. We send NULL to Action so it skips download/overwrite.
+							gabUrlToDispatch = null;
+
 							const fname = matchGab.filename || matchGab.path;
 							if (fname) {
-								gabUrlToDispatch = `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${slug}/files/${fname}`;
-								gabFinalNameForMeta = fname; // PRESERVE EXISTING FILENAME
+								gabFinalNameForMeta = fname; // PRESERVE EXISTING FILENAME for metadata
 							}
 						}
 					}
 
 					// LOGIC: If all required files (Prova and/or Gabarito) are already found in the manifest,
-					// we return success immediately. This assumes that if the visual hash matches,
-					// the file is identical and valid for this exam entity.
+					// we return success immediately.
 					const provaSatisfied = !fileProva || foundProva;
 					const gabSatisfied = !fileGabarito || foundGab;
 
@@ -1538,16 +1540,22 @@ async function handleManualUpload(request, env) {
 								slug,
 								message: 'Arquivo(s) já existente(s) encontrado(s) (Smart Deduplication).',
 								ai_data: aiData,
-								hf_url_preview: pdfUrlToDispatch,
-								hf_url_gabarito: gabUrlToDispatch,
+								// For preview, we reconstruct the hosted URL because dispatch was null
+								hf_url_preview: `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${slug}/files/${pdfFinalNameForMeta}`,
+								hf_url_gabarito: `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${slug}/files/${gabFinalNameForMeta}`,
 								is_deduplicated: true,
+								dedup_status: {
+									prova: foundProva ? 'hosted' : 'new',
+									gabarito: foundGab ? 'hosted' : 'new',
+								},
 							}),
 							{ headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
 						);
 					}
 
-					// If partial, we proceed to dispatch. The found ones have hosted URLs, new ones have tmpfiles URLs.
-					console.log('[Worker] Partial deduplication. Dispatching hybrid request.');
+					// If partial, we proceed to dispatch. The found ones have URLs=null, new ones have tmpfiles URLs.
+					const partialMsg = `[Worker] Partial deduplication: Prova=${foundProva ? 'Hosted' : 'New'}, Gab=${foundGab ? 'Hosted' : 'New'}. Dispatching hybrid request.`;
+					console.log(partialMsg);
 				}
 			} catch (e) {
 				console.warn('HF Check failed, assuming new.', e);
@@ -1561,7 +1569,9 @@ async function handleManualUpload(request, env) {
 
 		// (Calculated above)
 
-		console.log(`[Worker] FINAL DECISION: pdf="${pdfFinalNameForMeta}"`);
+		console.log(
+			`[Worker] FINAL DECISION: pdf="${pdfFinalNameForMeta}", pdf_url=${pdfUrlToDispatch ? 'SENDING' : 'SKIP'}, gab_url=${gabUrlToDispatch ? 'SENDING' : 'SKIP'}`,
+		);
 
 		const ghRes = await fetch(`https://api.github.com/repos/${githubOwner}/${githubRepo}/dispatches`, {
 			method: 'POST',
@@ -1613,7 +1623,12 @@ async function handleManualUpload(request, env) {
 				// We predict the final URL but frontend should wait for Pusher 'Cloud sync complete!'
 				// or use this as optimistic preview if dedup happened.
 				hf_url_preview: `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${slug}/files/${pdfFinalNameForMeta}`,
+				hf_url_gabarito: `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${slug}/files/${gabFinalNameForMeta}`,
 				should_monitor: true,
+				dedup_status: {
+					prova: foundProva ? 'hosted' : 'new',
+					gabarito: foundGab ? 'hosted' : 'new',
+				},
 			}),
 			{
 				headers: { ...corsHeaders, 'Content-Type': 'application/json' },
