@@ -4,8 +4,8 @@
  */
 
 export const CONFIG = {
-  GRID_SIZE: 16,
-  TARGET_WIDTH: 512, // Higher res for better stability when downscaling
+  GRID_SIZE: 64,
+  TARGET_WIDTH: 1024, // Higher res for better stability when downscaling
 };
 
 /**
@@ -74,7 +74,7 @@ export function computeDHash(
   createCanvasFn,
   debug = false
 ) {
-  const w = CONFIG.GRID_SIZE; // Still using config (try 8 or 16)
+  const w = CONFIG.GRID_SIZE;
   const h = CONFIG.GRID_SIZE;
 
   // Get Source Pixels
@@ -84,11 +84,9 @@ export function computeDHash(
   // Manual Deterministic Downscale
   const data = boxDownscale(srcImageData.data, width, height, w, h);
 
-  // Aggressive Quantization (Posterization)
-  // Divide 0-255 into 4 buckets: 0, 1, 2, 3
-  // Bucket size = 64
-  // This ignores subtle rendering differences (gamma, antialiasing)
-  // and captures only the macro layout (Text vs White Space).
+  // No Quantization (Full 0-255 Range)
+  // We use the raw grayscale value to ensure maximum sensitivity.
+  // Stored as 2-digit Hex to keep the string manageable but precise.
 
   let hash = "";
   let debugGrid = [];
@@ -100,15 +98,14 @@ export function computeDHash(
       data[idx] * 0.299 + data[idx + 1] * 0.587 + data[idx + 2] * 0.114
     );
 
-    // 4 levels: 0-63, 64-127, 128-191, 192-255
-    // Math.min(3, ...) ensures 255 doesn't overflow if we did floor(256/64)=4
-    const bucket = Math.min(3, Math.floor(val / 64));
+    // Convert to Hex (00-FF)
+    const hexVal = val.toString(16).padStart(2, "0");
 
     if (debug) {
       debugGrid.push(val); // Push raw grayscale value (0-255)
     }
 
-    hash += bucket.toString();
+    hash += hexVal;
   }
 
   if (debug) {
