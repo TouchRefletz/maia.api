@@ -353,9 +353,9 @@ export class TerminalUI {
     `;
 
     this.el.fill = this.container.querySelector(".term-bar-fill");
-    this.el.eta = this.container.querySelector(".term-eta");
+    this.el.eta = this.container.querySelector(".term-timer");
     this.el.status = this.container.querySelector(".term-status");
-    this.el.stepText = this.container.querySelector(".term-step-text");
+    // this.el.stepText is deprecated/removed in new layout
     this.el.objectivesHeader = this.container.querySelector(
       ".term-objectives-header"
     );
@@ -573,11 +573,12 @@ export class TerminalUI {
   }
 
   updateETADisplay() {
+    if (!this.el.eta) return;
     // Just render the current state
     const remaining = Math.max(0, Math.floor(this.estimatedRemainingTime));
     const mins = Math.floor(remaining / 60);
     const secs = Math.floor(remaining % 60);
-    this.el.eta.innerText = `TEMPO ESTIMADO: ${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+    this.el.eta.innerText = `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   }
 
   updateStepText(text) {
@@ -1214,7 +1215,7 @@ export class TerminalUI {
     this.container.classList.add("term-status-error");
 
     // Hide timer on error
-    if (this.el.timer) this.el.timer.style.display = "none";
+    if (this.el.eta) this.el.eta.style.display = "none";
 
     // Show error in Chain of Thought instead of legacy step text
     this.appendChainThought(`Processo falhou: ${reason}`, "error");
