@@ -735,7 +735,7 @@ export function setupSearchLogic() {
         // log("Nenhum banco exato encontrado. Iniciando busca...", "info");
 
         // --- CHANGE: Add specific task for "Advanced Search" ---
-        log("1. ⚡ Iniciando agente de pesquisa avançada", "in_progress");
+        log("Iniciando agente de pesquisa avançada...", "in_progress");
 
         doSearch(force, cleanup, true, "overwrite");
         return;

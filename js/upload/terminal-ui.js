@@ -95,19 +95,17 @@ export class TerminalUI {
         : `
       <div class="term-tasks-body">
          <div class="term-floating-header" id="term-floating-header">
-             <!-- Tasks Icons will be rendered here -->
-         </div>
-         <div class="term-chain-stream" id="term-chain-stream">
              <div id="term-placeholder" style="
                 text-align: center;
                 color: var(--term-text);
                 opacity: 0.5;
-                margin-top: 40px;
                 font-style: italic;
+                width: 100%;
              ">
                 As tarefas do agente aparecerão aqui...
              </div>
          </div>
+         <div class="term-chain-stream" id="term-chain-stream"></div>
       </div>
     `;
 
@@ -989,12 +987,6 @@ export class TerminalUI {
   appendChainThought(text, type = "info") {
     if (!this.el.chainStream) return;
 
-    // Hide placeholder if valid
-    const placeholder = this.el.chainStream.querySelector("#term-placeholder");
-    if (placeholder) {
-      placeholder.style.display = "none";
-    }
-
     const node = document.createElement("div");
     node.className = `term-chain-node ${type}`;
 
@@ -1193,6 +1185,10 @@ export class TerminalUI {
     this.el.status.innerText = "FALHA_NA_EXECUÇÃO";
     this.el.status.classList.remove("active");
     this.el.status.style.color = "var(--color-error)";
+
+    // Update Container Status for CSS hooks (e.g. stop animation)
+    this.container.classList.remove("term-status-success");
+    this.container.classList.add("term-status-error");
 
     this.el.eta.innerText = "TEMPO: INTERROMPIDO";
     this.el.stepText.innerText = `Processo falhou: ${reason}`;

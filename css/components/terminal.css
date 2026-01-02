@@ -434,7 +434,7 @@
   position: absolute;
   top: 20px;
   bottom: 20px;
-  left: 24px;
+  left: 64px;
   width: 2px;
   background: linear-gradient(to bottom, var(--term-accent) 0%, rgba(255,255,255,0.05) 100%);
   opacity: 0.3;
@@ -451,7 +451,7 @@
   animation: fadeIn 0.3s ease-out;
   display: flex; /* Flex to align logo and text */
   gap: 12px;
-  align-items: flex-start;
+  align-items: center;
 }
 
 .term-chain-node strong {
@@ -459,7 +459,6 @@
   color: var(--color-primary-light, #64ffda);
   font-weight: 700;
   font-size: 1.1rem; /* Bigger title */
-  margin-bottom: 4px;
 }
 
 /* Node Logo */
@@ -472,7 +471,6 @@
   background: var(--term-bg);
   border-radius: 50%; /* If logo needs it */
   padding: 2px; /* Small gap from potential border */
-  border: 1px solid var(--term-accent-dim);
 }
 
 /* Content wrapper */
@@ -485,11 +483,16 @@
   display: none;
 }
 
-/* Rotating Logo for LAST node */
+/* Rotating Logo for LAST node (Only when active/running) */
 .term-chain-node:last-child .node-logo {
     animation: spin-slow 4s linear infinite;
-    border-color: var(--term-accent);
-    box-shadow: 0 0 10px var(--term-accent-dim);
+}
+
+/* Stop animation on Success/Error/Done */
+.term-status-success .term-chain-node .node-logo,
+.term-status-error .term-chain-node .node-logo,
+.term-status-done .term-chain-node .node-logo {
+    animation: none !important;
 }
 
 @keyframes spin-slow {
