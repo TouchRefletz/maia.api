@@ -285,7 +285,7 @@ export function setupFormLogic(elements, initialData) {
             const timeout = setTimeout(() => {
               pusher.unsubscribe(tempSlug);
               reject(new Error("Timeout waiting for hash"));
-            }, 60000); // 60s timeout
+            }, 600000); // 10m timeout
 
             channel.bind("hash_computed", (data) => {
               // data = { hash, exists, found_slug }
