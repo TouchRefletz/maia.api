@@ -183,6 +183,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       } else {
         console.log("No hashes changed.");
       }
+      process.exit(0);
     } catch (e) {
       console.error("Critical Error:", e);
       process.exit(1);

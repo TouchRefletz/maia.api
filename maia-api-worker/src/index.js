@@ -1473,6 +1473,7 @@ async function handleManualUpload(request, env) {
 		// 2. Generate/Validate Slug
 		// AI now provides the slug, but we fallback if needed
 		let slug = aiData.slug;
+		// Fallback only if AI returns empty
 		if (!slug) {
 			slug = title
 				.toLowerCase()
