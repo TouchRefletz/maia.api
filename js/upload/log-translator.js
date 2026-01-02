@@ -177,6 +177,38 @@ export class LogTranslator {
         type: "in_progress",
       };
 
+    // --- GENERIC ACTIONS (Catch-All for things usually missed) ---
+    if (t.includes("CmdRunAction")) {
+      const cmdMatch = t.match(/command="([^"]*)"/);
+      const cmd = cmdMatch ? cmdMatch[1] : "sistema";
+      return {
+        text: `Executando comando: ${cmd}`, // e.g. "ls -la", "python script.py"
+        type: "system",
+      };
+    }
+    if (t.includes("FileWriteAction")) {
+      const pathMatch = t.match(/path="([^"]*)"/);
+      const path = pathMatch ? pathMatch[1] : "arquivo";
+      return {
+        text: `Escrevendo arquivo: ${path}`,
+        type: "in_progress",
+      };
+    }
+    if (t.includes("FileReadAction")) {
+      const pathMatch = t.match(/path="([^"]*)"/);
+      const path = pathMatch ? pathMatch[1] : "arquivo";
+      return {
+        text: `Lendo arquivo: ${path}`,
+        type: "in_progress",
+      };
+    }
+    if (t.includes("BrowseInteractiveAction")) {
+      return {
+        text: "Navegando na internet (Browser)...",
+        type: "in_progress",
+      };
+    }
+
     // --- 4. DATA SAVING & CLEANUP ---
     if (t.includes("Copying artifacts from container"))
       return {

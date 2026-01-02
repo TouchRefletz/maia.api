@@ -1011,6 +1011,19 @@ export class TerminalUI {
   appendChainThought(text, type = "info") {
     if (!this.el.chainStream) return;
 
+    // Dedup: Check last node
+    const lastNode = this.el.chainStream.lastElementChild;
+    if (lastNode) {
+      const lastContent = lastNode.querySelector(".node-content");
+      if (lastContent && lastContent.innerText.trim() === text.trim()) {
+        // Pulse last node to show activity but don't duplicate
+        lastNode.style.animation = "none";
+        lastNode.offsetHeight; /* trigger reflow */
+        lastNode.style.animation = "fadeIn 0.3s ease-out";
+        return;
+      }
+    }
+
     const node = document.createElement("div");
     node.className = `term-chain-node ${type}`;
 
