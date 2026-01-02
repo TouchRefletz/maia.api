@@ -1194,7 +1194,7 @@ export function setupSearchLogic() {
       log("[SISTEMA] Todos os arquivos validados com sucesso.", "success");
 
       if (terminal) {
-        terminal.finish(enableRetry);
+        terminal.finish(true, enableRetry);
       }
 
       currentManifest = validItems;

@@ -1001,7 +1001,7 @@ export class TerminalUI {
     }
   }
 
-  finish(isSuccess = true) {
+  finish(isSuccess = true, showRetry = true) {
     this.state = this.MODES.DONE;
     this.currentVirtualProgress = 100;
     this.updateProgressBar();
@@ -1042,15 +1042,9 @@ export class TerminalUI {
     }
 
     if (this.el.retryBtn) {
-      // By default show retry on finish unless explicitly told not to?
-      // Or pass 'showRetry' as arg 2?
-      // Let's assume on SUCCESS we usually allow retry?
-      // Actually the original code had 'showRetry' param.
-      // We'll expose the button in case we need it, but usually standard usage hides it until needed.
-      // Re-reading original `search-logic.js`, finish(true) is often called with enableRetry=true.
-      // But now we changed signature to finish(isSuccess).
-      // Let's assume if isSuccess is true, we allow retry.
-      if (isSuccess) {
+      // Logic decoupled: We show retry if showRetry is true, regardless of success result.
+      // (Although typically we only retry on success if we want to re-run, or on fail)
+      if (showRetry) {
         this.el.retryBtn.style.display = "flex";
         this.el.retryBtn.style.alignItems = "center";
         this.el.retryBtn.style.height = "22px";
