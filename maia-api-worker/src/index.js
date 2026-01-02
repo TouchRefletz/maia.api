@@ -435,49 +435,25 @@ async function handleDeleteArtifact(request, env) {
  * SERVICE: COMPUTE HASH (Proxy to GitHub Actions)
  */
 async function handleComputeHash(request, env) {
-	const body = await request.json();
-	const { url, slug } = body;
-
-	if (!url || !slug) {
-		return new Response(JSON.stringify({ error: 'URL and Slug are required' }), { status: 400, headers: corsHeaders });
-	}
-
-	const githubPat = env.GITHUB_PAT;
-	const githubOwner = env.GITHUB_OWNER || 'TouchRefletz';
-	const githubRepo = env.GITHUB_REPO || 'maia.api';
-
-	if (!githubPat) {
-		throw new Error('GITHUB_PAT not configured');
-	}
-
-	const ghUrl = `https://api.github.com/repos/${githubOwner}/${githubRepo}/dispatches`;
-
+	// Wrap everything in try/catch to ensure errors are logged and returned as JSON 500
 	try {
-		const response = await fetch(ghUrl, {
-			method: 'POST',
-			headers: {
-				Authorization: `Bearer ${githubPat}`,
-				Accept: 'application/vnd.github.v3+json',
-				'User-Agent': 'Cloudflare-Worker',
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify({
-				event_type: 'hash-computation', // Must match workflow trigger if customized, or use 'workflow_dispatch' via actions/workflows/ID/dispatches
-				// Wait, 'dispatches' endpoint (repository dispatch) triggers 'repository_dispatch' event.
-				// 'workflow_dispatch' needs a specific workflow ID endpoint or the generic dispatch if configured.
-				// Let's use 'repository_dispatch' with event_type 'hash-computation' IS EASIER but my workflow listens to 'workflow_dispatch'.
-				// CORRECTION: To trigger 'workflow_dispatch', I need to POST to /actions/workflows/:process.env.WORKFLOW_ID/dispatches
-				// OR easier: Change workflow to listen to 'repository_dispatch'.
-				// BUT user wanted 'workflow_dispatch' usually implies manual too.
-				// Let's stick to 'workflow_dispatch' logic?
-				// Actually, finding the workflow ID is annoying.
-				// Best practice: Use 'repository_dispatch' for API triggers.
-				// I WILL UPDATE hash-service.yml to ALSO listen to repository_dispatch types: [hash-computation].
-				// OR I use the workflow filename endpoint: /repos/OWNER/REPO/actions/workflows/hash-service.yml/dispatches
-			}),
-		});
+		const body = await request.json();
+		const { url, slug } = body;
 
-		// Let's use the FILENAME endpoint for workflow_dispatch which is robust.
+		if (!url || !slug) {
+			return new Response(JSON.stringify({ error: 'URL and Slug are required' }), { status: 400, headers: corsHeaders });
+		}
+
+		const githubPat = env.GITHUB_PAT;
+		const githubOwner = env.GITHUB_OWNER || 'TouchRefletz';
+		const githubRepo = env.GITHUB_REPO || 'maia.api';
+
+		if (!githubPat) {
+			throw new Error('GITHUB_PAT not configured');
+		}
+
+		// Use the FILENAME endpoint for workflow_dispatch
+		// This matches .github/workflows/hash-service.yml config
 		const workflowDispatchUrl = `https://api.github.com/repos/${githubOwner}/${githubRepo}/actions/workflows/hash-service.yml/dispatches`;
 
 		const dispatchResp = await fetch(workflowDispatchUrl, {
@@ -488,7 +464,7 @@ async function handleComputeHash(request, env) {
 				'User-Agent': 'Cloudflare-Worker',
 			},
 			body: JSON.stringify({
-				ref: 'main', // or 'master', ensure branch
+				ref: 'main',
 				inputs: {
 					file_url: url,
 					slug: slug,
@@ -505,6 +481,7 @@ async function handleComputeHash(request, env) {
 			headers: { ...corsHeaders, 'Content-Type': 'application/json' },
 		});
 	} catch (error) {
+		console.error('[Compute Hash Error]', error);
 		return new Response(JSON.stringify({ error: error.message }), {
 			status: 500,
 			headers: { ...corsHeaders, 'Content-Type': 'application/json' },
