@@ -1345,8 +1345,8 @@ async function handleManualUpload(request, env) {
 				// We instruct the AI to generate standardized filenames for both files.
 				const extractionPrompt = `Com base no relatório abaixo e nos arquivos originais, extraia os metadados exatos no formato JSON.
 				TAMBÉM GERE OS NOMES DE ARQUIVO PADRONIZADOS.
-				Padrão de nome: "{Instituição} {Ano} - {Fase/Etapa} - {Tipo}.pdf"
-				Exemplo: "FUVEST 2024 - 1ª Fase - Prova.pdf", "UNICAMP 2023 - 2ª Fase - Gabarito.pdf", "ENEM 2022 - Dia 1 - Prova.pdf"
+				Padrão de nome: "{Instituição} {Ano} - {Fase/Etapa} - {Tipo/Versão da prova (se aplicável)}"
+				Exemplo: "FUVEST 2024 - 1ª Fase - Prova V1", "UNICAMP 2023 - 2ª Fase - Gabarito", "ENEM 2022 - Dia 1 - Caderno 7 (Azul)"
 
 				RELATÓRIO:
 				${fullReport}`;
@@ -1359,7 +1359,7 @@ async function handleManualUpload(request, env) {
 						summary: { type: 'STRING' },
 						formatted_title_prova: {
 							type: 'STRING',
-							description: 'Nome padronizado para o arquivo da prova (ex: FUVEST 2024 - 1ª Fase - Prova)',
+							description: 'Nome padronizado para o arquivo da prova (ex: FUVEST 2024 - 1ª Fase - Prova V1)',
 						},
 						formatted_title_gabarito: {
 							type: 'STRING',
