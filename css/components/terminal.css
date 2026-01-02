@@ -33,9 +33,9 @@
   backdrop-filter: blur(12px);
 }
 
-/* Header Section */
+/* Header Section - Refined */
 .term-header {
-  background-color: var(--color-background-json);
+  background-color: transparent; /* Seamless look */
   border-bottom: 1px solid var(--term-border);
   padding: 12px 16px;
   display: flex;
@@ -416,12 +416,16 @@
 /* 2. Chain of Thought Stream (The Timeline) */
 .term-chain-stream {
   flex: 1;
+  max-height: 400px; /* User requested scroll limit */
   overflow-y: auto;
   padding: 20px 20px 20px 30px; /* Left padding for timeline line */
   position: relative;
   display: flex;
   flex-direction: column;
   gap: 16px;
+  /* Scrollbar fancy */
+  scrollbar-width: thin;
+  scrollbar-color: var(--term-border) transparent;
 }
 
 /* Timeline Line */
@@ -432,7 +436,7 @@
   bottom: 20px;
   left: 24px;
   width: 2px;
-  background: linear-gradient(to bottom, var(--term-accent) 0%, rgba(255,255,255,0.1) 100%);
+  background: linear-gradient(to bottom, var(--term-accent) 0%, rgba(255,255,255,0.05) 100%);
   opacity: 0.3;
   z-index: 0;
 }
@@ -440,50 +444,64 @@
 /* Chain Node (Thought Item) */
 .term-chain-node {
   position: relative;
-  padding-left: 24px;
+  padding-left: 20px; /* Adjusted since we use img now */
   color: var(--term-text);
-  font-size: 0.85rem;
+  font-size: 1rem; /* User asked for bigger */
   line-height: 1.5;
   animation: fadeIn 0.3s ease-out;
+  display: flex; /* Flex to align logo and text */
+  gap: 12px;
+  align-items: flex-start;
 }
 
 .term-chain-node strong {
   display: block;
   color: var(--color-primary-light, #64ffda);
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 1.1rem; /* Bigger title */
   margin-bottom: 4px;
 }
 
-/* Node Icon */
-.term-chain-node::before {
-  content: '⚡';
-  position: absolute;
-  left: -21px; /* Align with line */
-  top: 0;
-  width: 18px;
-  height: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--term-bg);
-  border: 1px solid var(--term-accent);
-  border-radius: 50%;
-  font-size: 10px;
-  color: var(--term-accent);
+/* Node Logo */
+.term-chain-node .node-logo {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  object-fit: contain;
   z-index: 1;
+  background: var(--term-bg);
+  border-radius: 50%; /* If logo needs it */
+  padding: 2px; /* Small gap from potential border */
+  border: 1px solid var(--term-accent-dim);
 }
 
-.term-chain-node.error::before { content: '✖'; border-color: var(--color-error); color: var(--color-error); }
-.term-chain-node.success::before { content: '✔'; border-color: var(--color-success); color: var(--color-success); }
-.term-chain-node.system::before { content: '⚙'; border-color: var(--color-text-secondary); color: var(--color-text-secondary); filter: grayscale(100%); }
+/* Content wrapper */
+.term-chain-node .node-content {
+    flex: 1;
+}
+
+/* Remove old pseudo-element icon */
+.term-chain-node::before {
+  display: none;
+}
+
+/* Rotating Logo for LAST node */
+.term-chain-node:last-child .node-logo {
+    animation: spin-slow 4s linear infinite;
+    border-color: var(--term-accent);
+    box-shadow: 0 0 10px var(--term-accent-dim);
+}
+
+@keyframes spin-slow {
+    100% { transform: rotate(360deg); }
+}
 
 /* --- 3. RAW LOGS (Reverted to Console Style) --- */
 .term-log-header {
     display: flex; /* Show header again */
     margin-top: auto; 
     border-top: 1px solid var(--term-border);
-    padding: 4px 16px;
+    padding: 10px 16px;
     background: rgba(0,0,0,0.3);
     font-size: 0.7rem;
     color: var(--color-text-secondary);

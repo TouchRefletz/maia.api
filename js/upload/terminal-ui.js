@@ -98,10 +98,14 @@ export class TerminalUI {
              <!-- Tasks Icons will be rendered here -->
          </div>
          <div class="term-chain-stream" id="term-chain-stream">
-             <!-- Initial Greeting Node -->
-             <div class="term-chain-node system">
-                 <strong>🚀 Sistema Inicializado</strong>
-                 Aguardando instruções de pesquisa...
+             <div id="term-placeholder" style="
+                text-align: center;
+                color: var(--term-text);
+                opacity: 0.5;
+                margin-top: 40px;
+                font-style: italic;
+             ">
+                As tarefas do agente aparecerão aqui...
              </div>
          </div>
       </div>
@@ -985,16 +989,35 @@ export class TerminalUI {
   appendChainThought(text, type = "info") {
     if (!this.el.chainStream) return;
 
+    // Hide placeholder if valid
+    const placeholder = this.el.chainStream.querySelector("#term-placeholder");
+    if (placeholder) {
+      placeholder.style.display = "none";
+    }
+
     const node = document.createElement("div");
     node.className = `term-chain-node ${type}`;
+
+    // Logo Image
+    const img = document.createElement("img");
+    img.src = "/logo.png"; // public/logo.png
+    img.className = "node-logo";
+    img.alt = "Agent";
+
+    // Text container
+    const content = document.createElement("div");
+    content.className = "node-content";
 
     // Ensure bold title logic if not present
     let htmlContent = text;
     if (!text.includes("<strong>")) {
       htmlContent = `<strong>${text}</strong>`;
     }
+    content.innerHTML = htmlContent;
 
-    node.innerHTML = htmlContent;
+    node.appendChild(img);
+    node.appendChild(content);
+
     this.el.chainStream.appendChild(node);
 
     // Auto-scroll chain
