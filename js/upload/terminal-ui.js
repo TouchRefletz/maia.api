@@ -1213,9 +1213,11 @@ export class TerminalUI {
     this.container.classList.remove("term-status-success");
     this.container.classList.add("term-status-error");
 
-    this.el.eta.innerText = "TEMPO: INTERROMPIDO";
-    this.el.stepText.innerText = `Processo falhou: ${reason}`;
-    this.el.stepText.style.color = "var(--color-error)";
+    // Hide timer on error
+    if (this.el.timer) this.el.timer.style.display = "none";
+
+    // Show error in Chain of Thought instead of legacy step text
+    this.appendChainThought(`Processo falhou: ${reason}`, "error");
 
     this.queueLog(`[ERRO CRÍTICO] ${reason}`, "error");
 
@@ -1245,7 +1247,8 @@ export class TerminalUI {
     // Override status text specifically for clarity
     this.el.status.innerText = "CANCELADO";
     this.el.status.style.color = "var(--color-error)"; // Reuse error red
-    this.el.eta.innerText = "TEMPO: CANCELADO";
+
+    // Timer was already hidden by fail(), no need to access el.eta
 
     // Ensure minimized button is RED (fail does this, but being explicit doesn't hurt)
     this.container.classList.remove("term-status-success");
