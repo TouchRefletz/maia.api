@@ -310,7 +310,6 @@ jobs:
         uses: ./.github/actions/compute-hash
         with:
           path: "hf_repo/output/${{ env.SLUG }}"
-          files: "${{ env.PDF_FILENAME }} ${{ env.GAB_FILENAME }}"
 
       - name: Generate Thumbnails
         env:

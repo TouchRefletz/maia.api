@@ -1490,18 +1490,23 @@ async function handleManualUpload(request, env) {
 		console.log('[Worker] Keys:', [...formData.keys()]);
 		console.log(`[Worker] CustomNames: PDF="${pdfCustomName}", GAB="${gabCustomName}"`);
 
-		// Priority: Custom Name > File Name > CANARY FALLBACK (to prove code update)
-		// Priority: AI Standardized Name > Custom Name > File Name
-		const pdfFinalName =
-			aiData.formatted_title_prova || pdfCustomName || (fileProva && fileProva.name ? fileProva.name : 'FALLBACK_ERROR_PDF.pdf');
-		// For gabarito, if AI didn't return one (maybe needed forcing?), we try to infer or fallback
-		const gabFinalName = aiData.formatted_title_gabarito || gabCustomName || (fileGabarito && fileGabarito.name ? fileGabarito.name : null);
+		// 1. PHYSICAL FILENAME (Storage) - Priority: Custom > Original
+		// We want SAFE filenames for the filesystem (no spaces/weird chars logic handled by user input or assumed safe from source)
+		const sanitize = (n) => (n ? n.replace(/[^a-zA-Z0-9.-]/g, '_') : n);
+		const pdfPhysicalName = sanitize(pdfCustomName || (fileProva && fileProva.name ? fileProva.name : 'FALLBACK_ERROR_PDF.pdf'));
+		const gabPhysicalName = sanitize(gabCustomName || (fileGabarito && fileGabarito.name ? fileGabarito.name : null));
+
+		// 2. DISPLAY NAME (Presentation) - Priority: AI > Custom > Original
+		const pdfDisplayName = aiData.formatted_title_prova || pdfPhysicalName.replace(/\.pdf$/i, '');
+		const gabDisplayName = aiData.formatted_title_gabarito || (gabPhysicalName ? gabPhysicalName.replace(/\.pdf$/i, '') : null);
 
 		// 3. DUPLICATE CHECK (Unless Override)
 		let pdfUrlToDispatch = formData.get('pdf_url_override') || pdfUrl;
 		let gabUrlToDispatch = formData.get('gabarito_url_override') || gabUrl;
-		let pdfFinalNameForMeta = pdfFinalName;
-		let gabFinalNameForMeta = gabFinalName;
+
+		// The "Final Name" for metadata starts as our physical target, but may be overwritten if dedup finds a hosted file.
+		let pdfFinalPhysicalName = pdfPhysicalName;
+		let gabFinalPhysicalName = gabPhysicalName;
 
 		let foundProva = false;
 		let foundGab = false;
@@ -1528,7 +1533,7 @@ async function handleManualUpload(request, env) {
 
 							const fname = match.filename || match.path;
 							if (fname) {
-								pdfFinalNameForMeta = fname; // PRESERVE EXISTING FILENAME for metadata
+								pdfFinalPhysicalName = fname; // PRESERVE EXISTING PHYSICAL NAME
 							}
 						}
 					}
@@ -1544,7 +1549,7 @@ async function handleManualUpload(request, env) {
 
 							const fname = matchGab.filename || matchGab.path;
 							if (fname) {
-								gabFinalNameForMeta = fname; // PRESERVE EXISTING FILENAME for metadata
+								gabFinalPhysicalName = fname; // PRESERVE EXISTING PHYSICAL NAME
 							}
 						}
 					}
@@ -1562,8 +1567,8 @@ async function handleManualUpload(request, env) {
 								message: 'Arquivo(s) já existente(s) encontrado(s) (Smart Deduplication).',
 								ai_data: aiData,
 								// For preview, we reconstruct the hosted URL because dispatch was null
-								hf_url_preview: `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${slug}/files/${pdfFinalNameForMeta}`,
-								hf_url_gabarito: `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${slug}/files/${gabFinalNameForMeta}`,
+								hf_url_preview: `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${slug}/files/${pdfFinalPhysicalName}`,
+								hf_url_gabarito: `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${slug}/files/${gabFinalPhysicalName}`,
 								is_deduplicated: true,
 								dedup_status: {
 									prova: foundProva ? 'hosted' : 'new',
@@ -1622,7 +1627,7 @@ async function handleManualUpload(request, env) {
 		// (Calculated above)
 
 		console.log(
-			`[Worker] FINAL DECISION: pdf="${pdfFinalNameForMeta}", pdf_url=${pdfUrlToDispatch ? 'SENDING' : 'SKIP'}, gab_url=${gabUrlToDispatch ? 'SENDING' : 'SKIP'}`,
+			`[Worker] FINAL DECISION: pdf="${pdfFinalPhysicalName}", pdf_url=${pdfUrlToDispatch ? 'SENDING' : 'SKIP'}, gab_url=${gabUrlToDispatch ? 'SENDING' : 'SKIP'}`,
 		);
 
 		const ghRes = await fetch(`https://api.github.com/repos/${githubOwner}/${githubRepo}/dispatches`, {
@@ -1640,8 +1645,8 @@ async function handleManualUpload(request, env) {
 					pdf_url: pdfUrlToDispatch,
 					gabarito_url: gabUrlToDispatch,
 					ai_names: {
-						prova: pdfFinalNameForMeta,
-						gabarito: gabFinalNameForMeta,
+						prova: pdfDisplayName, // Send Display Name for reference
+						gabarito: gabDisplayName,
 					},
 					mode: formData.get('mode') || 'overwrite',
 					// Consolidate metadata to avoid 10 property limit (GitHub 422)
@@ -1653,10 +1658,10 @@ async function handleManualUpload(request, env) {
 						source_url_prova: sourceUrlProva,
 						source_url_gabarito: sourceUrlGabarito,
 						// visual_hash and gabarito_url NOT sent to Action (it computes them)
-						pdf_filename: pdfFinalNameForMeta,
-						gabarito_filename: gabFinalNameForMeta,
-						pdf_display_name: pdfFinalNameForMeta.replace(/\.pdf$/i, ''),
-						gabarito_display_name: gabFinalNameForMeta ? gabFinalNameForMeta.replace(/\.pdf$/i, '') : null,
+						pdf_filename: pdfFinalPhysicalName,
+						gabarito_filename: gabFinalPhysicalName,
+						pdf_display_name: pdfDisplayName,
+						gabarito_display_name: gabDisplayName,
 					},
 				},
 			}),
@@ -1680,8 +1685,8 @@ async function handleManualUpload(request, env) {
 				ai_data: aiData,
 				// We predict the final URL but frontend should wait for Pusher 'Cloud sync complete!'
 				// or use this as optimistic preview if dedup happened.
-				hf_url_preview: `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${slug}/files/${pdfFinalNameForMeta}`,
-				hf_url_gabarito: `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${slug}/files/${gabFinalNameForMeta}`,
+				hf_url_preview: `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${slug}/files/${pdfFinalPhysicalName}`,
+				hf_url_gabarito: `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${slug}/files/${gabFinalPhysicalName}`,
 				should_monitor: true,
 				dedup_status: {
 					prova: foundProva ? 'hosted' : 'new',
