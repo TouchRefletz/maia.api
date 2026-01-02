@@ -521,7 +521,7 @@ async function handleDeepSearchUpdate(request, env) {
 				...metadata,
 				query, // We still keep the original query in metadata for reference
 				slug,
-				type: 'deep-search-result',
+				type: metadata.type || 'deep-search-result', // Allow manual override (e.g. 'manual-upload-result')
 				updated_at: new Date().toISOString(),
 			},
 		};
@@ -643,8 +643,10 @@ async function executePineconeQuery(vector, env, topK = 1, filter = {}) {
  * HELPER: Shared Pinecone Upsert
  */
 async function executePineconeUpsert(vectors, env, namespace = '') {
-	// Checks if any vector is a deep search result
-	const isDeepSearch = vectors.some((v) => v.metadata && v.metadata.type === 'deep-search-result');
+	// Checks if any vector is a deep search or manual upload result
+	const isDeepSearch = vectors.some(
+		(v) => v.metadata && (v.metadata.type === 'deep-search-result' || v.metadata.type === 'manual-upload-result'),
+	);
 
 	let pineconeHost = env.PINECONE_HOST;
 
@@ -1559,6 +1561,37 @@ async function handleManualUpload(request, env) {
 				}
 			} catch (e) {
 				console.warn('HF Check failed, assuming new.', e);
+			}
+		} else {
+			// 3b. NEW SLUG (Manual Upload Indexing)
+			try {
+				console.log(`[Worker] New slug detected: ${slug}. Indexing to Pinecone...`);
+
+				// Generate Embedding for the SLUG (Canonical representation)
+				// Similar to deep-search, we embed the slug/title concept
+				const embeddingText = slug.replace(/-/g, ' ');
+				const embedding = await generateEmbedding(embeddingText, env.GOOGLE_GENAI_API_KEY);
+
+				const vector = {
+					id: slug,
+					values: embedding,
+					metadata: {
+						slug: slug,
+						institution: aiData.institution,
+						year: aiData.year ? parseInt(aiData.year) : new Date().getFullYear(), // Ensure number if possible, or keep string if inconsistent
+						file_count: 2, // Initial count (Probe + Gabarito)
+						type: 'manual-upload-result',
+						source: 'manual-upload',
+						query: slug.replace(/-/g, ' '), // Approximate query equivalent
+						original_query: title, // User provided title
+						updated_at: new Date().toISOString(),
+					},
+				};
+
+				await executePineconeUpsert([vector], env);
+				console.log(`[Worker] Pinecone indexing successful for: ${slug}`);
+			} catch (err) {
+				console.warn('[Worker] Pinecone indexing failed (non-blocking):', err);
 			}
 		}
 
