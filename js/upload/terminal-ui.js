@@ -1339,7 +1339,6 @@ export class TerminalUI {
 
     // Disable Cancel Button
     if (this.el.cancelBtn) {
-      this.el.cancelBtn.innerText = "Processando...";
       this.el.cancelBtn.classList.add("disabled");
       this.el.cancelBtn.disabled = true;
       this.el.cancelBtn.style.cursor = "not-allowed";

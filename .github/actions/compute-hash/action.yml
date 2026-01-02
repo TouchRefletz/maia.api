@@ -63,8 +63,7 @@ runs:
 
         # Extract Hash if it's a single file output
         # Look for "Hash: <hex>" in the output
-        HASH=$(echo "$OUTPUT" | grep "Hash: " | awk '{print $2}' | tail -n 1)
-
-        if [ -n "$HASH" ]; then
+        if echo "$OUTPUT" | grep -q "Hash: "; then
+          HASH=$(echo "$OUTPUT" | grep "Hash: " | awk '{print $2}' | tail -n 1)
           echo "hash=$HASH" >> $GITHUB_OUTPUT
         fi
