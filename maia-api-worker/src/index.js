@@ -1464,6 +1464,18 @@ async function handleManualUpload(request, env) {
 				.replace(/[^a-z0-9-]/g, '');
 		}
 
+		// SANITIZE & FORCE
+		const pdfCustomName = (formData.get('pdf_custom_name') || '').trim();
+		const gabCustomName = (formData.get('gabarito_custom_name') || '').trim();
+
+		// DEBUG LOGS (Force visible)
+		console.log('[Worker] Keys:', [...formData.keys()]);
+		console.log(`[Worker] CustomNames: PDF="${pdfCustomName}", GAB="${gabCustomName}"`);
+
+		// Priority: Custom Name > File Name > CANARY FALLBACK (to prove code update)
+		const pdfFinalName = pdfCustomName || (fileProva && fileProva.name ? fileProva.name : 'FALLBACK_ERROR_PDF.pdf');
+		const gabFinalName = gabCustomName || (fileGabarito && fileGabarito.name ? fileGabarito.name : null);
+
 		// 3. DUPLICATE CHECK (Unless Override)
 		let pdfUrlToDispatch = formData.get('pdf_url_override') || pdfUrl;
 		let gabUrlToDispatch = formData.get('gabarito_url_override') || gabUrl;
@@ -1547,17 +1559,7 @@ async function handleManualUpload(request, env) {
 		const githubOwner = env.GITHUB_OWNER || 'TouchRefletz';
 		const githubRepo = env.GITHUB_REPO || 'maia.api';
 
-		// SANITIZE & FORCE
-		const pdfCustomName = (formData.get('pdf_custom_name') || '').trim();
-		const gabCustomName = (formData.get('gabarito_custom_name') || '').trim();
-
-		// DEBUG LOGS (Force visible)
-		console.log('[Worker] Keys:', [...formData.keys()]);
-		console.log(`[Worker] CustomNames: PDF="${pdfCustomName}", GAB="${gabCustomName}"`);
-
-		// Priority: Custom Name > File Name > CANARY FALLBACK (to prove code update)
-		const pdfFinalName = pdfCustomName || (fileProva && fileProva.name ? fileProva.name : 'FALLBACK_ERROR_PDF.pdf');
-		const gabFinalName = gabCustomName || (fileGabarito && fileGabarito.name ? fileGabarito.name : null);
+		// (Calculated above)
 
 		console.log(`[Worker] FINAL DECISION: pdf="${pdfFinalNameForMeta}"`);
 
