@@ -77,8 +77,8 @@
 
 /* Progress Bar Section */
 .term-progress-container {
-  padding: 20px;
-  border-bottom: 1px solid var(--term-border);
+  padding: 20px 20px 0px 20px; /* Reduced bottom padding */
+  border-bottom: 1px solid transparent; /* Removed visible border */
   background: var(--term-bg);
   flex-shrink: 0;
 }
@@ -129,101 +129,221 @@
   font-size: 0.75rem;
   color: var(--color-text-secondary);
   font-weight: var(--font-weight-medium);
+  margin-bottom: 10px;
 }
 
 .term-step-text {
+  /* This is now mostly hidden or used for fallback/status bar */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 70%;
+  display: none; /* Hiding old step text per new design */
 }
 
 .term-eta {
   color: var(--term-accent);
   font-weight: var(--font-weight-bold);
   font-variant-numeric: tabular-nums;
+  margin-left: auto; /* Push to right */
 }
 
-/* Task List Section */
-.term-tasks {
-  flex-grow: 1;
-  /* overflow-y: auto; REMOVED to show full content */
-  padding: 16px 20px;
-  background: var(--term-bg);
+/* --- NEW FLOATING OBJECTIVES HEADER --- */
+/* The container for the floating icons */
+.term-objectives-header {
+  display: flex;
+  gap: 16px;
+  padding: 10px 20px;
+  background: var(--term-bg); /* Or slightly different shade? */
   border-bottom: 1px solid var(--term-border);
-  min-height: 120px;
-  height: auto; /* Ensure it grows */
+  overflow-x: auto;
+  align-items: center;
+  justify-content: center; /* Center by default, or flex-start if many */
+  min-height: 60px;
 }
 
-.term-task-item {
+.term-obj-icon-link {
+  text-decoration: none;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.term-obj-icon-link:hover {
+  transform: scale(1.1);
+}
+
+.term-obj-img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  opacity: 0.4; /* Default inactive/upcoming */
+  filter: grayscale(100%);
+  transition: all 0.3s;
+}
+
+/* Connectors between icons */
+.term-obj-icon-link:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  right: -16px; /* Half of gap */
+  top: 50%;
+  width: 16px;
+  height: 2px;
+  background: var(--term-border);
+  z-index: 0;
+}
+
+/* Active / Spinning State */
+.term-obj-img.spinning {
+  opacity: 1;
+  filter: none; /* Full color */
+  animation: spin-logo 3s linear infinite;
+  width: 32px; /* Slightly larger */
+  height: 32px;
+  filter: drop-shadow(0 0 5px var(--term-accent));
+}
+
+@keyframes spin-logo {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Check / Done State */
+.term-obj-check {
+  font-size: 1.2rem;
+  color: var(--color-success);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+}
+
+/* --- DETAILED TASKS BODY (Definition Cards) --- */
+.term-tasks-body {
+  flex-grow: 1;
+  padding: 20px;
+  background: var(--term-bg); /* Or transparent */
   display: flex;
   flex-direction: column;
+  gap: 20px; /* Space between cards */
+  /* Remove fixed height constraints to let it flow */
+}
+
+/* Adopted Thought Card Styles */
+.term-task-card {
+  display: flex;
   gap: 12px;
-  padding: 6px 0;
-  opacity: 0.6;
-  transition: all 0.3s;
-  border-bottom: 1px solid transparent;
+  padding: 0; /* Layout handled by children */
+  border-radius: var(--radius-md);
+  scroll-margin-top: 100px; /* Buffer for anchors */
+  opacity: 0.5; /* Default dim for upcoming */
+  transition: opacity 0.3s;
 }
 
-.term-task-item:last-child {
-  padding-bottom: 0;
-}
-
-.term-task-item.current {
+.term-task-card.active {
   opacity: 1;
-  font-weight: var(--font-weight-bold);
-  color: var(--term-text-shine);
-  padding-left: 4px; /* Subtle shift */
-  border-left: 2px solid var(--term-accent);
 }
 
-.term-task-item.done {
-  opacity: 0.5;
+.term-task-card.done {
+  opacity: 0.7;
+}
+
+/* Left Column: Icon/Line */
+.term-task-visual {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 24px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+/* The vertical line connecting thoughts */
+.term-task-card:not(:last-child) .term-task-visual::after {
+  content: '';
+  position: absolute;
+  top: 24px; /* Start below icon */
+  bottom: -20px; /* Extend into gap */
+  width: 2px;
+  background: var(--term-border);
+  /* Optional: dashed line for future? */
+}
+
+.term-task-card.active .term-task-visual::after {
+   background: var(--term-accent); /* Highlight path */
+   opacity: 0.5;
+}
+
+.term-task-visual-icon {
+    font-size: 1rem;
+    line-height: 1;
+    margin-top: 2px;
+}
+
+.term-task-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.term-task-title {
+  font-family: var(--font-family-mono);
+  font-size: 16px;
+  font-weight: 700;
   color: var(--term-accent);
+  line-height: 1.2;
+  font-style: italic;
 }
 
-.term-icon {
-  width: 16px;
-  display: inline-flex; /* Better centering */
-  justify-content: center;
-  text-align: center;
+.term-task-notes {
+  font-family: var(--font-family-mono);
+  font-size: 11px;
+  color: var(--term-text);
+  white-space: pre-wrap;
+  line-height: 1.5;
+  background: rgba(0,0,0,0.1);
+  padding: 8px;
+  border-radius: 6px;
+  border-left: 2px solid var(--term-border);
 }
 
-/* Action Button */
-.term-action-btn {
-  background: var(--term-accent);
-  color: var(--color-btn-primary-text);
-  border: none;
-  padding: 8px 16px;
-  border-radius: var(--radius-base);
-  cursor: pointer;
-  font-size: 0.8rem;
-  font-family: var(--font-family-base); /* Standard font for buttons */
-  font-weight: var(--font-weight-medium);
-  transition: background 0.2s, transform 0.1s;
-  text-decoration: none;
-  display: inline-block;
+.term-task-card.active .term-task-notes {
+    border-left-color: var(--term-accent);
+    background: rgba(var(--color-primary-rgb), 0.05);
 }
 
-.term-action-btn:hover {
-  background: var(--color-primary-hover);
-  transform: translateY(-1px);
-}
+/* --- GENERIC BUTTONS & LOGS (Refined) --- */
 
 /* Header Buttons */
 .term-btn {
   font-size: 0.75rem;
   padding: 2px 8px;
+  margin: 0px 8px 4px 0px;
   border-radius: 4px;
   cursor: pointer;
-  margin: 0px 8px 4px 0px;
   transition: all 0.2s;
   text-decoration: none;
-  display: inline-block;
   font-family: var(--term-font);
-  border: 1px solid #444;
-  color: #666;
+  border: 1px solid var(--term-border);
+  color: var(--term-text);
   background: transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.term-btn:hover {
+    border-color: var(--term-text);
+    color: var(--term-text-shine);
 }
 
 .term-btn.disabled {
@@ -231,39 +351,28 @@
   opacity: 0.5;
 }
 
-.term-btn.active-log {
-  color: var(--color-primary);
-  border-color: var(--color-primary);
-  pointer-events: auto;
+.term-btn.retry {
+    background-color: var(--term-accent);
+    color: #fff;
+    border: none;
+}
+.term-btn.retry:hover {
+    opacity: 0.9;
 }
 
 .term-btn.cancel {
   border-color: #d32f2f;
   color: #d32f2f;
-  /* display: none; REMOVED per user request */
-  height: 22px;
 }
 
-.term-btn.cancel:hover {
-  background: rgba(211, 47, 47, 0.1);
-  box-shadow: 0 0 8px rgba(211, 47, 47, 0.4);
+/* Log Section */
+.term-log-header {
+    margin-top: auto; /* Push to bottom if content is short */
+    border-top: 1px solid var(--term-border);
+    padding: 8px 16px;
+    background: rgba(0,0,0,0.2);
 }
 
-.term-btn.cancel:disabled,
-.term-btn.cancel.disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  border-color: #666; /* Gray out border */
-  color: #666; /* Gray out text */
-  pointer-events: none;
-}
-
-.term-btn.cancel.disabled:hover {
-    background: transparent;
-    box-shadow: none;
-}
-
-/* Raw Log Section */
 .term-logs {
   height: 140px;
   flex-shrink: 0;
@@ -290,6 +399,7 @@
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;

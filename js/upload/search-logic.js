@@ -576,7 +576,11 @@ export function setupSearchLogic() {
       const log = (text, type = "info") => terminal.processLogLine(text, type);
 
       if (!confirm) {
-        log("Iniciando Verificação Pré-Busca...", "info");
+        // Initial LOG
+        log(
+          "Verificando banco de dados por resultados existentes...",
+          "in_progress"
+        );
       } else {
         log("Reiniciando busca (Terminal Restaurado)...", "warning");
       }
@@ -588,6 +592,9 @@ export function setupSearchLogic() {
       terminal = new TerminalUI(existingEl);
       terminalInstance = terminal; // Save Global Ref
       terminal.onExpandRequest = handleExpandRequest;
+
+      // Ensure we don't wipe tasks if we are just updating/retrying
+      // If force=true (retry), maybe we want to reset status to in_progress?
 
       // If update mode, show visual cue
       if (mode === "update")

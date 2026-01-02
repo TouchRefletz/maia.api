@@ -91,12 +91,21 @@ export class TerminalUI {
       this.options.mode === "simple"
         ? ""
         : `
-      <div class="term-tasks">
-        <div class="term-task-item current">
-          <div style="display:flex; align-items:center;">
-              <span class="term-icon">⚡</span> 
-              <span>Iniciando Executor OpenHands Cloud...</span>
-          </div>
+      <div class="term-objectives-header">
+        <!-- Init State -->
+        <a href="#" class="term-obj-icon-link">
+             <img src="/logo.png" class="term-obj-img spinning" alt="Active">
+        </a>
+      </div>
+      <div class="term-tasks-body">
+        <div class="term-task-card active">
+           <div class="term-task-visual">
+              <div class="term-task-visual-icon">⚡</div>
+           </div>
+           <div class="term-task-content">
+              <div class="term-task-title">Verificando banco de dados...</div>
+              <div class="term-task-notes">Consultando registros existentes...</div>
+           </div>
         </div>
       </div>
     `;
@@ -319,6 +328,7 @@ export class TerminalUI {
         </div>
       </div>
 
+      <!-- New Split View -->
       ${tasksBlock}
 
       <div class="term-log-header" style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; border-bottom: 1px solid #333; padding-bottom: 5px;">
@@ -348,7 +358,12 @@ export class TerminalUI {
     this.el.eta = this.container.querySelector(".term-eta");
     this.el.status = this.container.querySelector(".term-status");
     this.el.stepText = this.container.querySelector(".term-step-text");
-    this.el.taskList = this.container.querySelector(".term-tasks");
+    this.el.objectivesHeader = this.container.querySelector(
+      ".term-objectives-header"
+    );
+    this.el.tasksBody = this.container.querySelector(".term-tasks-body");
+    // Old ref for safety if needed, though we use new ones now
+    this.el.taskList = this.el.tasksBody;
     this.el.logStream = this.container.querySelector("#term-logs-stream");
     this.el.logBtn = this.container.querySelector("#term-btn-logs");
     this.el.cancelBtn = this.container.querySelector("#term-btn-cancel");
@@ -528,11 +543,34 @@ export class TerminalUI {
   }
 
   updateStepText(text) {
-    if (this.el.stepText) {
-      this.el.stepText.innerText = text;
-      // Reset color to default or based on context if needed
-      // this.el.stepText.style.color = "var(--color-text)";
+    if (!text) return;
+
+    // Find the currently active task
+    const activeTask =
+      this.tasks.find((t) => t.status === "in_progress") || this.tasks[0];
+
+    if (activeTask && this.el.tasksBody) {
+      // Append text to the notes of the active card in DOM directly for real-time feel
+      // We also ideally update state 'notes' but that might cause re-render flicker.
+      // Let's find the card element by some ID we will generate (or index).
+
+      // Strategy: Find the active card DOM element
+      const activeCard = this.el.tasksBody.querySelector(
+        ".term-task-card.active"
+      );
+      if (activeCard) {
+        const noteEl = activeCard.querySelector(".term-task-notes");
+        if (noteEl) {
+          // Append new line if not duplicate
+          if (!noteEl.innerText.includes(text)) {
+            noteEl.innerText += `\n> ${text}`;
+            noteEl.scrollTop = noteEl.scrollHeight;
+          }
+        }
+      }
     }
+    // Also update legacy/fallback if needed (hidden by CSS now)
+    if (this.el.stepText) this.el.stepText.innerText = text;
   }
 
   /**
@@ -811,7 +849,8 @@ export class TerminalUI {
       this.updateProgressBar();
 
       this.el.status.innerText = "EXECUTANDO_PLANO";
-      this.el.taskList.innerHTML = "";
+      this.el.objectivesHeader.innerHTML = "";
+      this.el.tasksBody.innerHTML = "";
     }
 
     this.tasks = newTasks;
@@ -861,39 +900,82 @@ export class TerminalUI {
   }
 
   renderTaskList() {
-    this.el.taskList.innerHTML = this.tasks
-      .map((t) => {
-        let icon = "○";
-        let cls = "";
+    if (!this.el.objectivesHeader || !this.el.tasksBody) return;
 
-        if (t.status === "done" || t.status === "completed") {
-          icon = "✔";
-          cls = "done";
-        } else if (t.status === "in_progress") {
-          icon = "▶";
-          cls = "current";
-          this.el.stepText.innerText = `Executando: ${t.title}`;
-        } else {
-          icon = "·";
-        }
+    // 1. Render Floating Objectives (Header)
+    let headerHtml = "";
+    let bodyHtml = "";
 
-        const noteHtml = t.notes
-          ? `<div style="font-size: 0.8rem; opacity: 0.7; margin-left: 24px;">${t.notes}</div>`
-          : "";
+    this.tasks.forEach((t, index) => {
+      const isDone = t.status === "done" || t.status === "completed";
+      const isProgress = t.status === "in_progress";
+      const isNext = !isDone && !isProgress && index === 0; // Fallback if nothing in progress? Logic check.
 
-        return `
-        <div class="term-task-item ${cls}">
-          <div style="display:flex; align-items:center;">
-              <span class="term-icon">${icon}</span> 
-              <span>${t.title}</span>
-          </div>
-          ${noteHtml}
-        </div>
-      `;
-      })
-      .join("");
+      // Icon Logic
+      // If done -> Checkmark
+      // If in_progress -> Spinning Star
+      // If todo -> Static Star (or number?)
 
-    this.el.taskList.scrollTop = this.el.taskList.scrollHeight;
+      let iconHtml = "";
+      let imgClass = "term-obj-img";
+
+      if (isProgress) {
+        imgClass += " spinning";
+        iconHtml = `<img src="/logo.png" class="${imgClass}" alt="Active">`;
+      } else if (isDone) {
+        iconHtml = `<div class="term-obj-check">✔</div>`;
+      } else {
+        // Todo/Waiting
+        iconHtml = `<img src="/logo.png" class="${imgClass}" alt="Waiting">`;
+      }
+
+      // Anchor Link
+      headerHtml += `
+         <a href="#term-task-${index}" class="term-obj-icon-link" title="${t.title}">
+            ${iconHtml}
+         </a>
+       `;
+
+      // 2. Render Definition Body (Cards)
+      let cardClass = "term-task-card";
+      if (isProgress) cardClass += " active";
+      if (isDone) cardClass += " done";
+
+      // Body Icon (Small visual on left of card)
+      let bodyIcon = "○";
+      if (isDone) bodyIcon = "✔";
+      if (isProgress) bodyIcon = "⚡"; // Or play
+
+      const rawNotes = t.notes || "";
+      // Ensure we have some content
+      const noteContent = rawNotes
+        ? rawNotes
+        : isProgress
+          ? "Processando..."
+          : "Aguardando...";
+
+      bodyHtml += `
+         <div id="term-task-${index}" class="${cardClass}">
+             <div class="term-task-visual">
+                 <div class="term-task-visual-icon">${bodyIcon}</div>
+             </div>
+             <div class="term-task-content">
+                 <div class="term-task-title">${t.title}</div>
+                 <div class="term-task-notes">${noteContent}</div>
+             </div>
+         </div>
+       `;
+    });
+
+    this.el.objectivesHeader.innerHTML = headerHtml;
+    this.el.tasksBody.innerHTML = bodyHtml;
+
+    // Auto-scroll logic for body?
+    // Not necessarily, user can scroll. Or scroll to active?
+    const activeCard = this.el.tasksBody.querySelector(".active");
+    if (activeCard) {
+      // activeCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
   }
 
   setVerifyMode() {
