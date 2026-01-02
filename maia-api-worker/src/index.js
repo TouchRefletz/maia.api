@@ -121,10 +121,6 @@ async function handleTriggerDeepSearch(request, env) {
 	let canonicalSlug = body.slug; // Helper or frontend provided fallback
 	let reasoning = 'Manual override';
 
-	// 2. Canonical Slug Generation (Pre-flight Phase)
-	let canonicalSlug = body.slug; // Helper or frontend provided fallback
-	let reasoning = 'Manual override';
-
 	// If no forced slug provided, generate one via Gemini (Centralized Service)
 	if (!canonicalSlug) {
 		try {
