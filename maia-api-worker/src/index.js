@@ -1465,77 +1465,77 @@ async function handleManualUpload(request, env) {
 		}
 
 		// 3. DUPLICATE CHECK (Unless Override)
-		// 3. DUPLICATE CHECK (Unless Override)
+		let pdfUrlToDispatch = formData.get('pdf_url_override') || pdfUrl;
+		let gabUrlToDispatch = formData.get('gabarito_url_override') || gabUrl;
+		let pdfFinalNameForMeta = pdfFinalName;
+		let gabFinalNameForMeta = gabFinalName;
+
+		let foundProva = false;
+		let foundGab = false;
 
 		if (!confirmOverride) {
 			try {
 				const hfManifestUrl = `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${slug}/manifest.json`;
-				const hfCheck = await fetch(hfManifestUrl, { method: 'HEAD' }); // HEAD is faster
+				const hfCheck = await fetch(hfManifestUrl, { method: 'HEAD' });
 
 				if (hfCheck.status === 200) {
-					// Conflict found! Fetch the full manifest to show the user
+					// Conflict found! Fetch the full manifest to check granularly
 					const fullManifestRes = await fetch(hfManifestUrl);
 					const remoteManifest = await fullManifestRes.json();
+					const items = Array.isArray(remoteManifest) ? remoteManifest : remoteManifest.results || remoteManifest.files || [];
 
-					// --- SMART DEDUPLICATION START ---
-					// If the incoming hash matches a file already in the manifest, we skip everything and just return success.
+					// --- CHECK PROVA ---
 					if (inputVisualHash) {
-						const items = Array.isArray(remoteManifest) ? remoteManifest : remoteManifest.results || remoteManifest.files || [];
 						const match = items.find((item) => item.visual_hash === inputVisualHash);
-
 						if (match) {
-							console.log(`[Worker] Smart Deduplication: Hash ${inputVisualHash} found in slug ${slug}. Using existing file.`);
-
-							let existingUrl = match.url;
-							if (!existingUrl) {
-								const info = match.path || match.filename; // fallback
-								if (info)
-									existingUrl = `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${slug}/files/${info}`;
+							console.log(`[Worker] Dedup: Prova found (${match.filename}). Using hosted URL.`);
+							foundProva = true;
+							// Use hosted URL instead of tmpfiles
+							const fname = match.filename || match.path;
+							if (fname) {
+								pdfUrlToDispatch = `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${slug}/files/${fname}`;
+								pdfFinalNameForMeta = fname; // PRESERVE EXISTING FILENAME
 							}
-
-							// Logic for Gabarito (if present, check if it also matches or just return the main proof match)
-							// Ideally we check both, but if Prova matches, we assume it's the same "Exam Entity".
-							// Let's check gabarito too if provided.
-							let existingGabUrl = null;
-							if (inputVisualHashGab) {
-								const matchGab = items.find((item) => item.visual_hash === inputVisualHashGab);
-								if (matchGab) {
-									existingGabUrl =
-										matchGab.url ||
-										`https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${slug}/files/${matchGab.filename || matchGab.path}`;
-								}
-							}
-
-							return new Response(
-								JSON.stringify({
-									success: true,
-									slug,
-									message: 'Arquivo já existente encontrado (Smart Deduplication).',
-									ai_data: aiData,
-									hf_url_preview: existingUrl,
-									hf_url_gabarito: existingGabUrl,
-									is_deduplicated: true,
-								}),
-								{ headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-							);
 						}
 					}
-					// --- SMART DEDUPLICATION END ---
 
-					return new Response(
-						JSON.stringify({
-							success: false,
-							status: 'conflict',
-							slug,
-							message: 'Prova encontrada no banco de dados.',
-							remote_manifest: remoteManifest,
-							ai_data: aiData,
-							// Pass back valid upload URLs so we don't need to re-upload if they override
-							temp_pdf_url: pdfUrl,
-							temp_gabarito_url: gabUrl,
-						}),
-						{ headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-					);
+					// --- CHECK GABARITO ---
+					if (inputVisualHashGab) {
+						const matchGab = items.find((item) => item.visual_hash === inputVisualHashGab);
+						if (matchGab) {
+							console.log(`[Worker] Dedup: Gabarito found (${matchGab.filename}). Using hosted URL.`);
+							foundGab = true;
+							const fname = matchGab.filename || matchGab.path;
+							if (fname) {
+								gabUrlToDispatch = `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${slug}/files/${fname}`;
+								gabFinalNameForMeta = fname; // PRESERVE EXISTING FILENAME
+							}
+						}
+					}
+
+					// LOGIC: If all required files (Prova and/or Gabarito) are already found in the manifest,
+					// we return success immediately. This assumes that if the visual hash matches,
+					// the file is identical and valid for this exam entity.
+					const provaSatisfied = !fileProva || foundProva;
+					const gabSatisfied = !fileGabarito || foundGab;
+
+					if (provaSatisfied && gabSatisfied) {
+						return new Response(
+							JSON.stringify({
+								success: true,
+								slug,
+								message: 'Arquivo(s) já existente(s) encontrado(s) (Smart Deduplication).',
+								ai_data: aiData,
+								hf_url_preview: pdfUrlToDispatch,
+								hf_url_gabarito: gabUrlToDispatch,
+								is_deduplicated: true,
+							}),
+							{ headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+						);
+					}
+
+					// If partial, we proceed to dispatch. The found ones have hosted URLs, new ones have tmpfiles URLs.
+					console.log('[Worker] Partial deduplication. Dispatching hybrid request.');
 				}
 			} catch (e) {
 				console.warn('HF Check failed, assuming new.', e);
@@ -1559,7 +1559,7 @@ async function handleManualUpload(request, env) {
 		const pdfFinalName = pdfCustomName || (fileProva && fileProva.name ? fileProva.name : 'FALLBACK_ERROR_PDF.pdf');
 		const gabFinalName = gabCustomName || (fileGabarito && fileGabarito.name ? fileGabarito.name : null);
 
-		console.log(`[Worker] FINAL DECISION: pdf="${pdfFinalName}"`);
+		console.log(`[Worker] FINAL DECISION: pdf="${pdfFinalNameForMeta}"`);
 
 		const ghRes = await fetch(`https://api.github.com/repos/${githubOwner}/${githubRepo}/dispatches`, {
 			method: 'POST',
@@ -1573,8 +1573,8 @@ async function handleManualUpload(request, env) {
 				client_payload: {
 					slug,
 					title,
-					pdf_url: formData.get('pdf_url_override') || pdfUrl,
-					gabarito_url: formData.get('gabarito_url_override') || gabUrl,
+					pdf_url: pdfUrlToDispatch,
+					gabarito_url: gabUrlToDispatch,
 					mode: formData.get('mode') || 'overwrite',
 					// Consolidate metadata to avoid 10 property limit (GitHub 422)
 					metadata: {
@@ -1585,8 +1585,8 @@ async function handleManualUpload(request, env) {
 						source_url_prova: sourceUrlProva,
 						source_url_gabarito: sourceUrlGabarito,
 						// visual_hash and gabarito_url NOT sent to Action (it computes them)
-						pdf_filename: pdfFinalName,
-						gabarito_filename: gabFinalName,
+						pdf_filename: pdfFinalNameForMeta,
+						gabarito_filename: gabFinalNameForMeta,
 					},
 				},
 			}),
@@ -1601,13 +1601,17 @@ async function handleManualUpload(request, env) {
 			});
 		}
 
+		// TELL FRONTEND TO MONITOR PUSHER
 		return new Response(
 			JSON.stringify({
 				success: true,
 				slug,
-				message: 'Upload started. AI Researching & Syncing...',
+				message: 'Upload started. Monitoring progress...',
 				ai_data: aiData,
-				hf_url_preview: `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${slug}/files/${pdfFinalName}`,
+				// We predict the final URL but frontend should wait for Pusher 'Cloud sync complete!'
+				// or use this as optimistic preview if dedup happened.
+				hf_url_preview: `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${slug}/files/${pdfFinalNameForMeta}`,
+				should_monitor: true,
 			}),
 			{
 				headers: { ...corsHeaders, 'Content-Type': 'application/json' },

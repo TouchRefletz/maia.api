@@ -35,76 +35,7 @@ jobs:
         with:
           path: "temp_input.pdf"
 
-      - name: Check for Hash Existence in Repository
-        id: check
-        shell: bash
-        env:
-          TARGET_HASH: ${{ steps.compute.outputs.hash }}
-        run: |
-          echo "Checking if hash $TARGET_HASH exists in known manifests..."
-
-          # We need to scan all manifests.
-          # output/*/manifest.json
-
-          # Create a quick node script inline to handle JSON parsing reliability
-          cat << 'EOF' > check_existence.cjs
-          const fs = require('fs');
-          const path = require('path');
-          const glob = require('glob'); // Might need to install specific glob if not available, OR just use fs traversal
-
-          // Simple recursive traversal since glob might not be installed in the root context 
-          // (Wait, we installed npm deps in the composite action, but that was just for puppeteer/pdfjs)
-          // Let's use 'find' command to list files and stream to node for robustness.
-
-          const targetHash = process.env.TARGET_HASH;
-          const rootDir = 'output';
-
-          if (!targetHash) {
-             console.log(JSON.stringify({ exists: false }));
-             process.exit(0);
-          }
-
-          let found = false;
-          let foundSlug = null;
-
-          if (fs.existsSync(rootDir)) {
-              const slugs = fs.readdirSync(rootDir);
-              for (const slug of slugs) {
-                  const manifestPath = path.join(rootDir, slug, 'manifest.json');
-                  if (fs.existsSync(manifestPath)) {
-                      try {
-                          const content = fs.readFileSync(manifestPath, 'utf8');
-                          const data = JSON.parse(content);
-                          const items = Array.isArray(data) ? data : (data.results || []);
-                          
-                          for (const item of items) {
-                              if (item.visual_hash === targetHash) {
-                                  found = true;
-                                  foundSlug = slug;
-                                  break;
-                              }
-                          }
-                      } catch (e) {
-                          // ignore json errors
-                      }
-                  }
-                  if (found) break;
-              }
-          }
-
-          console.log(JSON.stringify({ exists: found, slug: foundSlug }));
-          EOF
-
-          # Run the check
-          RESULT_JSON=$(node check_existence.cjs)
-          echo "Check Result: $RESULT_JSON"
-
-          # Parse for outputs
-          EXISTS=$(echo $RESULT_JSON | grep -o '"exists":true' && echo "true" || echo "false")
-          FOUND_SLUG=$(echo $RESULT_JSON | sed -n 's/.*"slug":"\([^"]*\)".*/\1/p')
-
-          echo "exists=$EXISTS" >> $GITHUB_OUTPUT
-          echo "found_slug=$FOUND_SLUG" >> $GITHUB_OUTPUT
+      # Removed 'Check for Hash Existence in Repository' step as this is now handled by the Worker/Frontend.
 
       - name: Notify Frontend (Pusher)
         if: always()
@@ -115,8 +46,9 @@ jobs:
           PUSHER_CLUSTER: ${{ secrets.PUSHER_CLUSTER }}
           CHANNEL: ${{ inputs.slug }}
           HASH: ${{ steps.compute.outputs.hash }}
-          EXISTS: ${{ steps.check.outputs.exists }}
-          FOUND_SLUG: ${{ steps.check.outputs.found_slug }}
+          # Check Logic Removed: Always return false/null here. Worker handles deduplication.
+          EXISTS: "false"
+          FOUND_SLUG: ""
         run: |
           # Construct JSON payload
           # We send: { hash, exists, existing_slug }
