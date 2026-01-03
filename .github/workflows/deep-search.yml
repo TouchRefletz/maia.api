@@ -412,7 +412,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          EXISTING_FILES: ${{ steps.fetch_manifest.outputs.existing_files }}
+          EXISTING_FILES="${{ steps.fetch_manifest.outputs.existing_files }}"
           # 1) Heredoc sem interpretação (não executa backticks)
           PROMPT_TEMPLATE=$(cat <<'EOF'
           Você recebeu uma consulta curta (QUERY) do tipo "nome da prova + ano", por exemplo: "ita 2022".

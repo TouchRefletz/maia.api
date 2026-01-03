@@ -640,6 +640,7 @@ export function setupSearchLogic() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query,
+          slug: currentSlug, // Fix: Ensure we target the existing folder on retry/update
           force,
           cleanup,
           confirm,
