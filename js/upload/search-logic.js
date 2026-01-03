@@ -609,16 +609,20 @@ export function setupSearchLogic() {
         terminalInstance = terminal;
       }
 
-      // RESET TERMINAL STATE FOR FRESH LOOK EVEN ON UPDATE
+      // 1. Define log helper FIRST (needed for onRetry)
+      const log = (text, type = "info") => terminal.processLogLine(text, type);
+
+      // 2. Bind onRetry with TYPE support (retry vs add_more)
+      terminal.onRetry = (type) =>
+        showRetryConfirmationModal(log, terminal, type);
+
+      // 3. RESET TERMINAL STATE FOR FRESH LOOK (Even on update)
       if (terminal) terminal.reset();
 
       terminal.onExpandRequest = handleExpandRequest;
 
-      // RESTORE STATE
+      // 4. RESTORE STATE
       if (prevNotify) terminal.setNotificationState(true);
-
-      // Ensure we don't wipe tasks if we are just updating/retrying
-      // If force=true (retry), maybe we want to reset status to in_progress?
 
       // If update mode, show visual cue
       if (mode === "update")
@@ -626,10 +630,6 @@ export function setupSearchLogic() {
           "⚠ MODO ATUALIZAÇÃO ATIVADO: Novos arquivos serão mesclados.",
           "warning"
         );
-
-      // Wire Retry Logic (Re-attach)
-      const log = (text, type = "info") => terminal.processLogLine(text, type);
-      terminal.onRetry = () => showRetryConfirmationModal(log, terminal);
     }
 
     // Internal Log helper
@@ -833,7 +833,7 @@ export function setupSearchLogic() {
     }
   };
 
-  const showRetryConfirmationModal = (log, terminal) => {
+  const showRetryConfirmationModal = (log, terminal, type = "add_more") => {
     // Create Modal UI dynamically
     const modalId = "retry-confirmation-modal";
     let modal = document.getElementById(modalId);
@@ -867,13 +867,35 @@ export function setupSearchLogic() {
       textAlign: "center",
     });
 
+    let iconHtml =
+      '<div style="font-size: 3rem; margin-bottom: 16px;">🔎</div>';
+    let titleText = "Continuar Busca?";
+    let bodyText = `
+        Deseja buscar <strong>novos arquivos</strong> para este termo?<br>
+        <br>
+        O sistema irá procurar itens que ainda não foram encontrados e adicioná-los ao banco de dados existente.
+    `;
+    let confirmBtnText = "Buscar Mais";
+    let confirmBtnColor = "var(--color-primary)"; // Default blue
+
+    // CUSTOMIZE FOR RETRY (ERROR RECOVERY)
+    if (type === "retry") {
+      iconHtml = '<div style="font-size: 3rem; margin-bottom: 16px;">🔄</div>';
+      titleText = "Tentar Novamente?";
+      bodyText = `
+          A busca anterior pode não ter sido concluída corretamente ou falhou.<br>
+          <br>
+          Deseja <strong>reiniciar o processo</strong>?
+      `;
+      confirmBtnText = "Tentar Novamente";
+      // Optional: Change button color to imply 'fix' or 'retry'
+    }
+
     content.innerHTML = `
-          <div style="font-size: 3rem; margin-bottom: 16px;">🔎</div>
-          <h2 style="font-size: 1.5rem; margin-bottom: 8px;">Continuar Busca?</h2>
+          ${iconHtml}
+          <h2 style="font-size: 1.5rem; margin-bottom: 8px;">${titleText}</h2>
           <p style="color: var(--color-text-secondary); margin-bottom: 24px;">
-              Deseja buscar <strong>novos arquivos</strong> para este termo?<br>
-              <br>
-              O sistema irá procurar itens que ainda não foram encontrados e adicioná-los ao banco de dados existente.
+              ${bodyText}
           </p>
           
           <div style="display: flex; gap: 12px; justify-content: center;">
@@ -883,9 +905,9 @@ export function setupSearchLogic() {
               ">Cancelar</button>
               
               <button id="btn-confirm-retry" style="
-                  background: var(--color-primary); color: white; border: none; padding: 12px 24px;
+                  background: ${confirmBtnColor}; color: white; border: none; padding: 12px 24px;
                   border-radius: 8px; font-weight: 600; cursor: pointer; flex: 1;
-              ">Buscar Mais</button>
+              ">${confirmBtnText}</button>
           </div>
       `;
 

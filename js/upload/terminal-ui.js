@@ -410,7 +410,7 @@ export class TerminalUI {
     // Bind Retry Button
     if (this.el.retryBtn) {
       this.el.retryBtn.addEventListener("click", () => {
-        if (this.onRetry) this.onRetry();
+        if (this.onRetry) this.onRetry("retry");
       });
     }
 
@@ -418,7 +418,7 @@ export class TerminalUI {
     if (this.el.addMoreBtn) {
       this.el.addMoreBtn.addEventListener("click", () => {
         // Reuse retry logic as it triggers the same search flow
-        if (this.onRetry) this.onRetry();
+        if (this.onRetry) this.onRetry("add_more");
       });
     }
 
