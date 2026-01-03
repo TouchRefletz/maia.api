@@ -201,7 +201,7 @@ jobs:
                 # Python script to safely remove entry from manifest
                 export MANIFEST_PATH="$MANIFEST_PATH"
                 export FILENAME="$FILENAME"
-                python3 .github/scripts/update_manifest.py
+                python3 "$GITHUB_WORKSPACE/.github/scripts/update_manifest.py"
 
                 git add "$MANIFEST_PATH"
             else

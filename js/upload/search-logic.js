@@ -1312,6 +1312,12 @@ export function setupSearchLogic() {
           ignoredFiles &&
           (ignoredFiles.has(fname) || ignoredFiles.has(item.filename))
         ) {
+          // EXCEPTION: If it is a reference, we WANT to show it (as broken)
+          if (item.status === "reference") {
+            item.isKnownBroken = true; // Mark to skip re-verification logic
+            return true;
+          }
+
           if (log)
             log(`[SKIP] Ignorando arquivo pendente de exclusão: ${fname}`);
           return false;
@@ -1374,6 +1380,13 @@ export function setupSearchLogic() {
 
     // 2. Verify References (Links)
     const checkReferenceTask = async (item) => {
+      // Skip if known broken (Optimistic Filter retention)
+      if (item.isKnownBroken) {
+        item.isBroken = true;
+        validItems.push(item);
+        return;
+      }
+
       // Assume valid initially? No, strict check requested.
       const isValid = await verifyReference(item.url, log);
       if (isValid) {
