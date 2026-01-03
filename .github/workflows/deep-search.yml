@@ -384,11 +384,56 @@ jobs:
             echo "[SYSTEM_INFO] JOB_URL=$JOB_URL"
           ) 2>&1 | python3 -u logger.py
 
+      - name: Fetch Existing Manifest
+        id: fetch_manifest
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          SLUG: ${{ github.event.client_payload.slug || inputs.slug }}
+        run: |
+          (
+            echo "Checking for existing manifest in Hugging Face..."
+            # Try to fetch manifest.json specifically using curl (faster than git clone)
+            # URL format: https://huggingface.co/datasets/OWNER/REPO/resolve/main/PATH
+            
+            MANIFEST_URL="https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/$SLUG/manifest.json"
+            
+            # Using a temporary file
+            curl -s -o existing_manifest.json -H "Authorization: Bearer $HF_TOKEN" "$MANIFEST_URL" || true
+            
+            if [ -s existing_manifest.json ] && grep -q "{" existing_manifest.json; then
+               echo "Found existing manifest."
+               
+               # Extract filenames using python for reliability
+               cat << 'EOF' > parse_existing.py
+          import json
+          try:
+              with open('existing_manifest.json', 'r') as f:
+                  data = json.load(f)
+              items = data if isinstance(data, list) else data.get('results', [])
+              filenames = [i.get('filename') for i in items if i.get('filename')]
+              print(", ".join(filenames))
+          except:
+              print("")
+          EOF
+               EXISTING_FILES=$(python3 parse_existing.py)
+               rm parse_existing.py
+               
+               echo "existing_files=$EXISTING_FILES" >> $GITHUB_OUTPUT
+               echo "Existing files found: $EXISTING_FILES"
+            else
+               echo "No existing manifest found or invalid."
+               echo "existing_files=" >> $GITHUB_OUTPUT
+            fi
+            
+            rm -f existing_manifest.json
+          ) 2>&1 | python3 logger.py
+
       - name: Run OpenHands Deep Search
         id: deep_search
         run: |
           set -euo pipefail
 
+          EXISTING_FILES: ${{ steps.fetch_manifest.outputs.existing_files }}
           # 1) Heredoc sem interpretação (não executa backticks)
           PROMPT_TEMPLATE=$(cat <<'EOF'
           Você recebeu uma consulta curta (QUERY) do tipo "nome da prova + ano", por exemplo: "ita 2022".
@@ -396,6 +441,8 @@ jobs:
           Objetivo: encontrar e organizar TODOS os links e arquivos (provas e gabaritos) associados a essa QUERY.
 
           QUERY: "__QUERY__"
+
+          __EXISTING_FILES_INSTRUCTION__
 
           Regras para evitar pesquisa demais (muito importante):
           1) Não use Google como primeira opção (CAPTCHA é comum). Prefira:
@@ -432,6 +479,14 @@ jobs:
           Ao final, responda apenas com caminhos e contagens.
           EOF
           )
+
+          # Logic to inject existing files instruction only if they exist
+          if [ -n "$EXISTING_FILES" ]; then
+             INSTRUCTION="⚠️ ATENÇÃO: Os seguintes arquivos JÁ FORAM ENCONTRADOS e baixados anteriormente no banco de dados: [$EXISTING_FILES].\n   - IGNORE-OS completamente.\n   - NÃO os baixe novamente.\n   - Foque EXCLUSIVAMENTE em encontrar NOVOS arquivos ou gabaritos que NÃO estejam nesta lista."
+             PROMPT_TEMPLATE="${PROMPT_TEMPLATE/__EXISTING_FILES_INSTRUCTION__/$INSTRUCTION}"
+          else
+             PROMPT_TEMPLATE="${PROMPT_TEMPLATE/__EXISTING_FILES_INSTRUCTION__/}"
+          fi
 
           # Replace Placeholders
           PROMPT="${PROMPT_TEMPLATE/__QUERY__/$QUERY}"

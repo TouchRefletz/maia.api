@@ -335,6 +335,9 @@ export class TerminalUI {
             <button id="term-btn-retry" class="term-btn retry" style="display:none; background-color: var(--color-primary); color: #fff; border: none;">
                 Tentar Novamente ↻
             </button>
+            <button id="term-btn-add-more" class="term-btn add-more" style="display:none; background-color: var(--color-success); color: #fff; border: none;">
+                Adicionar mais resultados +
+            </button>
             <button id="term-btn-cancel" class="term-btn cancel disabled" disabled>
                 Cancelar
             </button>
@@ -407,6 +410,14 @@ export class TerminalUI {
     // Bind Retry Button
     if (this.el.retryBtn) {
       this.el.retryBtn.addEventListener("click", () => {
+        if (this.onRetry) this.onRetry();
+      });
+    }
+
+    this.el.addMoreBtn = this.container.querySelector("#term-btn-add-more");
+    if (this.el.addMoreBtn) {
+      this.el.addMoreBtn.addEventListener("click", () => {
+        // Reuse retry logic as it triggers the same search flow
         if (this.onRetry) this.onRetry();
       });
     }
@@ -1230,14 +1241,24 @@ export class TerminalUI {
     }
 
     if (this.el.retryBtn) {
-      // Logic decoupled: We show retry if showRetry is true, regardless of success result.
-      // (Although typically we only retry on success if we want to re-run, or on fail)
-      if (showRetry) {
+      // Logic: Retry only on failure.
+      if (!isSuccess && showRetry) {
         this.el.retryBtn.style.display = "flex";
         this.el.retryBtn.style.alignItems = "center";
         this.el.retryBtn.style.height = "22px";
       } else {
         this.el.retryBtn.style.display = "none";
+      }
+    }
+
+    if (this.el.addMoreBtn) {
+      // Logic: Add More only on success.
+      if (isSuccess && showRetry) {
+        this.el.addMoreBtn.style.display = "flex";
+        this.el.addMoreBtn.style.alignItems = "center";
+        this.el.addMoreBtn.style.height = "22px";
+      } else {
+        this.el.addMoreBtn.style.display = "none";
       }
     }
   }
@@ -1284,6 +1305,11 @@ export class TerminalUI {
       this.el.retryBtn.style.display = "flex";
       this.el.retryBtn.style.alignItems = "center";
       this.el.retryBtn.style.height = "22px";
+    }
+
+    // Ensure Add More is hidden on failure
+    if (this.el.addMoreBtn) {
+      this.el.addMoreBtn.style.display = "none";
     }
   }
 
