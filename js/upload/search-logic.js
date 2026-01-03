@@ -1263,7 +1263,22 @@ export function setupSearchLogic() {
         );
       }
 
-      // 4. Success -> Render
+      // 4. Check for Total Failure (Auto-Run Agent)
+      if (validItems.length === 0) {
+        log(
+          "[SISTEMA] Nenhum resultado válido encontrado. Iniciando Agente Automaticamente...",
+          "warning"
+        );
+        if (terminal)
+          terminal.processLogLine(">> Redirecionando para Agent...", "system");
+
+        // Trigger Force Search (Overwrite)
+        // force=true, cleanup=false, confirm=true, mode="overwrite"
+        doSearch(true, false, true, "overwrite");
+        return;
+      }
+
+      // 5. Success -> Render
       log("[SISTEMA] Todos os arquivos validados com sucesso.", "success");
 
       if (terminal) {
@@ -1590,18 +1605,25 @@ export function setupSearchLogic() {
     const itemsFiles = items.filter((i) => i.status !== "reference");
     const itemsRefs = items.filter((i) => i.status === "reference");
 
-    if (itemsFiles.length === 0 && itemsRefs.length === 0) {
-      searchResults.innerHTML +=
-        '<div style="text-align:center; padding: 20px;">Nenhum resultado válido encontrado.</div>';
-      return;
-    }
-
     // --- RENDER FILES ---
     if (itemsFiles.length > 0) {
       itemsFiles.forEach((item) => {
         const card = createCard(item);
         grid.appendChild(card);
       });
+    } else {
+      const msg = document.createElement("div");
+      Object.assign(msg.style, {
+        gridColumn: "1 / -1",
+        textAlign: "center",
+        padding: "32px",
+        color: "var(--color-text-secondary)",
+        border: "1px dashed var(--color-border)",
+        borderRadius: "8px",
+        background: "var(--color-bg-sub)",
+      });
+      msg.innerHTML = "Nenhum arquivo de prova encontrado.";
+      grid.appendChild(msg);
     }
 
     // --- RENDER REFERENCES ---
