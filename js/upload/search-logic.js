@@ -27,14 +27,30 @@ const normalizeItem = (item) => {
   if (!newItem.name && newItem.nome) newItem.name = newItem.nome;
   if (!newItem.name && newItem.friendly_name)
     newItem.name = newItem.friendly_name;
-  if (!newItem.url) {
-    let path = newItem.path || newItem.filename || newItem.arquivo_local;
-    if (path && !path.startsWith("http")) {
-      // Construct full URL for verification
-      const prefix = `output/${currentSlug}`;
-      // Handle 'files/' prefix cleanly
-      if (path.startsWith("files/")) path = path.replace("files/", "");
-      newItem.url = `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/${prefix}/files/${path}`;
+
+  // REFERENCE ITEM LOGIC
+  if (newItem.status === "reference") {
+    if (!newItem.url) {
+      // Try common fields for external links
+      newItem.url =
+        newItem.link ||
+        newItem.url_source ||
+        newItem.original_link ||
+        newItem.external_url;
+    }
+    // If still empty, it might be a broken reference.
+    if (!newItem.url) newItem.url = "#broken-reference";
+  } else {
+    // Normal File Logic
+    if (!newItem.url) {
+      let path = newItem.path || newItem.filename || newItem.arquivo_local;
+      if (path && !path.startsWith("http")) {
+        // Construct full URL for verification
+        const prefix = `output/${currentSlug}`;
+        // Handle 'files/' prefix cleanly
+        if (path.startsWith("files/")) path = path.replace("files/", "");
+        newItem.url = `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/${prefix}/files/${path}`;
+      }
     }
   }
   return newItem;
@@ -1328,15 +1344,18 @@ export function setupSearchLogic() {
 
     // Split references vs downloads
     const downloadableItems = items.filter((i) => i.status !== "reference");
-    // Pre-populate valid with references
-    const validItems = items.filter((i) => i.status === "reference");
+    const referenceItems = items.filter((i) => i.status === "reference");
+
+    // Pre-populate valid with references (we will verification them below)
+    const validItems = [];
+    // const validItems = items.filter((i) => i.status === "reference"); // REMOVED: We now verify references
 
     // Check downloads efficiently
     const queue = new AsyncQueue(4); // 4 checks in parallel
     let processed = 0;
-    const total = downloadableItems.length;
 
-    const checkTask = async (item) => {
+    // 1. Verify Downloads (PDFs)
+    const checkDownloadTask = async (item) => {
       const isValid = await robustVerifyPdf(item.url, log);
       if (isValid) {
         validItems.push(item);
@@ -1346,10 +1365,45 @@ export function setupSearchLogic() {
       processed++;
     };
 
-    downloadableItems.forEach((item) => queue.enqueue(() => checkTask(item)));
+    downloadableItems.forEach((item) =>
+      queue.enqueue(() => checkDownloadTask(item))
+    );
+
+    // 2. Verify References (Links)
+    const checkReferenceTask = async (item) => {
+      // Assume valid initially? No, strict check requested.
+      const isValid = await verifyReference(item.url, log);
+      if (isValid) {
+        validItems.push(item);
+      } else {
+        if (log)
+          log(`[REFERÊNCIA QUEBRADA] ${item.name} (${item.url})`, "warning");
+        corruptedItems.push(item);
+      }
+    };
+
+    referenceItems.forEach((item) =>
+      queue.enqueue(() => checkReferenceTask(item))
+    );
+
     await queue.drain();
 
     return { validItems, corruptedItems };
+  };
+
+  // --- NEW: Verify Reference Link ---
+  const verifyReference = async (url, log) => {
+    if (!url || url === "#broken-reference") return false;
+    try {
+      // Use no-cors to avoid blocking but check network.
+      // Note: status is 0 (opaque). We accept opaque as "connected".
+      // If DNS fails or connection refused -> fetch throws TypeError.
+      await fetch(url, { method: "HEAD", mode: "no-cors" });
+      return true;
+    } catch (e) {
+      // Network error (DNS, Connection Refused etc)
+      return false;
+    }
   };
 
   const performBatchCleanup = async (corruptedItems, log) => {
@@ -1362,9 +1416,16 @@ export function setupSearchLogic() {
 
         // 1. Delete Artifact (HF)
         try {
+          // Determine if it's a reference (no file) or file
+          const isReference = item.status === "reference";
+
           await fetch(`${PROD_WORKER_URL}/delete-artifact`, {
             method: "POST",
-            body: JSON.stringify({ slug: currentSlug, filename: filename }),
+            body: JSON.stringify({
+              slug: currentSlug,
+              filename: filename,
+              manifest_only: isReference, // Pass flag for Worker/Workflow (though workflow auto-detects missing file too)
+            }),
             headers: { "Content-Type": "application/json" },
           });
         } catch (e) {
@@ -1523,28 +1584,67 @@ export function setupSearchLogic() {
     container.appendChild(grid);
     searchResults.appendChild(container);
 
-    if (items.length === 0) {
+    const itemsFiles = items.filter((i) => i.status !== "reference");
+    const itemsRefs = items.filter((i) => i.status === "reference");
+
+    if (itemsFiles.length === 0 && itemsRefs.length === 0) {
       searchResults.innerHTML +=
         '<div style="text-align:center; padding: 20px;">Nenhum resultado válido encontrado.</div>';
       return;
     }
 
-    // Render Cards
-    items.forEach((item) => {
-      const card = createCard(item);
-      grid.appendChild(card);
-    });
+    // --- RENDER FILES ---
+    if (itemsFiles.length > 0) {
+      itemsFiles.forEach((item) => {
+        const card = createCard(item);
+        grid.appendChild(card);
+      });
+    }
+
+    // --- RENDER REFERENCES ---
+    if (itemsRefs.length > 0) {
+      // Create Section Break
+      const refSection = document.createElement("div");
+      refSection.style.gridColumn = "1 / -1";
+      refSection.style.marginTop = "32px";
+      refSection.innerHTML = `
+            <div style="
+                background: rgba(255, 193, 7, 0.1); 
+                border: 1px solid rgba(255, 193, 7, 0.3); 
+                border-radius: 8px; 
+                padding: 16px; 
+                display: flex; 
+                align-items: center; 
+                gap: 12px;
+                color: var(--color-warning);
+                margin-bottom: 24px;
+            ">
+                <div style="font-size: 1.5rem;">⚠️</div>
+                <div>
+                    <strong>Referências Externas Detectadas</strong><br>
+                    <span style="font-size: 0.9em; opacity: 0.9;">Estes links foram encontrados durante a varredura, mas apontam para sites externos. Eles podem estar quebrados ou desatualizados. Use apenas para consulta manual.</span>
+                </div>
+            </div>
+            <h3 style="color:var(--color-text); margin-bottom:16px;">Links de Referência (${itemsRefs.length})</h3>
+        `;
+      grid.appendChild(refSection);
+
+      itemsRefs.forEach((item) => {
+        const card = createCard(item, true); // true = isReference
+        grid.appendChild(card);
+      });
+    }
 
     document.getElementById("btnExtractSelection").onclick = showRenameModal;
   };
 
-  const createCard = (item) => {
+  const createCard = (item, isReference = false) => {
     let finalUrl = item.url;
     // Fallback if url is somehow missing but path exists
     // (Normalized by verify strategy but just in case)
     if (!finalUrl && item.path) finalUrl = item.path;
 
-    if (!finalUrl) return document.createElement("div"); // Skip invalid cards
+    if (!finalUrl && !isReference) return document.createElement("div"); // Skip invalid cards
 
     // --- Title Fallback Logic ---
     let displayTitle =
@@ -1557,7 +1657,7 @@ export function setupSearchLogic() {
         displayTitle = fileBase.replace(/[_-]/g, " ");
         displayTitle = displayTitle.replace(/\b\w/g, (l) => l.toUpperCase());
       } else {
-        displayTitle = "Sem Título";
+        displayTitle = isReference ? "Link Externo" : "Sem Título";
       }
     }
 
@@ -1577,7 +1677,7 @@ export function setupSearchLogic() {
       border: "1px solid var(--color-card-border)",
       display: "flex",
       flexDirection: "column",
-      height: "380px", // Mais altura para visualização
+      height: isReference ? "120px" : "380px", // Smaller height for references
       transition:
         "transform var(--duration-fast), border-color var(--duration-fast), box-shadow var(--duration-fast)",
       cursor: "pointer",

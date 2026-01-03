@@ -359,6 +359,7 @@ async function handleDeleteArtifact(request, env) {
 				client_payload: {
 					slug,
 					filename, // Optional, but used if provided for specific file deletion
+					manifest_only: body.manifest_only || false,
 				},
 			}),
 		});
