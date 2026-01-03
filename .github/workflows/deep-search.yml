@@ -377,7 +377,7 @@ jobs:
             MANIFEST_URL="https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/$SLUG/manifest.json"
             
             # Using a temporary file
-            curl -s -o existing_manifest.json -H "Authorization: Bearer $HF_TOKEN" "$MANIFEST_URL" || true
+            curl -s -L -o existing_manifest.json -H "Authorization: Bearer $HF_TOKEN" "$MANIFEST_URL" || true
             
             if [ -s existing_manifest.json ] && grep -q "{" existing_manifest.json; then
                echo "Found existing manifest."
