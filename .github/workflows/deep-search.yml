@@ -451,8 +451,10 @@ jobs:
           1) Crie a pasta: /workspace/output/__SLUG__/
           2) Baixe todos os PDFs que conseguir para: /workspace/output/__SLUG__/files/.
             CRITICO:
-            - USE 'wget' ou 'curl' com verificação de header.
-            - VERIFIQUE SE O HEADER 'Content-Type' É 'application/pdf'.
+            - USE 'curl -I' PRIMEIRO para verificar o header.
+            - SE O HEADER 'Content-Type' NÃO FOR 'application/pdf' (ex: 'text/html'), PARE IMEDIATAMENTE. NÃO BAIXE. MARQUE COMO "reference".
+            - JAMAIS TENTE BAIXAR O MESMO LINK DUAS VEZES SE FALHAR NA PRIMEIRA.
+            - SE VOCÊ SE PEGAR FAZENDO A MESMA AÇÃO 2 VEZES SEGUIDAS (ex: checar o mesmo link), DESISTA DESSE LINK E VÁ PARA O PRÓXIMO.
             - SE O ARQUIVO BAIXADO TIVER MENOS DE 1KB, APAGUE-O IMEDIATAMENTE e mude o status para "reference".
             - SE O ARQUIVO CONTIVER HTML (DOCTYPE, <html>), APAGUE-O e mude o status para "reference".
             - NÃO CRIE ARQUIVOS FAKES OU COM CONTEÚDO GERADO. SÓ MANTENHA O QUE FOI BAIXADO DE VERDADE.
