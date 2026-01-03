@@ -1405,10 +1405,99 @@ export class TerminalUI {
     );
   }
 
+  showCustomConfirm() {
+    return new Promise((resolve) => {
+      // Create Modal UI dynamically
+      const modalId = "cancel-confirmation-modal";
+      let modal = document.getElementById(modalId);
+      if (modal) modal.remove();
+
+      modal = document.createElement("div");
+      modal.id = modalId;
+      Object.assign(modal.style, {
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        backgroundColor: "rgba(0,0,0,0.8)",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        zIndex: 10000,
+        backdropFilter: "blur(4px)",
+      });
+
+      const content = document.createElement("div");
+      Object.assign(content.style, {
+        backgroundColor: "var(--color-surface)",
+        padding: "32px",
+        borderRadius: "var(--radius-xl)",
+        maxWidth: "500px",
+        width: "90%",
+        border: "1px solid var(--color-border)",
+        boxShadow: "var(--shadow-2xl)",
+        textAlign: "center",
+      });
+
+      // Warning / Destructive theme
+      const iconHtml =
+        '<div style="font-size: 3rem; margin-bottom: 16px;">⚠️</div>';
+      const titleText = "Cancelar Pesquisa?";
+      const bodyText = `
+        Tem certeza que deseja imterromper o processo atual?<br>
+        <br>
+        Todo o progresso não salvo será perdido e o agente será desconectado.
+      `;
+      const confirmBtnText = "Sim, Cancelar";
+      const confirmBtnColor = "var(--color-error)"; // Red for destructive action
+
+      content.innerHTML = `
+          ${iconHtml}
+          <h2 style="font-size: 1.5rem; margin-bottom: 8px;">${titleText}</h2>
+          <p style="color: var(--color-text-secondary); margin-bottom: 24px;">
+              ${bodyText}
+          </p>
+          
+          <div style="display: flex; gap: 12px; justify-content: center;">
+              <button id="btn-cancel-modal-dismiss" style="
+                  background: transparent; border: 1px solid var(--color-border); color: var(--color-text);
+                  padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; flex: 1;
+              ">Voltar</button>
+              
+              <button id="btn-cancel-modal-confirm" style="
+                  background: ${confirmBtnColor}; color: white; border: none; padding: 12px 24px;
+                  border-radius: 8px; font-weight: 600; cursor: pointer; flex: 1;
+              ">${confirmBtnText}</button>
+          </div>
+      `;
+
+      modal.appendChild(content);
+      document.body.appendChild(modal);
+
+      // Handlers
+      const cleanup = () => {
+        modal.remove();
+      };
+
+      document.getElementById("btn-cancel-modal-dismiss").onclick = () => {
+        cleanup();
+        resolve(false);
+      };
+
+      document.getElementById("btn-cancel-modal-confirm").onclick = () => {
+        cleanup();
+        resolve(true);
+      };
+    });
+  }
+
   async cancelJob() {
     if (!this.runId || this.isCancelling) return;
 
-    if (!confirm("Tem certeza que deseja cancelar esta pesquisa?")) return;
+    // Use styled confirm instead of native
+    const confirmed = await this.showCustomConfirm();
+    if (!confirmed) return;
 
     this.isCancelling = true;
     this.el.cancelBtn.innerText = "Cancelando...";
