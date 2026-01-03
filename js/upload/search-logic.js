@@ -1239,7 +1239,9 @@ export function setupSearchLogic() {
 
         // Optimistic Update: Add these to ignoredFiles so we don't block on them
         corruptedItems.forEach((item) => {
-          const filename = item.filename || item.path.split("/").pop();
+          const filename =
+            item.filename ||
+            (item.path ? item.path.split("/").pop() : item.url);
           ignoredFiles.add(filename);
           // Also add the raw name/path to be safe
           ignoredFiles.add(item.filename);
