@@ -34,6 +34,7 @@ const normalizeItem = (item) => {
       // Try common fields for external links
       newItem.url =
         newItem.link ||
+        newItem.link_origem ||
         newItem.url_source ||
         newItem.original_link ||
         newItem.external_url;
@@ -1411,7 +1412,8 @@ export function setupSearchLogic() {
 
     corruptedItems.forEach((item) => {
       queue.enqueue(async () => {
-        const filename = item.filename || item.path.split("/").pop();
+        const filename =
+          item.filename || (item.path ? item.path.split("/").pop() : item.url);
         log(`[QUEUE] Solicitando exclusão: ${filename}...`, "warning");
 
         // 1. Delete Artifact (HF)
