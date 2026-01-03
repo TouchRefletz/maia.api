@@ -216,12 +216,49 @@ jobs:
             # Commit changes (File removal AND/OR Manifest update)
             # Use --allow-empty in case nothing changed but we want to log the attempt?
             # No, if nothing blocked, we might fail commit. Check status.
-            if git diff --staged --quiet; then
-                echo "Nenhuma mudança para commitar."
-            else
+            # Retry Loop for Race Conditions
+            MAX_RETRIES=10
+            success="false"
+
+            for (( i=0; i<MAX_RETRIES; i++ )); do
+                if git diff --staged --quiet; then
+                    echo "Nenhuma mudança para commitar."
+                    success="true"
+                    break
+                fi
+
                 git commit -m "Cleanup: $FILENAME"
-                git push
-                echo "SUCESSO: Limpeza aplicada."
+
+                if git push origin main; then
+                    echo "SUCESSO: Limpeza aplicada."
+                    success="true"
+                    break
+                else
+                    echo "ALERTA: Falha no push (Possível Race Condition). Tentativa $((i+1))/$MAX_RETRIES..."
+                    git reset --soft HEAD~1
+                    
+                    # Random Backoff (2-7s) to mitigate thundering herd
+                    sleep $(( ( RANDOM % 6 ) + 2 ))
+
+                    # Sync & Re-Apply
+                    git fetch origin main
+                    
+                    # Reset manifest to upstream version to avoid conflicts
+                    # We preserve the file deletion (git rm) in the index, but refresh manifest
+                    if [ "$SHOULD_UPDATE_MANIFEST" == "true" ] && [ -f "$MANIFEST_PATH" ]; then
+                        echo "Sincronizando manifest.json com upstream..."
+                        git checkout origin/main -- "$MANIFEST_PATH"
+                        
+                        echo "Re-aplicando atualização no manifesto..."
+                        python3 "$GITHUB_WORKSPACE/.github/scripts/update_manifest.py"
+                        git add "$MANIFEST_PATH"
+                    fi
+                fi
+            done
+
+            if [ "$success" != "true" ]; then
+                echo "ERRO FATAL: Falha ao sincronizar após $MAX_RETRIES tentativas."
+                exit 1
             fi
             
             cd ..
