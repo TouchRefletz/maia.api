@@ -1658,11 +1658,6 @@ export function setupSearchLogic() {
           `;
         refSection.innerHTML = contentHtml;
         grid.appendChild(refSection);
-
-        itemsRefs.forEach((item) => {
-          const card = createCard(item, true); // true = isReference
-          grid.appendChild(card);
-        });
       } else {
         // Empty State
         contentHtml += `
