@@ -69,6 +69,7 @@ export function getUploadInterfaceHTML() {
                 </label>
                 <input type="file" id="pdfFileInput" accept=".pdf" style="display: none;" required>
                 <span id="fileName" class="file-name-display">Nenhum arquivo selecionado</span>
+                <input type="text" id="sourceUrlProva" class="form-control" placeholder="Link original da prova (Opcional)" style="margin-top: 10px; width: 100%; padding: 10px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface); color: var(--color-text);">
             </div>
 
             <div class="form-group" id="gabaritoInputGroup">
@@ -78,6 +79,7 @@ export function getUploadInterfaceHTML() {
                 </label>
                 <input type="file" id="gabaritoFileInput" accept=".pdf" style="display: none;">
                 <span id="gabaritoFileName" class="file-name-display">Nenhum arquivo selecionado</span>
+                <input type="text" id="sourceUrlGabarito" class="form-control" placeholder="Link original do gabarito (Opcional)" style="margin-top: 10px; width: 100%; padding: 10px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface); color: var(--color-text);">
             </div>
 
 
@@ -109,5 +111,43 @@ export function getUploadInterfaceHTML() {
            </div>
        </div>
     </div>
+
+    <!-- Disclaimer Modal -->
+    <div id="disclaimerModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); backdrop-filter:blur(2px); z-index:10000; align-items:center; justify-content:center;">
+       <div style="background:var(--color-surface); padding:24px; border-radius:12px; max-width:480px; width:90%; box-shadow:0 10px 30px rgba(0,0,0,0.5); border:1px solid var(--color-border); position:relative;">
+           <button id="btnCloseDisclaimer" type="button" style="position:absolute; top:12px; right:12px; background:none; border:none; cursor:pointer; color:var(--color-text-secondary); padding:4px;">
+               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+           </button>
+           <h3 style="margin-top:0; color:var(--color-text); margin-bottom:12px; font-size:1.1rem; border-bottom:1px solid var(--color-border); padding-bottom:8px;">Aviso sobre IA</h3>
+           <p style="color:var(--color-text-secondary); line-height:1.5; font-size:0.9rem; margin-bottom:16px;">
+               Os resultados desta busca são gerados e processados por modelos de inteligência artificial. Embora tenhamos sistemas de verificação, o conteúdo pode, ocasionalmente, estar incorreto, incompleto ou corrompido.
+           </p>
+           <div style="background:rgba(var(--color-primary-rgb), 0.1); border-left:4px solid var(--color-primary); padding:10px 14px; border-radius:4px; font-size:0.85rem; color:var(--color-text);">
+               <strong>Recomendação:</strong> Sempre verifique a integridade dos arquivos e a exatidão das informações antes de utilizá-los para fins críticos.
+           </div>
+       </div>
+    </div>
+    
+    <!-- Privacy Confirmation Modal -->
+    <div id="privacyConfirmModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); backdrop-filter:blur(4px); z-index:13000; align-items:center; justify-content:center;">
+       <div style="background:var(--color-surface); padding:30px; border-radius:16px; max-width:500px; width:90%; box-shadow:0 25px 50px -12px rgba(0,0,0,0.5); border:1px solid var(--color-border); display:flex; flex-direction:column; gap:20px;">
+           <div style="text-align:center;">
+               <div style="width:50px; height:50px; background:rgba(var(--color-warning-rgb, 255, 193, 7), 0.1); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 15px auto;">
+                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning, #ffc107)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+               </div>
+               <h3 style="margin:0; color:var(--color-text); font-size:1.25rem;">Aviso de Privacidade</h3>
+           </div>
+           
+           <p style="margin:0; text-align:center; color:var(--color-text-secondary); line-height:1.6;">
+               Você não informou os links de origem dos arquivos enviados. Ao confirmar o envio, os arquivos, ao menos que estejam em nosso banco de dados, são considerados privados e eles não serão coletados. Você deseja continuar?
+           </p>
+
+           <div style="display:flex; gap:12px; justify-content:center; margin-top:10px;">
+               <button id="btnCancelUpload" type="button" class="btn btn--outline" style="flex:1;">Voltar</button>
+               <button id="btnConfirmUpload" type="button" class="btn btn--primary" style="flex:1;">Continuar Envio</button>
+           </div>
+       </div>
+    </div>
+    
     `;
 }
