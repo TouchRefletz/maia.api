@@ -1,19 +1,15 @@
-// --- CONFIG ---
+﻿// --- CONFIG ---
 const PROD_WORKER_URL =
   import.meta.env.VITE_WORKER_URL || "https://your-worker.workers.dev";
 
 // Importa o visualizador
-import { gerarVisualizadorPDF } from "../viewer/events.js";
 import { SearchPersistence } from "./search-persistence.js";
 import { TerminalUI } from "./terminal-ui.js";
 
 // --- STATE ---
 let currentSlug = null;
 let currentManifest = null;
-let selectedItems = {
-  prova: null, // { name, url, file (blob) }
-  gabarito: null,
-};
+
 // Connection State
 let activePusher = null;
 let activeChannel = null;
@@ -54,78 +50,6 @@ const normalizeItem = (item) => {
     }
   }
   return newItem;
-};
-
-const toggleSelection = (item, cardEl, overlayEl, url) => {
-  const type = item.tipo?.toLowerCase().includes("gabarito")
-    ? "gabarito"
-    : "prova";
-
-  // Verificação de estado atual
-  const isCurrentlySelected =
-    selectedItems[type] && selectedItems[type].url === url;
-
-  // Seleciona todos os cards do mesmo tipo para manipular
-  const allCardsOfTheSameType = document.querySelectorAll(
-    `.result-card[data-type="${type}"]`
-  );
-
-  if (isCurrentlySelected) {
-    // --- AÇÃO DE DESELECIONAR ---
-    selectedItems[type] = null;
-
-    // Reset Visuals para ESTE card
-    overlayEl.style.display = "none";
-    cardEl.style.borderColor = "var(--color-card-border)";
-    cardEl.style.transform = "none"; // Reset scale/transform se tiver
-
-    // REABILITAR todos os outros cards
-    allCardsOfTheSameType.forEach((c) => {
-      if (c !== cardEl) {
-        c.style.opacity = "1";
-        c.style.pointerEvents = "auto";
-        c.style.filter = "none";
-        c.style.cursor = "pointer";
-      }
-    });
-  } else {
-    // --- AÇÃO DE SELECIONAR ---
-
-    // Se já existe um selecionado desse tipo (e não é este, pois caíria no if acima),
-    // em teoria não deveríamos conseguir clicar aqui por causa do bloqueo de UI.
-    // Mas se acontecer, ignoramos ou retornamos.
-    if (selectedItems[type]) return;
-
-    selectedItems[type] = { ...item, url, el: cardEl };
-
-    // Highlight ESTE card
-    overlayEl.style.display = "block";
-    cardEl.style.borderColor = "var(--color-primary)";
-
-    // DESABILITAR todos os outros cards
-    allCardsOfTheSameType.forEach((c) => {
-      if (c !== cardEl) {
-        c.style.opacity = "0.3"; // Bem apagado
-        c.style.pointerEvents = "none"; // Impede cliques
-        c.style.filter = "grayscale(100%)"; // Preto e branco
-        c.style.cursor = "not-allowed";
-      }
-    });
-  }
-
-  // Atualiza estado do botão de extração
-  const btn = document.getElementById("btnExtractSelection");
-  const hasSelection = selectedItems.prova && selectedItems.gabarito;
-
-  if (hasSelection) {
-    btn.disabled = false;
-    btn.style.opacity = "1";
-    btn.style.cursor = "pointer";
-  } else {
-    btn.disabled = true;
-    btn.style.opacity = "0.5";
-    btn.style.cursor = "not-allowed";
-  }
 };
 
 /**
@@ -437,17 +361,20 @@ export function setupSearchLogic() {
     }
   };
 
+  // --- Helper de NavegaÃ§Ã£o ---
+  const switchToManualUpload = () => {
+    searchContainer.classList.add("hidden");
+    searchContainer.style.display = "none";
+    manualUploadContainer.classList.remove("hidden");
+    manualUploadContainer.style.display = "flex";
+    manualUploadContainer.classList.add("fade-in-centralized");
+
+    floatTerminal();
+  };
+
   // --- Toggles de Interface ---
   if (btnShowUpload) {
-    btnShowUpload.addEventListener("click", () => {
-      searchContainer.classList.add("hidden");
-      searchContainer.style.display = "none";
-      manualUploadContainer.classList.remove("hidden");
-      manualUploadContainer.style.display = "flex";
-      manualUploadContainer.classList.add("fade-in-centralized");
-
-      floatTerminal();
-    });
+    btnShowUpload.addEventListener("click", switchToManualUpload);
   }
 
   // Bind to Global Back Button (js-voltar-inicio)
@@ -575,7 +502,6 @@ export function setupSearchLogic() {
     if (!confirm || !existingEl) {
       // Fresh start OR Recovery if terminal is missing
       searchResults.innerHTML = "";
-      selectedItems = { prova: null, gabarito: null };
 
       // Only reset slug if fresh start, otherwise we might want to keep it?
       // Actually, if we are retrying, we usually get a new slug anyway.
@@ -614,8 +540,6 @@ export function setupSearchLogic() {
       // so the user sees a "fresh" start while the agent runs.
       const existingResults = searchResults.querySelector(".results-container");
       if (existingResults) existingResults.remove();
-      // Reset selections since DOM elements are gone
-      selectedItems = { prova: null, gabarito: null };
 
       // Re-attach to existing terminal
       if (terminalInstance) {
@@ -1254,25 +1178,47 @@ export function setupSearchLogic() {
     header.style.marginBottom = "24px";
 
     header.innerHTML = `
-      <h2 style="color:var(--color-text); font-weight:var(--font-weight-bold); font-size:var(--font-size-2xl);">
-        Resultados Encontrados (${items.length})
-      </h2>
-      <button id="btnExtractSelection" disabled style="
+      <div style="flex:1;">
+          <h2 style="color:var(--color-text); font-weight:var(--font-weight-bold); font-size:var(--font-size-2xl);">
+            Resultados Encontrados (${items.length})
+          </h2>
+          <p style="
+            color: var(--color-text-secondary); 
+            margin-top: 8px; 
+            font-size: 0.95rem; 
+            background: var(--color-bg-sub); 
+            padding: 8px 12px; 
+            border-radius: 8px; 
+            border: 1px dashed var(--color-border);
+            display: inline-block;
+          ">
+            📁 <strong>Dica:</strong> Baixe a Prova e o Gabarito desejados abaixo e depois clique em <strong style="color:var(--color-primary);">Fazer Upload Manual</strong>.
+          </p>
+      </div>
+      
+      <button id="btnManualUploadHighlight" style="
         background: var(--color-primary); 
-        color: var(--color-btn-primary-text); 
+        color: white; 
         border: none; 
-        padding: 10px 24px; 
-        border-radius: var(--radius-base); 
+        padding: 12px 24px; 
+        border-radius: var(--radius-lg); 
         cursor: pointer; 
-        font-weight: var(--font-weight-medium); 
-        opacity: 0.5; 
-        transition: all var(--duration-normal);
+        font-weight: bold; 
+        opacity: 1; 
+        box-shadow: 0 4px 12px rgba(var(--color-primary-rgb), 0.3);
+        transition: all 0.2s ease;
         display: flex; align-items: center; gap: 8px;">
-        <span>Extrair Selecionados</span>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <span>Fazer Upload Manual</span>
       </button>
     `;
     container.appendChild(header);
+
+    // Bind Button
+    setTimeout(() => {
+      const btn = document.getElementById("btnManualUploadHighlight");
+      if (btn) btn.onclick = switchToManualUpload;
+    }, 0);
 
     // Grid Repaginado
     const grid = document.createElement("div");
@@ -1374,8 +1320,6 @@ export function setupSearchLogic() {
         grid.appendChild(refList);
       }
     }
-
-    document.getElementById("btnExtractSelection").onclick = showRenameModal;
   };
 
   // --- NEW: ROW RENDERER FOR REFERENCES ---
@@ -1558,10 +1502,7 @@ export function setupSearchLogic() {
     card.onmouseleave = () => {
       card.style.transform = "translateY(0)";
       card.style.boxShadow = "var(--shadow-sm)";
-      // Restore border unless selected (logic handled in toggleSelection)
-      if (!selectedItems[card.dataset.type]?.url?.includes(finalUrl)) {
-        card.style.borderColor = "var(--color-card-border)";
-      }
+      card.style.borderColor = "var(--color-card-border)";
     };
 
     // Header: Badge + Icon
@@ -1651,41 +1592,7 @@ export function setupSearchLogic() {
     actions.appendChild(btnLink);
     card.appendChild(actions);
 
-    // Overlay de Seleção
-    const selectOverlay = document.createElement("div");
-    Object.assign(selectOverlay.style, {
-      position: "absolute",
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: "rgba(var(--color-primary-rgb), 0.05)",
-      border: "2px solid var(--color-primary)",
-      borderRadius: "var(--radius-lg)",
-      pointerEvents: "none",
-      display: "none",
-      zIndex: 10,
-    });
-
-    const checkIcon = document.createElement("div");
-    checkIcon.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>`;
-    Object.assign(checkIcon.style, {
-      position: "absolute",
-      top: "12px",
-      left: "12px",
-      width: "28px",
-      height: "28px",
-      backgroundColor: "var(--color-primary)",
-      borderRadius: "50%",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
-    });
-    selectOverlay.appendChild(checkIcon);
-    card.appendChild(selectOverlay);
-
-    card.onclick = () => toggleSelection(item, card, selectOverlay, finalUrl);
+    card.onclick = () => window.open(finalUrl, "_blank");
 
     return card;
   };
@@ -1814,117 +1721,6 @@ export function setupSearchLogic() {
 
   // No-op functions or replaced logic
   // Removed: advanced PDF rendering, previews, etc
-
-  const showRenameModal = () => {
-    const existing = document.getElementById("renameModal");
-    if (existing) existing.remove();
-
-    const prova = selectedItems.prova;
-    const gab = selectedItems.gabarito;
-
-    if (!prova && !gab) return;
-
-    const modal = document.createElement("div");
-    modal.id = "renameModal";
-    Object.assign(modal.style, {
-      position: "fixed",
-      top: 0,
-      left: 0,
-      width: "100%",
-      height: "100%",
-      backgroundColor: "rgba(0,0,0,0.7)",
-      zIndex: 10000,
-      display: "flex",
-      justifyContent: "center",
-      alignItems: "center",
-    });
-
-    const hasProva = !!prova;
-    const hasGab = !!gab;
-
-    modal.innerHTML = `
-        <div style="background:#2d2d2d; padding:25px; border-radius:12px; width:400px; box-shadow:0 10px 30px rgba(0,0,0,0.5);">
-            <h2 style="margin-top:0; color:white; margin-bottom:20px;">Confirmar Seleção</h2>
-            
-            ${
-              hasProva
-                ? `
-                <div style="margin-bottom:15px;">
-                    <label style="display:block; color:#ccc; margin-bottom:5px;">Nome da Prova</label>
-                    <input type="text" id="inputRenameProva" value="${prova.name}" style="width:100%; padding:8px; border-radius:6px; border:1px solid #444; background:#1e1e1e; color:white;">
-                </div>
-            `
-                : ""
-            }
-
-            ${
-              hasGab
-                ? `
-                <div style="margin-bottom:15px;">
-                    <label style="display:block; color:#ccc; margin-bottom:5px;">Nome do Gabarito</label>
-                    <input type="text" id="inputRenameGab" value="${gab.name}" style="width:100%; padding:8px; border-radius:6px; border:1px solid #444; background:#1e1e1e; color:white;">
-                </div>
-            `
-                : ""
-            }
-
-            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:25px;">
-                <button id="btnCancelExtract" style="padding:8px 16px; background:transparent; border:1px solid #666; color:#ccc; border-radius:6px; cursor:pointer;">Cancelar</button>
-                <button id="btnConfirmExtract" style="padding:8px 16px; background:var(--color-primary); border:none; color:white; border-radius:6px; cursor:pointer;">Confirmar e Abrir</button>
-            </div>
-            <div id="loadingStatus" style="margin-top:10px; color:#aaa; font-size:0.9rem; display:none;">Processando...</div>
-        </div>
-      `;
-
-    document.body.appendChild(modal);
-
-    document.getElementById("btnCancelExtract").onclick = () => modal.remove();
-    document.getElementById("btnConfirmExtract").onclick = async () => {
-      const status = document.getElementById("loadingStatus");
-      status.style.display = "block";
-      status.innerText = "Baixando arquivos...";
-
-      try {
-        // 1. Download Blobs
-        let provaBlob = null;
-        let gabaritoBlob = null;
-
-        if (hasProva) {
-          const newName = document.getElementById("inputRenameProva").value;
-          const resp = await fetch(prova.url);
-          provaBlob = await resp.blob();
-          // Metadata update not needed for blob, but passed to viewer
-          prova.rawTitle = newName;
-        }
-
-        if (hasGab) {
-          const newName = document.getElementById("inputRenameGab").value;
-          const resp = await fetch(gab.url);
-          gabaritoBlob = await resp.blob();
-          gab.rawTitle = newName;
-        }
-
-        // 3. Start Viewer
-        status.innerText = "Iniciando visualizador...";
-
-        const viewerData = {
-          title: hasProva ? `(${prova.rawTitle})` : "Documento Extraído",
-          rawTitle: hasProva ? prova.rawTitle : "Documento",
-          fileProva: provaBlob,
-          fileGabarito: gabaritoBlob,
-          gabaritoNaProva: !hasGab, // Se não selecionou gabarito separado, assume que tá na prova ou nem tem
-        };
-
-        modal.remove();
-        // Inicia a mágica
-        gerarVisualizadorPDF(viewerData);
-      } catch (e) {
-        console.error(e);
-        status.innerText = "Erro: " + e.message;
-        status.style.color = "red";
-      }
-    };
-  };
 
   // Listeners Iniciais
   if (btnSearch) btnSearch.addEventListener("click", () => doSearch(false));
