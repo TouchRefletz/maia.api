@@ -42,7 +42,8 @@ export function getUploadInterfaceHTML() {
         </div>
         
         <div style="margin-top: 50px; margin-bottom: 30px; display: flex; flex-direction: column; align-items: center; gap: 10px;">
-             <button id="btnShowUpload" class="btn btn--outline">Fazer Upload Manualmente</button>
+            <span style="color: var(--color-text-secondary); font-size: 0.9rem;">Caso tenha os arquivos</span>
+            <button id="btnShowUpload" class="btn btn--outline">Fazer Upload Manualmente</button>
         </div>
     </div>
 
