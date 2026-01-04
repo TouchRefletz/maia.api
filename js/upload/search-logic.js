@@ -1179,7 +1179,7 @@ export function setupSearchLogic() {
         Resultados Encontrados (${items.length})
       </h2>
 
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; gap: 24px;">
           <p style="
             color: var(--color-text-secondary); 
             font-size: 0.95rem; 
