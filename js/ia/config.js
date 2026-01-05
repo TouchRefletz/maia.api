@@ -468,6 +468,36 @@ export function obterConfiguracaoIA(modo) {
         "estrutura",
       ],
       $defs: {
+        blocoConteudo: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            tipo: {
+              type: "string",
+              enum: [
+                "texto",
+                "imagem",
+                "citacao",
+                "titulo",
+                "subtitulo",
+                "lista",
+                "equacao",
+                "codigo",
+                "destaque",
+                "separador",
+                "fonte",
+                "tabela",
+              ],
+              description: "O tipo de conteúdo deste bloco.",
+            },
+            conteudo: {
+              type: "string",
+              description:
+                "Conteúdo do bloco conforme o tipo: (texto/citacao/destaque) texto literal em parágrafos; (titulo/subtitulo) cabeçalho interno do conteúdo, nunca a identificação da questão; (lista) itens em linhas separadas; (equacao) somente expressão em LaTeX; (codigo) somente o código; (imagem) descrição visual curta (alt-text) sem OCR; (separador) pode ser vazio; (fonte) créditos/referência exibível (ex: 'Fonte: ...', 'Adaptado de ...', autor/obra/URL); (tabela) USE FORMATO MARKDOWN TABLE.",
+            },
+          },
+          required: ["tipo", "conteudo"],
+        },
         alternativa: {
           type: "object",
           additionalProperties: false,
@@ -477,25 +507,11 @@ export function obterConfiguracaoIA(modo) {
               type: "array",
               description:
                 "Lista ordenada que representa o fluxo visual das alternativas, mantendo a ordem exata de textos e imagens.",
-              items: { $ref: "#/$defs/blocoAlternativa" },
+              items: { $ref: "#/$defs/blocoConteudo" },
             },
           },
           required: ["letra", "estrutura"],
         },
-        blocoAlternativa: {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            tipo: { type: "string", enum: ["texto", "equacao", "imagem"] },
-            conteudo: {
-              type: "string",
-              description:
-                "Conteúdo do bloco conforme o tipo: (texto) texto literal; (equacao) somente LaTeX; (imagem) alt-text curto sem OCR.",
-            },
-          },
-          required: ["tipo", "conteudo"],
-        },
-        additionalProperties: false,
       },
     };
   }
