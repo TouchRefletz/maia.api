@@ -1275,8 +1275,8 @@ async function handleManualUpload(request, env) {
 		const pdfUrl = formData.get('pdf_url_override');
 		const gabUrl = formData.get('gabarito_url_override');
 
-		if (!pdfUrl && !confirmOverride) {
-			return new Response(JSON.stringify({ error: 'PDF URL is required (Frontend upload failed?)' }), {
+		if (!pdfUrl && !sourceUrlProva && !confirmOverride) {
+			return new Response(JSON.stringify({ error: 'PDF URL or Source Link is required' }), {
 				status: 400,
 				headers: corsHeaders,
 			});
@@ -1634,6 +1634,10 @@ async function handleManualUpload(request, env) {
 						institution: aiData.institution,
 						phase: aiData.phase,
 						summary: aiData.summary,
+
+						// Pass Source URLs in metadata too for redundancy
+						source_url_prova: sourceUrlProva || '',
+						source_url_gabarito: sourceUrlGabarito || '',
 
 						// Filenames and Display Names for Manifest
 						pdf_filename: pdfFinalPhysicalName,

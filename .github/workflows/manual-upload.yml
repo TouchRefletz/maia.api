@@ -133,8 +133,8 @@ jobs:
           GAB_DISPLAY_NAME: ${{ github.event.client_payload.metadata.gabarito_display_name }}
 
           # Original Source URLs
-          PDF_SOURCE: ${{ github.event.client_payload.source_url_prova || inputs.source_url_prova }}
-          GAB_SOURCE: ${{ github.event.client_payload.source_url_gabarito || inputs.source_url_gabarito }}
+          PDF_SOURCE: ${{ github.event.client_payload.source_url_prova || github.event.client_payload.metadata.source_url_prova || inputs.source_url_prova }}
+          GAB_SOURCE: ${{ github.event.client_payload.source_url_gabarito || github.event.client_payload.metadata.source_url_gabarito || inputs.source_url_gabarito }}
 
           # Visual Hashes (Passed from frontend)
           VISUAL_HASH: ${{ github.event.client_payload.visual_hash }}
@@ -144,8 +144,8 @@ jobs:
           PDF_FILENAME: ${{ github.event.client_payload.metadata.pdf_filename }}
           GAB_FILENAME: ${{ github.event.client_payload.metadata.gabarito_filename }}
 
-          HAS_PDF: ${{ github.event.client_payload.source_url_prova != '' }}
-          HAS_GAB: ${{ github.event.client_payload.source_url_gabarito != '' }}
+          HAS_PDF: ${{ github.event.client_payload.metadata.pdf_filename != '' && github.event.client_payload.metadata.pdf_filename != null }}
+          HAS_GAB: ${{ github.event.client_payload.metadata.gabarito_filename != '' && github.event.client_payload.metadata.gabarito_filename != null }}
 
         run: |
           # Create script in root (OUTSIDE hf_repo to avoid commit)
