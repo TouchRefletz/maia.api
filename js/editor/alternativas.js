@@ -1,3 +1,4 @@
+console.log("[DEBUG] Loading updated alternativas.js");
 import { criarHtmlBlocoEditor } from "./structure-editor.js";
 
 /**
