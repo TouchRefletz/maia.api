@@ -294,9 +294,9 @@
   flex-direction: column;
 }
 
-.structure-lista>ul,
-.structure-lista>li,
-.structure-lista>strong {
+.structure-lista > ul,
+.structure-lista > li,
+.structure-lista > strong {
   text-align: left;
 }
 
@@ -453,4 +453,44 @@
   overflow-wrap: break-word;
   white-space: normal;
   max-width: 100%;
+}
+
+/* --- TABELAS (MARKDOWN) --- */
+.structure-tabela table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 15px 0;
+  font-size: 0.95rem;
+  background-color: var(--color-surface);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--color-border);
+}
+
+.structure-tabela th {
+  background-color: var(--color-background); /* Ou uma cor de destaque leve */
+  color: var(--color-text);
+  font-weight: 700;
+  text-align: left;
+  padding: 12px 15px;
+  border-bottom: 2px solid var(--color-border);
+}
+
+.structure-tabela td {
+  padding: 10px 15px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+.structure-tabela tr:last-child td {
+  border-bottom: none;
+}
+
+.structure-tabela tr:nth-child(even) {
+  background-color: rgba(var(--color-primary-rgb), 0.03); /* Leve listrado */
+}
+
+.structure-tabela tr:hover {
+  background-color: rgba(var(--color-primary-rgb), 0.05);
 }
