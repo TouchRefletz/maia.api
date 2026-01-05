@@ -658,6 +658,10 @@ export function setupFormLogic(elements, initialData) {
                 const gabaritoEnviadoPeloUser = !!fileGabarito;
 
                 if (matchProva) {
+                  console.log(
+                    "[Manual] SKIPPING PROVA UPLOAD: Hash checked and found in cloud.",
+                    matchProva
+                  );
                   progress.addLog(
                     "✅ Prova já existe na nuvem (Hash idêntico)."
                   );
@@ -667,6 +671,10 @@ export function setupFormLogic(elements, initialData) {
 
                 if (gabaritoEnviadoPeloUser) {
                   if (matchGab) {
+                    console.log(
+                      "[Manual] SKIPPING GABARITO UPLOAD: Hash checked and found in cloud.",
+                      matchGab
+                    );
                     progress.addLog("✅ Gabarito já existe na nuvem.");
                     uploadGabarito = false;
                     remoteUrlGab = matchGab.url;
@@ -882,6 +890,9 @@ export function setupFormLogic(elements, initialData) {
           skipUpload = !uploadProva && !uploadGabarito;
 
           if (skipUpload) {
+            console.log(
+              "[Manual] ALL FILES EXIST IN CLOUD. Skipping upload flow completely."
+            );
             progress.setTarget(100, "Concluído");
             progress.addLog(
               "Todos os arquivos já existem. Abrindo visualizador local..."
