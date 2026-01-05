@@ -988,17 +988,28 @@ export function setupFormLogic(elements, initialData) {
           formData.append("fileProva", fileProva, finalNameProva);
           formData.append("pdf_custom_name", finalNameProva);
           if (tmpUrlProva) formData.append("pdf_url_override", tmpUrlProva);
-          if (remoteHashProva) formData.append("visual_hash", remoteHashProva);
+          if (remoteHashProva || remoteHashProvaLink)
+            formData.append(
+              "visual_hash",
+              remoteHashProva || remoteHashProvaLink
+            );
         } else {
           console.log("[Manual] Pulando upload da Prova (já existe).");
         }
 
-        if (fileGabarito && finalNameGab && uploadGabarito) {
-          formData.append("fileGabarito", fileGabarito, finalNameGab);
-          formData.append("gabarito_custom_name", finalNameGab);
+        if (uploadGabarito) {
+          // Relaxed check to allow Link-only Gabarito
+          if (fileGabarito && finalNameGab) {
+            formData.append("fileGabarito", fileGabarito, finalNameGab);
+            formData.append("gabarito_custom_name", finalNameGab);
+          }
           if (tmpUrlGab) formData.append("gabarito_url_override", tmpUrlGab);
-          if (remoteHashGab)
-            formData.append("visual_hash_gabarito", remoteHashGab);
+
+          if (remoteHashGab || remoteHashGabLink)
+            formData.append(
+              "visual_hash_gabarito",
+              remoteHashGab || remoteHashGabLink
+            );
         } else if (!uploadGabarito && fileGabarito) {
           console.log("[Manual] Pulando upload do Gabarito (já existe).");
         }
