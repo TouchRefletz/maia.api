@@ -3,9 +3,15 @@ import { gerarVisualizadorPDF } from "../viewer/events.js";
 /**
  * Helper: Upload to TmpFiles.org
  */
-async function uploadToTmpFiles(file) {
+async function uploadToTmpFiles(file, customName = null) {
   const formData = new FormData();
-  formData.append("file", file);
+  if (customName) {
+    formData.append("file", file, customName);
+  } else if (file.name) {
+    formData.append("file", file, file.name);
+  } else {
+    formData.append("file", file, "unknown_file.pdf");
+  }
 
   try {
     const response = await fetch("https://tmpfiles.org/api/v1/upload", {
@@ -382,7 +388,10 @@ export function setupFormLogic(elements, initialData) {
               "Download via link com sucesso! Enviando para TmpFiles..."
             );
             try {
-              tmpUrlProvaLink = await uploadToTmpFiles(blob);
+              tmpUrlProvaLink = await uploadToTmpFiles(
+                blob,
+                "prova_link_temp.pdf"
+              );
               console.log("[Manual] TmpUrl Prova (Link):", tmpUrlProvaLink);
               progress.addLog("✅ Link da prova processado.");
             } catch (err) {
@@ -407,7 +416,10 @@ export function setupFormLogic(elements, initialData) {
               "Download via link com sucesso! Enviando para TmpFiles..."
             );
             try {
-              tmpUrlGabLink = await uploadToTmpFiles(blob);
+              tmpUrlGabLink = await uploadToTmpFiles(
+                blob,
+                "gabarito_link_temp.pdf"
+              );
               console.log("[Manual] TmpUrl Gabarito (Link):", tmpUrlGabLink);
               progress.addLog("✅ Link do gabarito processado.");
             } catch (err) {
