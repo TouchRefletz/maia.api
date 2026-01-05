@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { processarSalvamentoGabarito } from '../editor/gabarito-save.js';
 
 // Importações originais mantidas para garantir a mesma lógica de negócio e templates
-import { configurarEventosNovaAlternativa, gerarHtmlTemplateAlternativa } from '../editor/alternativas.js';
+import { configurarEventosAlternativa, configurarEventosNovaAlternativa, gerarHtmlTemplateAlternativa } from '../editor/alternativas.js';
 import { initBotaoAdicionarPasso, setupImageToggle } from '../editor/passos.js';
 import { processarSalvamentoQuestao } from '../editor/questao-save.js';
 import { initStepEditors } from '../editor/steps-ui.js';
@@ -153,26 +153,8 @@ const QuestaoTabs: React.FC<Props> = ({ questao, gabarito, containerRef }) => {
       configurarDelecao(drag);
       configurarDragAndDrop(drag);
 
-      // Botões Add Bloco
-      row.querySelectorAll('.btn-alt-add').forEach((btn: any) => {
-        // Remove listener anterior para evitar duplicação em re-renders
-        btn.onclick = null;
-        btn.onclick = () => {
-          const tipo = btn.dataset.addType;
-          const html = criarHtmlBlocoEditor(tipo, '');
-          const temp = document.createElement('div');
-          temp.innerHTML = html.trim();
-          const novoEl = temp.firstChild as HTMLElement; // Type assertion
-          drag.appendChild(novoEl);
-          novoEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); // Better UX
-        };
-      });
-
-      // Botão Remover Alternativa
-      const btnRemove = row.querySelector('.btn-remove-alt');
-      if (btnRemove) {
-        btnRemove.onclick = () => row.remove();
-      }
+      // DELEGA TUDO PARA A FUNÇÃO COMPLETA DE ALTERNATIVAS (Incluindo Dropdown)
+      configurarEventosAlternativa(row);
     });
   };
 
@@ -417,11 +399,33 @@ const QuestaoTabs: React.FC<Props> = ({ questao, gabarito, containerRef }) => {
                       <div className="alt-editor">
                         <div className="structure-editor-wrapper">
                           <div className="structure-editor-container alt-drag-container" dangerouslySetInnerHTML={{ __html: blocosAltHtml }}></div>
-                          <div className="structure-toolbar alt-add-buttons" style={{ marginTop: '6px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                            {['texto', 'equacao', 'imagem'].map(t => (
-                              <button key={t} type="button" className="btn btn--sm btn--secondary btn-alt-add" data-add-type={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</button>
-                            ))}
+                          
+                          {/* MENU DROPDOWN (Nova UI) */}
+                          <div className="structure-toolbar alt-add-buttons" style={{ marginTop: '6px', position: 'relative' }}>
+                             <button type="button" className="btn btn--sm btn--secondary btn-alt-toggle-menu" style={{ width: '100%', display: 'flex', justifyContent: 'center', gap: '5px', alignItems: 'center' }}>
+                                 <span>+</span> <span>Adicionar Conteúdo</span>
+                             </button>
+                             <div className="alt-add-menu hidden" style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--color-surface)', border: '1px solid var(--color-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', borderRadius: '6px', padding: '8px', zIndex: 999, flexDirection: 'column', gap: '4px', marginTop: '5px', display: 'none' }}>
+                                 {['texto', 'equacao', 'imagem'].map(t => (
+                                     <button key={t} type="button" className="btn btn--sm btn--text btn-alt-add" style={{ justifyContent: 'flex-start', textAlign: 'left', width: '100%' }} data-add-type={t}>
+                                         {t === 'texto' ? '📄 Texto' : t === 'equacao' ? '∑ Equação' : '📷 Imagem'}
+                                     </button>
+                                 ))}
+                                 <div style={{ height: '1px', background: 'var(--color-border)', margin: '4px 0' }}></div>
+                                 {['lista', 'tabela', 'codigo', 'citacao', 'destaque'].map(t => (
+                                     <button key={t} type="button" className="btn btn--sm btn--text btn-alt-add" style={{ justifyContent: 'flex-start', textAlign: 'left', width: '100%' }} data-add-type={t}>
+                                         {t === 'lista' ? '≡ Lista' : t === 'tabela' ? '▦ Tabela' : t === 'codigo' ? '{ } Código' : t === 'citacao' ? '“ Citação' : '★ Destaque'}
+                                     </button>
+                                 ))}
+                                 <div style={{ height: '1px', background: 'var(--color-border)', margin: '4px 0' }}></div>
+                                  {['titulo', 'subtitulo', 'separador', 'fonte'].map(t => (
+                                     <button key={t} type="button" className="btn btn--sm btn--text btn-alt-add" style={{ justifyContent: 'flex-start', textAlign: 'left', width: '100%' }} data-add-type={t}>
+                                         {t === 'titulo' ? 'H1 Título' : t === 'subtitulo' ? 'H2 Subtítulo' : t === 'separador' ? '__ Separador' : '© Fonte'}
+                                     </button>
+                                 ))}
+                             </div>
                           </div>
+                          
                         </div>
                       </div>
                     </div>
