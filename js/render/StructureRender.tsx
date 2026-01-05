@@ -32,6 +32,8 @@ interface CommonProps {
 }
 
 // --- HELPER DE SANITIZAÇÃO (Para manter compatibilidade com o regex original) ---
+import { marked } from 'marked';
+
 const sanitizeContent = (content: string) => {
   return content
     .replace(/"/g, '&quot;')
@@ -65,6 +67,22 @@ const StructureTextBlock: React.FC<{
     case 'titulo': return criarMarkdown('structure-titulo');
     case 'subtitulo': return criarMarkdown('structure-subtitulo');
     case 'fonte': return criarMarkdown('structure-fonte');
+    case 'tabela':
+      // Renderiza Tabela usando Marked
+      // Precisamos garantir que o estilo de tabela seja aplicado
+      try {
+         const htmlTabela = marked.parse(conteudoRaw) as string;
+         return (
+            <div
+              className={`structure-block structure-tabela markdown-content ${className}`}
+              data-raw={conteudoSafe} // Mantem o markdown original no data-raw
+              dangerouslySetInnerHTML={{ __html: htmlTabela }}
+            />
+         );
+      } catch (e) {
+          console.error("Erro ao renderizar tabela markdown:", e);
+          return criarMarkdown('structure-tabela-error');
+      }
     case 'lista':
       // Adiciona 2 espaços antes da quebra de linha para forçar quebra no Markdown (Hard Line Break)
       const conteudoListaMarkdown = conteudoRaw.replace(/\n/g, '  \n');
@@ -377,7 +395,7 @@ export const normalizeStructureBlock = (bloco: any) => {
   // Se quiser importar, precisaria mover a constante para um arquivo de tipos compartilhado.
   // Vou assumir a lógica padrão: se não for texto/lista/etc conhecido, é imagem.
 
-  const knownTypes = new Set(['texto', 'citacao', 'destaque', 'titulo', 'subtitulo', 'fonte', 'lista', 'equacao', 'codigo', 'separador']);
+  const knownTypes = new Set(['texto', 'citacao', 'destaque', 'titulo', 'subtitulo', 'fonte', 'lista', 'equacao', 'codigo', 'separador', 'tabela']);
   if (!knownTypes.has(tipo) && tipo !== 'imagem') {
     tipo = 'imagem';
   }
