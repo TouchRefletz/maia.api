@@ -189,5 +189,3 @@ Em outras palavras: se você publicar uma versão modificada, incorporar este pr
 > _A educação não tem preço. Sua falta tem custo. - Antônio Gomes Lacerda_
 
 ```
-
-```
