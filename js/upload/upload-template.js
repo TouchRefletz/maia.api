@@ -148,6 +148,38 @@ export function getUploadInterfaceHTML() {
            </div>
        </div>
     </div>
+
+    <!-- Processing Confirmation Modal (Safety Check) -->
+    <div id="processingConfirmModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); backdrop-filter:blur(4px); z-index:13000; align-items:center; justify-content:center;">
+       <div style="background:var(--color-surface); padding:30px; border-radius:16px; max-width:500px; width:90%; box-shadow:0 25px 50px -12px rgba(0,0,0,0.5); border:1px solid var(--color-border); display:flex; flex-direction:column; gap:20px;">
+           <div style="text-align:center;">
+               <div style="width:50px; height:50px; background:rgba(var(--color-info-rgb, 33, 150, 243), 0.1); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 15px auto;">
+                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+               </div>
+               <h3 style="margin:0; color:var(--color-text); font-size:1.25rem;">Confirmação Final</h3>
+           </div>
+           
+           <p style="margin:0; text-align:center; color:var(--color-text-secondary); line-height:1.6;">
+               O envio manual inicia um processo de sincronização e indexação por IA que <strong>não pode ser cancelado ou interrompido com segurança</strong> uma vez iniciado.
+           </p>
+
+           <!-- Conditional Copyright Checkbox -->
+           <div id="copyrightCheckContainer" style="display:none; flex-direction:row; align-items:flex-start; gap:10px; background:rgba(255,255,255,0.03); padding:12px; border-radius:8px; border:1px solid var(--color-border);">
+                <input type="checkbox" id="checkCopyrightPublic" style="margin-top:4px;">
+                <label for="checkCopyrightPublic" style="font-size:0.85rem; color:var(--color-text); cursor:pointer; line-height:1.4;">
+                    Certifico que detenho os direitos necessários ou que o conteúdo é de livre distribuição. Reconheço a integral responsabilidade legal por este upload e isento a plataforma de qualquer infração de propriedade intelectual decorrente de declarações falsas.
+                </label>
+           </div>
+           <p id="copyrightWarningText" style="display:block; font-size:0.75rem; color:var(--color-text-secondary); text-align:center; margin-top:-10px;">
+              Certifique-se de que os arquivos estão corretos antes de prosseguir.
+           </p>
+
+           <div style="display:flex; gap:12px; justify-content:center; margin-top:10px;">
+               <button id="btnCancelProcessing" type="button" class="btn btn--outline" style="flex:1;">Cancelar</button>
+               <button id="btnStartProcessing" type="button" class="btn btn--primary" style="flex:1;">Iniciar Processo</button>
+           </div>
+       </div>
+    </div>
     
     `;
 }

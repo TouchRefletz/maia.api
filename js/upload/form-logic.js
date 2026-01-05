@@ -1184,31 +1184,113 @@ export function setupFormLogic(elements, initialData) {
       }
     }; // End executeUploadSequence
 
-    // Check for Source Links
+    // --- MODAL ORCHESTRATION START ---
+
     const srcP = document.getElementById("sourceUrlProva")?.value.trim();
     const srcG = document.getElementById("sourceUrlGabarito")?.value.trim();
+    const hasAnyLink = !!srcP || !!srcG;
 
-    if (!srcP && !srcG) {
-      const m = document.getElementById("privacyConfirmModal");
-      if (m) {
-        m.style.display = "flex";
+    // Helper to show Processing/Safety Modal
+    const showProcessingConfirmation = () => {
+      const modal = document.getElementById("processingConfirmModal");
+      const checkboxContainer = document.getElementById(
+        "copyrightCheckContainer"
+      );
+      const checkbox = document.getElementById("checkCopyrightPublic");
+      const btnStart = document.getElementById("btnStartProcessing");
+      const btnCancel = document.getElementById("btnCancelProcessing");
+      const warningText = document.getElementById("copyrightWarningText");
 
-        const bYes = document.getElementById("btnConfirmUpload");
-        const bNo = document.getElementById("btnCancelUpload");
+      if (!modal) {
+        executeUploadSequence(); // Fallback if modal missing
+        return;
+      }
 
-        // Direct assignment to clean listeners
-        bYes.onclick = () => {
-          m.style.display = "none";
-          executeUploadSequence();
+      modal.style.display = "flex";
+
+      // Reset State
+      if (checkbox) checkbox.checked = false;
+
+      // Conditional Logic
+      if (hasAnyLink) {
+        checkboxContainer.style.display = "flex";
+        btnStart.disabled = true;
+        btnStart.style.opacity = "0.5";
+        btnStart.style.cursor = "not-allowed";
+
+        if (warningText) warningText.style.display = "none"; // Checkbox acts as warning
+      } else {
+        checkboxContainer.style.display = "none";
+        btnStart.disabled = false;
+        btnStart.style.opacity = "1";
+        btnStart.style.cursor = "pointer";
+
+        if (warningText) warningText.style.display = "block";
+      }
+
+      // Checkbox Listener
+      if (checkbox) {
+        // Clone to remove old listeners
+        const newCheckbox = checkbox.cloneNode(true);
+        checkbox.parentNode.replaceChild(newCheckbox, checkbox);
+
+        newCheckbox.addEventListener("change", (e) => {
+          if (e.target.checked) {
+            btnStart.disabled = false;
+            btnStart.style.opacity = "1";
+            btnStart.style.cursor = "pointer";
+          } else {
+            btnStart.disabled = true;
+            btnStart.style.opacity = "0.5";
+            btnStart.style.cursor = "not-allowed";
+          }
+        });
+      }
+
+      // Button Listeners (One-off)
+      btnCancel.onclick = () => {
+        modal.style.display = "none";
+      };
+
+      btnStart.onclick = () => {
+        modal.style.display = "none";
+        executeUploadSequence();
+      };
+    };
+
+    // Step 1: Privacy/Missing Link Check
+    if (!hasAnyLink) {
+      const privacyModal = document.getElementById("privacyConfirmModal");
+      if (privacyModal) {
+        privacyModal.style.display = "flex";
+
+        const bBack = document.getElementById("btnCancelUpload");
+        const bContinue = document.getElementById("btnConfirmUpload");
+
+        // Clean previous listeners
+        const newBack = bBack.cloneNode(true);
+        bBack.parentNode.replaceChild(newBack, bBack);
+
+        const newContinue = bContinue.cloneNode(true);
+        bContinue.parentNode.replaceChild(newContinue, bContinue);
+
+        newBack.textContent = "Voltar"; // Ensure correct text
+        newBack.onclick = () => {
+          privacyModal.style.display = "none";
         };
-        bNo.onclick = () => {
-          m.style.display = "none";
+
+        newContinue.onclick = () => {
+          privacyModal.style.display = "none";
+          // Proceed to Step 2
+          showProcessingConfirmation();
         };
-        return; // Stop here, wait for click
+        return; // Wait for user interaction
       }
     }
 
-    // If verification passed or no modal found
-    executeUploadSequence();
+    // Step 2: Immediate Processing Confirmation (if links present or Step 1 passed)
+    showProcessingConfirmation();
+
+    // executeUploadSequence(); // Only called by modals now
   });
 }
