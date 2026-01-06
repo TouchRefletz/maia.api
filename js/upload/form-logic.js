@@ -3,7 +3,7 @@ import { gerarVisualizadorPDF } from "../viewer/events.js";
 /**
  * Helper: Upload to TmpFiles.org
  */
-async function uploadToTmpFiles(file, customName = null) {
+async function uploadToTmpFiles(file, customName = null, signal = null) {
   const formData = new FormData();
   if (customName) {
     formData.append("file", file, customName);
@@ -17,6 +17,7 @@ async function uploadToTmpFiles(file, customName = null) {
     const response = await fetch("https://tmpfiles.org/api/v1/upload", {
       method: "POST",
       body: formData,
+      signal,
     });
     const data = await response.json();
     if (data.status === "success") {
@@ -34,7 +35,9 @@ async function uploadToTmpFiles(file, customName = null) {
     }
     throw new Error("Upload failed");
   } catch (e) {
-    console.error("TmpFiles Upload Error:", e);
+    if (e.name !== "AbortError") {
+      console.error("TmpFiles Upload Error:", e);
+    }
     throw e;
   }
 }
@@ -46,9 +49,9 @@ async function uploadToTmpFiles(file, customName = null) {
 /**
  * Helper: Download PDF from URL (Blob)
  */
-async function downloadPdfFromUrl(url) {
+async function downloadPdfFromUrl(url, signal = null) {
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, { signal });
     if (!res.ok) throw new Error(`Status ${res.status}`);
     const blob = await res.blob();
     return blob;
@@ -115,7 +118,7 @@ export function setupFormLogic(elements, initialData) {
 
       // Create/Show Progress Modal
       // Create/Show Progress Modal
-      const showProgressModal = (initialStatus) => {
+      const showProgressModal = (initialStatus, onCancel) => {
         let modal = document.getElementById("upload-progress-modal");
         if (!modal) {
           modal = document.createElement("div");
@@ -144,7 +147,7 @@ export function setupFormLogic(elements, initialData) {
             
             <div style="text-align:center;">
                 <h3 style="margin:0 0 5px 0; color:var(--color-text); font-size:1.2rem;">Processando Arquivos</h3>
-                <p style="margin:0; color:var(--color-text-secondary); font-size:0.9rem;">Tempo estimado: ~4 min (Cloud Sync)</p>
+                <p style="margin:0; color:var(--color-text-secondary); font-size:0.9rem;">Tempo estimado: ~2 min (Sincronização com a nuvem)</p>
             </div>
 
             <!-- Progress Bar Container -->
@@ -178,8 +181,27 @@ export function setupFormLogic(elements, initialData) {
                 <div class="log-line">> ${initialStatus}</div>
             </div>
 
+            <button id="btn-cancel-upload-process" style="
+                margin-top: 10px;
+                background: rgba(220, 53, 69, 0.1);
+                color: #ff6b6b;
+                border: 1px solid rgba(220, 53, 69, 0.3);
+                padding: 10px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 0.9rem;
+                transition: all 0.2s;
+            " onmouseover="this.style.background='rgba(220, 53, 69, 0.2)'" onmouseout="this.style.background='rgba(220, 53, 69, 0.1)'">
+                Cancelar Envio
+            </button>
+
         </div>
       `;
+
+        const btnCancel = document.getElementById("btn-cancel-upload-process");
+        if (btnCancel && onCancel) {
+          btnCancel.onclick = onCancel;
+        }
 
         const progressBar = document.getElementById("upload-progress-bar");
         const progressPercent = document.getElementById("progress-percent");
@@ -232,8 +254,42 @@ export function setupFormLogic(elements, initialData) {
         };
       };
 
+      const abortController = new AbortController();
+      const signal = abortController.signal;
+
       const progress = showProgressModal(
-        "Calculando identidade visual do arquivo..."
+        "Calculando identidade visual do arquivo...",
+        () => {
+          const confirmModal = document.getElementById(
+            "cancelUploadConfirmModal"
+          );
+          const btnKeep = document.getElementById("btnKeepUploading");
+          const btnConfirm = document.getElementById("btnConfirmCancel");
+
+          if (confirmModal) {
+            confirmModal.style.display = "flex";
+
+            // Setup Listeners
+            const close = () => {
+              confirmModal.style.display = "none";
+            };
+
+            btnKeep.onclick = close;
+
+            btnConfirm.onclick = () => {
+              close();
+              abortController.abort();
+              progress.addLog("Cancelando operações...", true);
+              setTimeout(() => progress.close(), 1000);
+            };
+          } else {
+            // Fallback if modal is missing for some reason
+            if (confirm("Deseja realmente cancelar o upload?")) {
+              abortController.abort();
+              progress.close();
+            }
+          }
+        }
       );
 
       // Helper to Open Viewer (Reusable)
@@ -382,7 +438,7 @@ export function setupFormLogic(elements, initialData) {
         // 1. Prova Link Check
         if (linkProva) {
           progress.addLog(`Verificando link da prova: ${linkProva}...`);
-          const blob = await downloadPdfFromUrl(linkProva);
+          const blob = await downloadPdfFromUrl(linkProva, signal);
           if (blob) {
             progress.addLog(
               "Download via link com sucesso! Enviando para TmpFiles..."
@@ -390,7 +446,8 @@ export function setupFormLogic(elements, initialData) {
             try {
               tmpUrlProvaLink = await uploadToTmpFiles(
                 blob,
-                "prova_link_temp.pdf"
+                "prova_link_temp.pdf",
+                signal
               );
               console.log("[Manual] TmpUrl Prova (Link):", tmpUrlProvaLink);
               progress.addLog("✅ Link da prova processado.");
@@ -410,7 +467,7 @@ export function setupFormLogic(elements, initialData) {
         // 2. Gabarito Link Check
         if (linkGab) {
           progress.addLog(`Verificando link do gabarito...`);
-          const blob = await downloadPdfFromUrl(linkGab);
+          const blob = await downloadPdfFromUrl(linkGab, signal);
           if (blob) {
             progress.addLog(
               "Download via link com sucesso! Enviando para TmpFiles..."
@@ -418,7 +475,8 @@ export function setupFormLogic(elements, initialData) {
             try {
               tmpUrlGabLink = await uploadToTmpFiles(
                 blob,
-                "gabarito_link_temp.pdf"
+                "gabarito_link_temp.pdf",
+                signal
               );
               console.log("[Manual] TmpUrl Gabarito (Link):", tmpUrlGabLink);
               progress.addLog("✅ Link do gabarito processado.");
@@ -436,7 +494,7 @@ export function setupFormLogic(elements, initialData) {
         if (fileProva) {
           progress.setTarget(10, "Upload Temporário");
           progress.addLog("Enviando prova para servidor temporário...");
-          tmpUrlProva = await uploadToTmpFiles(fileProva);
+          tmpUrlProva = await uploadToTmpFiles(fileProva, null, signal);
           console.log("[Manual] TmpUrl Prova:", tmpUrlProva);
         }
 
@@ -444,7 +502,7 @@ export function setupFormLogic(elements, initialData) {
         if (fileGabarito) {
           progress.setTarget(15);
           progress.addLog("Enviando gabarito para servidor temporário...");
-          tmpUrlGab = await uploadToTmpFiles(fileGabarito);
+          tmpUrlGab = await uploadToTmpFiles(fileGabarito, null, signal);
           console.log("[Manual] TmpUrl Gabarito:", tmpUrlGab);
         }
 
@@ -462,6 +520,7 @@ export function setupFormLogic(elements, initialData) {
           const response = await fetch(`${WORKER_URL}/compute-hash`, {
             method: "POST",
             body: JSON.stringify({ url, slug: tempSlug }),
+            signal,
           });
 
           if (!response.ok) {
@@ -609,6 +668,7 @@ export function setupFormLogic(elements, initialData) {
             const slugRes = await fetch(`${WORKER_URL}/canonical-slug`, {
               method: "POST",
               body: JSON.stringify({ query: queryForSlug }),
+              signal,
             });
 
             const slugData = await slugRes.json();
@@ -620,7 +680,7 @@ export function setupFormLogic(elements, initialData) {
 
               // 2. Verificar Manifesto Existente
               const manifestUrl = `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${predictedSlug}/manifest.json`;
-              const manifestRes = await fetch(manifestUrl);
+              const manifestRes = await fetch(manifestUrl, { signal });
 
               if (manifestRes.ok) {
                 const manifest = await manifestRes.json();
@@ -823,6 +883,7 @@ export function setupFormLogic(elements, initialData) {
                   },
                   files: [base64Data], // Send file
                 }),
+                signal,
               });
 
               if (!response.ok)
@@ -1051,6 +1112,7 @@ export function setupFormLogic(elements, initialData) {
         const res = await fetch(`${WORKER_URL_UPLOAD}/manual-upload`, {
           method: "POST",
           body: formData,
+          signal,
         });
         const data = await res.json();
         console.log("[Manual] Worker Response:", data);
@@ -1091,7 +1153,10 @@ export function setupFormLogic(elements, initialData) {
           // Reutilizar startPolling mas modificar para NÃO abrir com URL remota
           // Precisamos esperar o evento 'Cloud sync complete' ou similar.
 
-          await new Promise(async (resolve) => {
+          await new Promise(async (resolve, reject) => {
+            if (signal.aborted)
+              return reject(new DOMException("Aborted", "AbortError"));
+
             let PusherClass = window.Pusher;
             if (!PusherClass) {
               const module = await import("pusher-js");
@@ -1102,10 +1167,28 @@ export function setupFormLogic(elements, initialData) {
             });
             const channel = pusher.subscribe(finalSlug);
 
+            // Handle Abort
+            const onAbort = () => {
+              if (pusher) {
+                try {
+                  pusher.unsubscribe(finalSlug);
+                  // channel.unbind_all() is handled by garbage collection or explicit close,
+                  // but good practice to unbind if we keep the instance.
+                  // However, for immediate cancel:
+                  pusher.disconnect();
+                } catch (e) {}
+              }
+              reject(
+                new DOMException("Upload Cancelled by User", "AbortError")
+              );
+            };
+            signal.addEventListener("abort", onAbort);
+
             let done = false;
             const safeResolve = () => {
               if (!done) {
                 done = true;
+                signal.removeEventListener("abort", onAbort);
                 channel.unbind_all();
                 pusher.unsubscribe(finalSlug);
                 resolve();
@@ -1114,6 +1197,7 @@ export function setupFormLogic(elements, initialData) {
 
             // Timeout de segurança (se o worker for rápido demais e perdermos o ev, ou demorar)
             setTimeout(() => {
+              if (signal.aborted) return;
               progress.addLog(
                 "⚠️ Tempo limite de sync atingido. Abrindo assim mesmo..."
               );
@@ -1121,9 +1205,9 @@ export function setupFormLogic(elements, initialData) {
             }, 15000); // 15s max wait
 
             channel.bind("log", (d) => {
+              if (signal.aborted) return;
               const msg = d.message || "";
               console.log(`[Pusher Sync] ${msg}`);
-              // progress.update(msg); // Opcional mostrar logs detalhados
               if (
                 msg.includes("Cloud sync complete") ||
                 msg.includes("Processamento concluído")
@@ -1132,9 +1216,6 @@ export function setupFormLogic(elements, initialData) {
                 safeResolve();
               }
             });
-
-            // Se já veio sucesso imediato e não é async?
-            // O manual-upload geralmente é async para coisas pesadas.
           });
         }
 
@@ -1160,15 +1241,27 @@ export function setupFormLogic(elements, initialData) {
         return;
       } catch (e) {
         if (progress && progress.close) progress.close();
-        console.error("[Manual] Error triggering upload:", e);
 
-        // Ensure viewer opens even on error
-        setTimeout(() => {
+        // Check if it's a user cancellation
+        const isAbort =
+          e.name === "AbortError" ||
+          (e.message && e.message.includes("AbortError"));
+
+        if (isAbort) {
+          console.log(
+            "[Manual] Upload cancelled by user. Opening local viewer..."
+          );
+        } else {
+          console.error("[Manual] Error triggering upload:", e);
           alert(
             "Erro na sincronização: " +
               e.message +
               "\nAbrindo modo visualização local."
           );
+        }
+
+        // Ensure viewer opens even on error or cancel
+        setTimeout(() => {
           gerarVisualizadorPDF({
             title: AUTO_TITLE || "Documento Local (Offline)",
             rawTitle: "Documento Local",
@@ -1178,7 +1271,8 @@ export function setupFormLogic(elements, initialData) {
               : null,
             gabaritoNaProva: gabaritoCheck.checked,
             isManualLocal: true,
-            slug: "local-error-" + Date.now(),
+            slug:
+              "local-" + (isAbort ? "cancelled" : "error") + "-" + Date.now(),
           });
         }, 500);
       }

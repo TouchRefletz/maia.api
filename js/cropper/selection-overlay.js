@@ -3,25 +3,33 @@ import { viewerState } from "../main.js";
 /**
  * MODULE: selection-overlay.js
  * Gerencia a camada flutuante que permite selecionar áreas livres através de múltiplas páginas.
- * Versão 4.0: Page-Anchored Positioning (Fix Zoom Issues)
+ * Versão 5.0: Multiple Selections Support
  */
 
 let overlayElement = null;
-let selectionBox = null;
-let currentSelectionRect = null; // { top, left, width, height } em PIXELS RELATIVOS AO OVERLAY
-let storedSelectionData = null;  // Persistence
+let activeSelectionBox = null;
+// Removed singleton selectionBox, currentSelectionRect, storedSelectionData
+// State is now managed within each selection box DOM element
 
 // Listeners
 let resizeObserver = null;
 let scrollListener = null;
+let rafId = null; // Throttling for pointer move
+let dimmingPath = null; // SVG Path element
 
 // Enum
 const DragType = {
-    NONE: 'none',
-    CREATE: 'create',
-    BOX: 'box',
-    NW: 'nw', NE: 'ne', SW: 'sw', SE: 'se',
-    N: 'n', S: 's', W: 'w', E: 'e'
+  NONE: "none",
+  CREATE: "create",
+  BOX: "box",
+  NW: "nw",
+  NE: "ne",
+  SW: "sw",
+  SE: "se",
+  N: "n",
+  S: "s",
+  W: "w",
+  E: "e",
 };
 
 let currentDragType = DragType.NONE;
@@ -32,406 +40,718 @@ let creationStartX = 0;
 let creationStartY = 0;
 
 export function initSelectionOverlay() {
-    const container = document.getElementById("canvasContainer");
-    if (!container) return;
+  const container = document.getElementById("canvasContainer");
+  if (!container) return;
 
-    if (!overlayElement) {
-        createOverlayDOM(container);
-    }
+  if (!overlayElement) {
+    createOverlayDOM(container);
+  }
 
-    // Atualiza altura e largura total (fix overflow horizontal)
+  // Atualiza altura e largura total
+  updateOverlayDimensions();
+
+  // Listeners Robustos
+  scrollListener = () => {
     updateOverlayDimensions();
+  };
+  container.addEventListener("scroll", scrollListener);
 
-    // Listeners Robustos (Scroll e Resize)
-    scrollListener = () => {
-        updateOverlayDimensions();
-    };
-    container.addEventListener('scroll', scrollListener);
+  if (window.ResizeObserver) {
+    resizeObserver = new ResizeObserver(() => {
+      updateOverlayDimensions();
+    });
+    resizeObserver.observe(container);
+  }
 
-    if (window.ResizeObserver) {
-        resizeObserver = new ResizeObserver(() => {
-            updateOverlayDimensions();
-        });
-        resizeObserver.observe(container);
-    }
-
-    // RESET STATE
-    selectionBox.style.display = 'none';
-    overlayElement.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-
-    // Limpa seleção anterior
-    currentSelectionRect = null;
-    storedSelectionData = null;
+  // RESET STATE
+  // overlayElement.style.backgroundColor = "rgba(0, 0, 0, 0.5)"; // REMOVED: Using SVG now
+  updateDimmingMask();
+  activeSelectionBox = null;
 }
 
 function updateOverlayDimensions() {
-    const container = document.getElementById("canvasContainer");
-    if (!container || !overlayElement) return;
+  const container = document.getElementById("canvasContainer");
+  if (!container || !overlayElement) return;
 
-    const nav = document.getElementById('viewerSidebar');
-    // Pequeno hack: garante que pegamos o maior valor possível para cobrir tudo
-    const w = Math.max(container.scrollWidth, container.clientWidth);
-    const h = Math.max(container.scrollHeight, container.clientHeight);
+  // Pequeno hack: garante que pegamos o maior valor possível para cobrir tudo
+  const w = Math.max(container.scrollWidth, container.clientWidth);
+  const h = Math.max(container.scrollHeight, container.clientHeight);
 
-    overlayElement.style.width = `${w}px`;
-    overlayElement.style.height = `${h}px`;
+  // LOOP PROTECTION: Only update if changed
+  if (
+    overlayElement.style.width === `${w}px` &&
+    overlayElement.style.height === `${h}px`
+  ) {
+    return;
+  }
+
+  overlayElement.style.width = `${w}px`;
+  overlayElement.style.height = `${h}px`;
+
+  if (
+    overlayElement.firstChild &&
+    overlayElement.firstChild.tagName === "svg"
+  ) {
+    overlayElement.firstChild.setAttribute("width", "100%");
+    overlayElement.firstChild.setAttribute("height", "100%");
+    overlayElement.firstChild.setAttribute("viewBox", `0 0 ${w} ${h}`);
+  }
+
+  updateDimmingMask();
 }
 
 function createOverlayDOM(container) {
-    overlayElement = document.createElement("div");
-    overlayElement.id = "selection-overlay";
-    overlayElement.style.position = "absolute";
-    overlayElement.style.top = "0";
-    overlayElement.style.left = "0";
-    overlayElement.style.width = "100%";
-    overlayElement.style.zIndex = "999";
-    overlayElement.style.backgroundColor = "rgba(0,0,0,0.5)";
-    overlayElement.style.touchAction = "none";
-    overlayElement.style.cursor = "crosshair";
+  overlayElement = document.createElement("div");
+  overlayElement.id = "selection-overlay";
+  overlayElement.style.position = "absolute";
+  overlayElement.style.top = "0";
+  overlayElement.style.left = "0";
+  overlayElement.style.width = "100%";
+  overlayElement.style.zIndex = "999";
+  overlayElement.style.backgroundColor = "transparent"; // Changed for SVG approach
+  overlayElement.style.touchAction = "none";
+  overlayElement.style.cursor = "crosshair";
 
-    selectionBox = document.createElement("div");
-    selectionBox.id = "selection-box";
-    selectionBox.style.position = "absolute";
-    selectionBox.style.display = "none";
+  // SVG Mask Layer
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.style.position = "absolute";
+  svg.style.top = "0";
+  svg.style.left = "0";
+  svg.style.width = "100%";
+  svg.style.height = "100%";
+  svg.style.pointerEvents = "none"; // Let clicks pass through to div/boxes
 
-    // VISUAL CLÁSSICO
-    selectionBox.style.boxShadow = "0 0 0 9999px rgba(0, 0, 0, 0.5)";
-    selectionBox.style.border = "1px solid #39f";
-    selectionBox.style.cursor = "move";
+  dimmingPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  dimmingPath.setAttribute("fill", "rgba(0, 0, 0, 0.5)");
+  dimmingPath.setAttribute("fill-rule", "evenodd");
 
-    const handles = ['nw', 'ne', 'sw', 'se', 'n', 's', 'w', 'e'];
-    handles.forEach(h => {
-        const el = document.createElement('div');
-        el.className = `resize-handle handle-${h}`;
-        el.dataset.handle = h;
-        el.style.position = "absolute";
-        el.style.width = "6px";
-        el.style.height = "6px";
-        el.style.backgroundColor = "#39f";
-        el.style.zIndex = "10";
+  svg.appendChild(dimmingPath);
+  overlayElement.appendChild(svg);
 
-        if (h.includes('n')) el.style.top = "-3px";
-        if (h.includes('s')) el.style.bottom = "-3px";
-        if (h.includes('w')) el.style.left = "-3px";
-        if (h.includes('e')) el.style.right = "-3px";
-        if (h === 'n' || h === 's') el.style.left = "50%", el.style.marginLeft = "-3px";
-        if (h === 'w' || h === 'e') el.style.top = "50%", el.style.marginTop = "-3px";
+  container.appendChild(overlayElement);
 
-        selectionBox.appendChild(el);
-    });
+  overlayElement.addEventListener("pointerdown", handlePointerDown);
+  document.addEventListener("pointermove", handlePointerMove);
+  document.addEventListener("pointerup", handlePointerUp);
+}
 
-    overlayElement.appendChild(selectionBox);
-    container.appendChild(overlayElement);
+function createSelectionBoxDOM() {
+  const box = document.createElement("div");
+  box.className = "selection-box";
+  box.style.position = "absolute";
 
-    overlayElement.addEventListener('pointerdown', handlePointerDown);
-    document.addEventListener('pointermove', handlePointerMove);
-    document.addEventListener('pointerup', handlePointerUp);
+  // VISUAL: Multi-selection friendly (no giant box-shadow)
+  box.style.border = "2px solid #39f";
+  box.style.cursor = "move";
+  box.style.backgroundColor = "rgba(51, 153, 255, 0.1)"; // Slight blue tint
+
+  const handles = ["nw", "ne", "sw", "se", "n", "s", "w", "e"];
+  handles.forEach((h) => {
+    const el = document.createElement("div");
+    el.className = `resize-handle handle-${h}`;
+    el.dataset.handle = h;
+    el.style.position = "absolute";
+    el.style.width = "8px";
+    el.style.height = "8px";
+    el.style.backgroundColor = "#39f";
+    el.style.zIndex = "10";
+
+    if (h.includes("n")) el.style.top = "-5px";
+    if (h.includes("s")) el.style.bottom = "-5px";
+    if (h.includes("w")) el.style.left = "-5px";
+    if (h.includes("e")) el.style.right = "-5px";
+    if (h === "n" || h === "s")
+      ((el.style.left = "50%"), (el.style.marginLeft = "-4px"));
+    if (h === "w" || h === "e")
+      ((el.style.top = "50%"), (el.style.marginTop = "-4px"));
+
+    // Specific cursor for each handle to avoid confusion with move or create
+    let cursorStyle = "pointer";
+    if (h === "nw" || h === "se") cursorStyle = "nwse-resize";
+    else if (h === "ne" || h === "sw") cursorStyle = "nesw-resize";
+    else if (h === "n" || h === "s") cursorStyle = "ns-resize";
+    else if (h === "w" || h === "e") cursorStyle = "ew-resize";
+
+    el.style.cursor = cursorStyle;
+
+    box.appendChild(el);
+  });
+
+  return box;
 }
 
 export function removeSelectionOverlay() {
-    const container = document.getElementById("canvasContainer");
-    if (overlayElement && container) {
-        if (overlayElement.parentNode === container) {
-            container.removeChild(overlayElement);
-        }
+  const container = document.getElementById("canvasContainer");
+  if (overlayElement && container) {
+    if (overlayElement.parentNode === container) {
+      container.removeChild(overlayElement);
     }
+  }
 
-    overlayElement = null;
-    selectionBox = null;
-    currentSelectionRect = null;
-    storedSelectionData = null;
+  overlayElement = null;
+  activeSelectionBox = null;
+  dimmingPath = null;
+  // Cleared implicitly by removing overlayElement
 
-    document.removeEventListener('pointermove', handlePointerMove);
-    document.removeEventListener('pointerup', handlePointerUp);
+  document.removeEventListener("pointermove", handlePointerMove);
+  document.removeEventListener("pointerup", handlePointerUp);
 
-    if (container && scrollListener) {
-        container.removeEventListener('scroll', scrollListener);
-    }
-    if (resizeObserver) {
-        resizeObserver.disconnect();
-        resizeObserver = null;
-    }
+  if (container && scrollListener) {
+    container.removeEventListener("scroll", scrollListener);
+  }
+  if (resizeObserver) {
+    resizeObserver.disconnect();
+    resizeObserver = null;
+  }
 }
 
-// --- LÓGICA DE DRAG E RESIZE ---
+// --- DRAG AND RESIZE LOGIC ---
 
 function handlePointerDown(e) {
-    if (!overlayElement) return;
+  if (!overlayElement) return;
 
-    const target = e.target;
-    const rect = overlayElement.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+  const target = e.target;
+  // Coordinates relative to overlay
+  const rect = overlayElement.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
 
-    if (target.classList.contains('resize-handle')) {
-        if (selectionBox.style.display === 'none') return;
-        currentDragType = target.dataset.handle;
-        e.preventDefault();
+  // 1. Clicked resize handle?
+  if (target.classList.contains("resize-handle")) {
+    const box = target.parentElement;
+    setActiveBox(box);
 
-        initialBoxState = { ...currentSelectionRect };
-        dragStartX = e.clientX;
-        dragStartY = e.clientY;
+    currentDragType = target.dataset.handle;
+    e.preventDefault();
 
-    } else if (target === selectionBox || selectionBox.contains(target)) {
-        currentDragType = DragType.BOX;
-        e.preventDefault();
+    initialBoxState = { ...box.__selectionRect };
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
 
-        initialBoxState = { ...currentSelectionRect };
-        dragStartX = e.clientX;
-        dragStartY = e.clientY;
+    refreshBoxConstraint(box);
+  }
+  // 2. Clicked existing selection box?
+  else if (
+    target.classList.contains("selection-box") ||
+    target.closest(".selection-box")
+  ) {
+    const box = target.classList.contains("selection-box")
+      ? target
+      : target.closest(".selection-box");
+    setActiveBox(box);
 
-    } else {
-        // CREATE
-        currentDragType = DragType.CREATE;
-        e.preventDefault();
+    currentDragType = DragType.BOX;
+    e.preventDefault();
 
-        creationStartX = x;
-        creationStartY = y;
+    initialBoxState = { ...box.__selectionRect };
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
 
-        overlayElement.style.backgroundColor = 'transparent';
-        selectionBox.style.display = 'block';
-        updateSelectionBox(creationStartX, creationStartY, 0, 0);
+    refreshBoxConstraint(box);
+  }
+  // 3. Clicked empty space -> Create new box
+  else {
+    // 3a. CHECK: Start strictly inside a page?
+    const elements = document.elementsFromPoint(e.clientX, e.clientY);
+    const pageEl = elements.find((el) => el.classList.contains("pdf-page"));
+
+    if (!pageEl) {
+      // Clicked outside any page (gap or margin) -> Ignore
+      return;
     }
 
-    overlayElement.setPointerCapture(e.pointerId);
+    currentDragType = DragType.CREATE;
+    e.preventDefault();
+
+    creationStartX = x;
+    creationStartY = y;
+
+    // Make overlay transparent as soon as we start creating boxes
+    overlayElement.style.backgroundColor = "transparent";
+
+    const newBox = createSelectionBoxDOM();
+    overlayElement.appendChild(newBox);
+    setActiveBox(newBox);
+
+    // STORE CONSTRAINT (Page Bounds relative to Overlay)
+    const pRect = pageEl.getBoundingClientRect();
+    const oRect = overlayElement.getBoundingClientRect();
+    newBox.__constraint = {
+      left: pRect.left - oRect.left,
+      top: pRect.top - oRect.top,
+      right: pRect.right - oRect.left,
+      bottom: pRect.bottom - oRect.top,
+      width: pRect.width,
+      height: pRect.height,
+    };
+
+    // Initial update
+    updateSelectionBox(newBox, creationStartX, creationStartY, 0, 0);
+  }
+
+  overlayElement.setPointerCapture(e.pointerId);
+  updateDimmingMask(); // Force update on click
+}
+
+function setActiveBox(box) {
+  activeSelectionBox = box;
+  // Bring to front
+  if (box.parentElement) {
+    box.parentElement.appendChild(box);
+  }
+}
+
+// Helper to refresh constraint for existing boxes (in case page moved or just to be safe)
+function refreshBoxConstraint(box) {
+  if (!box || !box.__selectionRect) return;
+  // Find page based on center of box
+  const boxRect = box.getBoundingClientRect();
+  const centerX = boxRect.left + boxRect.width / 2;
+  const centerY = boxRect.top + boxRect.height / 2;
+
+  const elements = document.elementsFromPoint(centerX, centerY);
+  const pageEl = elements.find((el) => el.classList.contains("pdf-page"));
+
+  if (pageEl && overlayElement) {
+    const pRect = pageEl.getBoundingClientRect();
+    const oRect = overlayElement.getBoundingClientRect();
+    box.__constraint = {
+      left: pRect.left - oRect.left,
+      top: pRect.top - oRect.top,
+      right: pRect.right - oRect.left,
+      bottom: pRect.bottom - oRect.top,
+      width: pRect.width,
+      height: pRect.height,
+    };
+  }
 }
 
 function handlePointerMove(e) {
-    if (currentDragType === DragType.NONE || !overlayElement) return;
+  if (currentDragType === DragType.NONE || !overlayElement) return;
+
+  // THROTTLING to prevent softlock/performance issues
+  if (rafId) return;
+
+  rafId = requestAnimationFrame(() => {
+    rafId = null;
+
+    // Safety check if overlay was removed in between frames
+    if (!overlayElement) return;
 
     const rect = overlayElement.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
 
     if (currentDragType === DragType.CREATE) {
-        const width = Math.abs(mouseX - creationStartX);
-        const height = Math.abs(mouseY - creationStartY);
-        const left = Math.min(mouseX, creationStartX);
-        const top = Math.min(mouseY, creationStartY);
+      if (!activeSelectionBox) return;
 
-        updateSelectionBox(left, top, width, height);
+      let left = Math.min(mouseX, creationStartX);
+      let top = Math.min(mouseY, creationStartY);
+      let width = Math.abs(mouseX - creationStartX);
+      let height = Math.abs(mouseY - creationStartY);
 
+      // CONSTRAINT FOR CREATION
+      if (activeSelectionBox.__constraint) {
+        const c = activeSelectionBox.__constraint;
+
+        // Clamp "start" logic is tricky because startX/Y might be valid,
+        // but mouseX might be out of bounds.
+
+        // Clamp current mouse position first
+        let curX = mouseX;
+        let curY = mouseY;
+
+        if (curX < c.left) curX = c.left;
+        if (curX > c.right) curX = c.right;
+        if (curY < c.top) curY = c.top;
+        if (curY > c.bottom) curY = c.bottom;
+
+        // Re-calculate rect from clamped mouse to original start
+        // Note: creationStartX/Y should be inside because we checked on PointerDown
+
+        left = Math.min(curX, creationStartX);
+        top = Math.min(curY, creationStartY);
+        width = Math.abs(curX - creationStartX);
+        height = Math.abs(curY - creationStartY);
+      }
+
+      updateSelectionBox(activeSelectionBox, left, top, width, height);
     } else {
-        const deltaX = e.clientX - dragStartX;
-        const deltaY = e.clientY - dragStartY;
+      if (!initialBoxState || !activeSelectionBox) return;
 
-        let newLeft = initialBoxState.left;
-        let newTop = initialBoxState.top;
-        let newWidth = initialBoxState.width;
-        let newHeight = initialBoxState.height;
+      // Calculate logic identical to before
+      const deltaX = e.clientX - dragStartX;
+      const deltaY = e.clientY - dragStartY;
 
-        if (currentDragType === DragType.BOX) {
-            newLeft += deltaX;
-            newTop += deltaY;
-        } else {
-            const type = currentDragType;
-            if (type.includes('e')) newWidth += deltaX;
-            if (type.includes('w')) { newLeft += deltaX; newWidth -= deltaX; }
-            if (type.includes('s')) newHeight += deltaY;
-            if (type.includes('n')) { newTop += deltaY; newHeight -= deltaY; }
+      let newLeft = initialBoxState.left;
+      let newTop = initialBoxState.top;
+      let newWidth = initialBoxState.width;
+      let newHeight = initialBoxState.height;
+
+      if (currentDragType === DragType.BOX) {
+        newLeft += deltaX;
+        newTop += deltaY;
+      } else {
+        const type = currentDragType;
+        if (type.includes("e")) newWidth += deltaX;
+        if (type.includes("w")) {
+          newLeft += deltaX;
+          newWidth -= deltaX;
+        }
+        if (type.includes("s")) newHeight += deltaY;
+        if (type.includes("n")) {
+          newTop += deltaY;
+          newHeight -= deltaY;
+        }
+      }
+
+      if (newWidth < 10) newWidth = 10;
+      if (newHeight < 10) newHeight = 10;
+
+      // --- CONSTRAINT APPLICATION ---
+      if (activeSelectionBox && activeSelectionBox.__constraint) {
+        const c = activeSelectionBox.__constraint;
+
+        // Clamp to Page Bounds
+        // 1. Clamp Left/Top
+        if (newLeft < c.left) newLeft = c.left;
+        if (newTop < c.top) newTop = c.top;
+
+        // 2. Clamp Right/Bottom (adjust width/height based on clamped top/left)
+        if (newLeft + newWidth > c.right) {
+          // If we are moving (BOX), prevent moving past right edge
+          if (currentDragType === DragType.BOX) {
+            newLeft = c.right - newWidth;
+            // Double check left
+            if (newLeft < c.left) {
+              newLeft = c.left;
+              newWidth = c.right - c.left; // Shrink if bigger than page (unlikely)
+            }
+          } else {
+            // Resizing
+            newWidth = c.right - newLeft;
+          }
         }
 
-        if (newWidth < 10) newWidth = 10;
-        if (newHeight < 10) newHeight = 10;
-
-        const containerW = overlayElement.clientWidth;
+        if (newTop + newHeight > c.bottom) {
+          if (currentDragType === DragType.BOX) {
+            newTop = c.bottom - newHeight;
+            if (newTop < c.top) {
+              newTop = c.top;
+              newHeight = c.bottom - c.top;
+            }
+          } else {
+            newHeight = c.bottom - newTop;
+          }
+        }
+      } else {
+        // Fallback safety (Viewport/Container bounds)
         if (newLeft < 0) newLeft = 0;
         if (newTop < 0) newTop = 0;
-        if (newLeft + newWidth > containerW) {
-            if (currentDragType === DragType.BOX) newLeft = containerW - newWidth;
-            else newWidth = containerW - newLeft;
-        }
+      }
 
-        updateSelectionBox(newLeft, newTop, newWidth, newHeight);
+      updateSelectionBox(
+        activeSelectionBox,
+        newLeft,
+        newTop,
+        newWidth,
+        newHeight
+      );
     }
+
+    // Always update mask during drag
+    updateDimmingMask();
+  });
 }
 
 function handlePointerUp(e) {
-    if (currentDragType !== DragType.NONE) {
-        if (currentDragType === DragType.CREATE) {
-            if (currentSelectionRect.width < 5 || currentSelectionRect.height < 5) {
-                selectionBox.style.display = 'none';
-                overlayElement.style.backgroundColor = 'rgba(0,0,0,0.5)';
-                currentSelectionRect = null;
-            }
-        }
+  if (currentDragType !== DragType.NONE) {
+    if (currentDragType === DragType.CREATE && activeSelectionBox) {
+      const rect = activeSelectionBox.__selectionRect;
+      // Remove if too small (accidental click)
+      if (!rect || rect.width < 5 || rect.height < 5) {
+        activeSelectionBox.remove();
+        activeSelectionBox = null;
 
-        currentDragType = DragType.NONE;
-        saveSelectionState(); // MODIFICADO: Salva ancorado na página
-        if (overlayElement) overlayElement.releasePointerCapture(e.pointerId);
+        // If no boxes left, restore dark background
+        if (overlayElement.children.length === 0) {
+          // No need to set background color, mask handles it
+        }
+      }
+      updateDimmingMask();
     }
+
+    currentDragType = DragType.NONE;
+
+    if (activeSelectionBox) {
+      saveSelectionState(activeSelectionBox);
+    }
+
+    if (overlayElement) overlayElement.releasePointerCapture(e.pointerId);
+  }
 }
 
-function updateSelectionBox(left, top, w, h) {
-    if (!selectionBox) return;
-    selectionBox.style.left = `${left}px`;
-    selectionBox.style.top = `${top}px`;
-    selectionBox.style.width = `${w}px`;
-    selectionBox.style.height = `${h}px`;
+function updateSelectionBox(box, left, top, w, h) {
+  if (!box) return;
+  box.style.left = `${left}px`;
+  box.style.top = `${top}px`;
+  box.style.width = `${w}px`;
+  box.style.height = `${h}px`;
 
-    currentSelectionRect = { left, top, width: w, height: h };
+  // Store rect state on the DOM element
+  box.__selectionRect = { left, top, width: w, height: h };
+  // Visual update of mask
+  // We don't call updateDimmingMask here to avoid thrashing during simple programmatic updates if not needed,
+  // but for drag it is needed. rely on caller or add it here?
+  // safer to add it here but debounce? For now direct call is fine with RAF in move handler.
 }
 
-// --- PERSISTÊNCIA ANCORADA EM PÁGINA (ZOOM FIX) ---
+// --- PERSISTENCE & ZOOM FIX ---
 
-function saveSelectionState() {
-    if (!currentSelectionRect || !overlayElement || selectionBox.style.display === 'none') return;
+function saveSelectionState(box) {
+  if (!box || !box.__selectionRect) return;
 
-    // Encontra qual página está "embaixo" do topo da seleção
-    const container = document.getElementById("canvasContainer");
+  const currentRect = box.__selectionRect;
+  const container = document.getElementById("canvasContainer");
 
-    // Coordenada Y absoluta dentro do container.
-    // currentSelectionRect.top é relativo ao overlay (que tem height = scrollHeight)
-    // Então Y real da seleção = currentSelectionRect.top
-    const selectionRealY = currentSelectionRect.top;
-    const selectionRealX = currentSelectionRect.left;
+  // Coordenadas absolutas da seleção dentro do container
+  const boxLeft = currentRect.left;
+  const boxTop = currentRect.top;
+  const boxRight = boxLeft + currentRect.width;
+  const boxBottom = boxTop + currentRect.height;
+  const boxCX = boxLeft + currentRect.width / 2;
+  const boxCY = boxTop + currentRect.height / 2;
 
-    // Acha a página mais próxima
-    const pages = Array.from(container.querySelectorAll('.pdf-page'));
-    let anchorPage = null;
+  const pages = Array.from(container.querySelectorAll(".pdf-page"));
+  let bestPage = null;
+  let maxIntersectionArea = -1;
+  let minDistance = Infinity;
+  let fallbackPage = null;
 
-    // Procuramos a primeira página cujo 'bottom' é maior que o 'top' da seleção
-    // Isso significa que a seleção começa dentro ou depois dessa página
-    for (const page of pages) {
-        // offsetTop é relativo ao container
-        if (selectionRealY >= page.offsetTop && selectionRealY < (page.offsetTop + page.offsetHeight)) {
-            anchorPage = page;
-            break;
-        }
-        // Se a seleção começa antes da página (no gap?), pega a anterior ou essa mesmo
+  // 1. Encontrar página âncora baseada no CENTRO do recorte
+  // Isso é muito mais estável do que interseção de área para prevenir "pulos" para a página de cima.
+  for (const page of pages) {
+    const pTop = page.offsetTop;
+    const pHeight = page.offsetHeight;
+    const pBottom = pTop + pHeight;
+
+    // A página contém o centro Y do recorte?
+    // Usamos uma margem de segurança pequena (e.g. 1px) se necessário, mas direto costuma funcionar bem.
+    if (boxCY >= pTop && boxCY <= pBottom) {
+      bestPage = page;
+      break; // Encontrou o dono soberano!
     }
 
-    if (!anchorPage && pages.length > 0) {
-        // Fallback: Se não achou (ex: clicou no gap), pega a página mais próxima pelo topo
-        anchorPage = pages.find(p => p.offsetTop > selectionRealY) || pages[pages.length - 1];
+    // Fallback: Distância do centro (caso esteja no gap entre páginas)
+    const pCY = pTop + pHeight / 2;
+    // Distância vertical apenas é o mais crítico aqui
+    const distY = Math.abs(boxCY - pCY);
+
+    if (distY < minDistance) {
+      minDistance = distY;
+      fallbackPage = page;
     }
+  }
 
-    if (!anchorPage) return; // Não tem página, abortar persistência
+  const anchorPage = bestPage || fallbackPage;
 
-    // Calcula coordenadas relativas à PÁGINA ANCORA, e desnormalizadas da escala
-    const currentScale = viewerState.pdfScale;
+  if (!anchorPage) return;
 
-    // Distância do topo da seleção para o topo da página âncora
-    const relativeTop = (selectionRealY - anchorPage.offsetTop) / currentScale;
+  const currentScale = viewerState.pdfScale;
 
-    // Distância da esquerda da seleção para a esquerda da página (margem?) ou esquerda do container?
-    // As páginas estão centralizadas margin: 0 auto.
-    // rect.left do pageWrapper varia se resize window.
-    // offsetLeft do pageWrapper varia.
-    // Então devemos guardar relativo ao offsetLeft da página.
-    const relativeLeft = (selectionRealX - anchorPage.offsetLeft) / currentScale;
+  // IMPORTANTE: Coordenadas relativas à página âncora
+  const relativeTop = (boxTop - anchorPage.offsetTop) / currentScale;
+  const relativeLeft = (boxLeft - anchorPage.offsetLeft) / currentScale;
+  const unscaledW = currentRect.width / currentScale;
+  const unscaledH = currentRect.height / currentScale;
 
-    // Largura e altura desnormalizadas
-    const unscaledW = currentSelectionRect.width / currentScale;
-    const unscaledH = currentSelectionRect.height / currentScale;
-
-    storedSelectionData = {
-        anchorPageNum: parseInt(anchorPage.dataset.pageNum),
-        relativeTop,
-        relativeLeft,
-        unscaledW,
-        unscaledH
-    };
+  box.__anchorData = {
+    anchorPageNum: parseInt(anchorPage.dataset.pageNum),
+    relativeTop,
+    relativeLeft,
+    unscaledW,
+    unscaledH,
+  };
 }
 
 export function refreshOverlayPosition() {
-    const container = document.getElementById("canvasContainer");
-    if (!overlayElement || !viewerState.pdfDoc || !container) return;
+  const container = document.getElementById("canvasContainer");
+  if (!overlayElement || !viewerState.pdfDoc || !container) return;
 
-    // Reinsere overlay se necessário
-    if (overlayElement.parentNode !== container) {
-        if (selectionBox.style.display !== 'none') {
-            container.appendChild(overlayElement);
-        } else {
-            return;
-        }
+  if (overlayElement.parentNode !== container) {
+    container.appendChild(overlayElement);
+  }
+
+  updateOverlayDimensions();
+
+  const boxes = Array.from(overlayElement.querySelectorAll(".selection-box"));
+  const currentScale = viewerState.pdfScale;
+
+  if (boxes.length === 0) {
+    // handled by updateDimmingMask
+  } else {
+    overlayElement.style.backgroundColor = "transparent";
+  }
+
+  boxes.forEach((box) => {
+    // FIX: Se estiver arrastando ESTE box agora, não reposicione ele baseado em dados antigos!
+    // Isso evita que ele "pule" de volta para a posição original se um refresh ocorrer durante o arraste.
+    if (currentDragType !== DragType.NONE && activeSelectionBox === box) {
+      return;
     }
 
-    updateOverlayDimensions(); // Usa a nova função centralizada
+    const data = box.__anchorData;
+    if (!data) {
+      // Se falta âncora (ex: criado programaticamente sem save), tentamos salvar agora
+      saveSelectionState(box);
+      if (!box.__anchorData) return; // Se falhou, ignora
+    }
 
-    if (!storedSelectionData || selectionBox.style.display === 'none') return;
+    const anchorPage = document.getElementById(
+      `page-wrapper-${box.__anchorData.anchorPageNum}`
+    );
 
-    // Recupera página âncora
-    const anchorPage = document.getElementById(`page-wrapper-${storedSelectionData.anchorPageNum}`);
-    if (!anchorPage) return; // Página não existe (ainda?), abortar
+    // Safety check: Se a página âncora sumiu (ex: filtro de páginas?), mantenha onde está
+    if (!anchorPage) return;
 
-    const currentScale = viewerState.pdfScale;
+    const newLeft =
+      anchorPage.offsetLeft + box.__anchorData.relativeLeft * currentScale;
+    const newTop =
+      anchorPage.offsetTop + box.__anchorData.relativeTop * currentScale;
+    const newWidth = box.__anchorData.unscaledW * currentScale;
+    const newHeight = box.__anchorData.unscaledH * currentScale;
 
-    // Recalcula posição absoluta baseada na nova posição da página
-    const newLeft = anchorPage.offsetLeft + (storedSelectionData.relativeLeft * currentScale);
-    const newTop = anchorPage.offsetTop + (storedSelectionData.relativeTop * currentScale);
-    const newWidth = storedSelectionData.unscaledW * currentScale;
-    const newHeight = storedSelectionData.unscaledH * currentScale;
+    // SANITY CHECK: Evita distorções de "linha"
+    // Se a altura ficou < 0 ???
+    if (newHeight < 1 || newWidth < 1) return;
 
-    updateSelectionBox(newLeft, newTop, newWidth, newHeight);
+    updateSelectionBox(box, newLeft, newTop, newWidth, newHeight);
+    box.style.opacity = "1";
+  });
 
-    // Restaura opacidade (Sync com layout frame)
-    requestAnimationFrame(() => {
-        if (selectionBox) selectionBox.style.opacity = '1';
-        overlayElement.style.opacity = '1';
-    });
+  overlayElement.style.opacity = "1";
+  updateDimmingMask();
+}
+
+/**
+ * Updates the SVG path to create a dark overlay with "holes" for selection boxes
+ */
+function updateDimmingMask() {
+  if (!dimmingPath || !overlayElement) return;
+
+  const w = Math.max(overlayElement.offsetWidth, 100);
+  const h = Math.max(overlayElement.offsetHeight, 100);
+
+  // Outer rectangle (covers entire scrollable area)
+  let d = `M 0 0 h ${w} v ${h} h -${w} Z `;
+
+  // Create holes for each box
+  const boxes = overlayElement.querySelectorAll(".selection-box");
+  boxes.forEach((box) => {
+    if (box.style.display === "none") return;
+
+    // We rely on the DOM style for current visual position
+    // parsing string "10px" -> 10
+    const bx = parseFloat(box.style.left) || 0;
+    const by = parseFloat(box.style.top) || 0;
+    const bw = parseFloat(box.style.width) || 0;
+    const bh = parseFloat(box.style.height) || 0;
+
+    if (bw > 0 && bh > 0) {
+      // Inner rectangle (hole)
+      // Direction doesn't matter much for 'evenodd', but standard is typically same direction with evenodd
+      d += `M ${bx} ${by} h ${bw} v ${bh} h -${bw} Z `;
+    }
+  });
+
+  dimmingPath.setAttribute("d", d);
 }
 
 export function hideOverlayDuringRender() {
-    // MODIFICADO: Não esconde o overlay (fundo escuro), apenas a caixa de seleção para evitar "pulos"
-    if (selectionBox) selectionBox.style.opacity = '0';
+  if (!overlayElement) return;
+  const boxes = overlayElement.querySelectorAll(".selection-box");
+  boxes.forEach((b) => (b.style.opacity = "0"));
 }
 
-
 /**
- * Capture Logic - Mantém a mesma
+ * Capture Logic
  */
 export async function extractImageFromSelection() {
-    if (!currentSelectionRect || selectionBox.style.display === 'none') return null;
+  // Uses activeSelectionBox, or falls back to last created
+  let targetBox = activeSelectionBox;
 
-    const container = document.getElementById("canvasContainer");
-    const { left: x, top: y, width, height } = currentSelectionRect;
-
-    const finalCanvas = document.createElement('canvas');
-    finalCanvas.width = width;
-    finalCanvas.height = height;
-    const ctx = finalCanvas.getContext('2d');
-    const pages = Array.from(container.querySelectorAll('.pdf-page'));
-    let intersected = false;
-
-    for (const pageWrapper of pages) {
-        const pLeft = pageWrapper.offsetLeft;
-        const pTop = pageWrapper.offsetTop;
-        const pWidth = pageWrapper.offsetWidth;
-        const pHeight = pageWrapper.offsetHeight;
-
-        const x_overlap = Math.max(0, Math.min(x + width, pLeft + pWidth) - Math.max(x, pLeft));
-        const y_overlap = Math.max(0, Math.min(y + height, pTop + pHeight) - Math.max(y, pTop));
-
-        if (x_overlap > 0 && y_overlap > 0) {
-            intersected = true;
-            const sourceX = Math.max(0, x - pLeft);
-            const sourceY = Math.max(0, y - pTop);
-            const destX = Math.max(0, pLeft - x);
-            const destY = Math.max(0, pTop - y);
-            const drawW = Math.min(width - destX, pWidth - sourceX);
-            const drawH = Math.min(height - destY, pHeight - sourceY);
-
-            try {
-                const pageNum = parseInt(pageWrapper.dataset.pageNum);
-                const pageCanvasOnScreen = document.getElementById(`page-canvas-${pageNum}`);
-                if (pageCanvasOnScreen) {
-                    const pRatio = pageCanvasOnScreen.width / pageCanvasOnScreen.clientWidth;
-                    ctx.drawImage(
-                        pageCanvasOnScreen,
-                        sourceX * pRatio, sourceY * pRatio, drawW * pRatio, drawH * pRatio,
-                        destX, destY, drawW, drawH
-                    );
-                }
-            } catch (err) { }
-        }
+  if (!targetBox && overlayElement) {
+    const boxes = overlayElement.querySelectorAll(".selection-box");
+    if (boxes.length > 0) {
+      targetBox = boxes[boxes.length - 1];
     }
+  }
 
-    if (!intersected) return null;
-    return new Promise(resolve => {
-        finalCanvas.toBlob(blob => {
-            const url = URL.createObjectURL(blob);
-            resolve(url);
-        }, 'image/png');
-    });
+  if (!targetBox || !targetBox.__selectionRect) return null;
+
+  const container = document.getElementById("canvasContainer");
+  const { left: x, top: y, width, height } = targetBox.__selectionRect;
+
+  const finalCanvas = document.createElement("canvas");
+  finalCanvas.width = width;
+  finalCanvas.height = height;
+  const ctx = finalCanvas.getContext("2d");
+  const pages = Array.from(container.querySelectorAll(".pdf-page"));
+  let intersected = false;
+
+  for (const pageWrapper of pages) {
+    const pLeft = pageWrapper.offsetLeft;
+    const pTop = pageWrapper.offsetTop;
+    const pWidth = pageWrapper.offsetWidth;
+    const pHeight = pageWrapper.offsetHeight;
+
+    const x_overlap = Math.max(
+      0,
+      Math.min(x + width, pLeft + pWidth) - Math.max(x, pLeft)
+    );
+    const y_overlap = Math.max(
+      0,
+      Math.min(y + height, pTop + pHeight) - Math.max(y, pTop)
+    );
+
+    if (x_overlap > 0 && y_overlap > 0) {
+      intersected = true;
+      const sourceX = Math.max(0, x - pLeft);
+      const sourceY = Math.max(0, y - pTop);
+      const destX = Math.max(0, pLeft - x);
+      const destY = Math.max(0, pTop - y);
+      const drawW = Math.min(width - destX, pWidth - sourceX);
+      const drawH = Math.min(height - destY, pHeight - sourceY);
+
+      try {
+        const pageNum = parseInt(pageWrapper.dataset.pageNum);
+        const pageCanvasOnScreen = document.getElementById(
+          `page-canvas-${pageNum}`
+        );
+        if (pageCanvasOnScreen) {
+          const pRatio =
+            pageCanvasOnScreen.width / pageCanvasOnScreen.clientWidth;
+          ctx.drawImage(
+            pageCanvasOnScreen,
+            sourceX * pRatio,
+            sourceY * pRatio,
+            drawW * pRatio,
+            drawH * pRatio,
+            destX,
+            destY,
+            drawW,
+            drawH
+          );
+        }
+      } catch (err) {}
+    }
+  }
+
+  if (!intersected) return null;
+  return new Promise((resolve) => {
+    finalCanvas.toBlob((blob) => {
+      const url = URL.createObjectURL(blob);
+      resolve(url);
+    }, "image/png");
+  });
 }

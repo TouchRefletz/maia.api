@@ -159,8 +159,8 @@ export function getUploadInterfaceHTML() {
                <h3 style="margin:0; color:var(--color-text); font-size:1.25rem;">Confirmação Final</h3>
            </div>
            
-           <p style="margin:0; text-align:center; color:var(--color-text-secondary); line-height:1.6;">
-               O envio manual inicia um processo de sincronização e indexação por IA que <strong>não pode ser cancelado ou interrompido com segurança</strong> uma vez iniciado.
+            <p style="margin:0; text-align:center; color:var(--color-text-secondary); line-height:1.6;">
+               Você tem certeza que deseja iniciar o processo de sincronização e indexação? 
            </p>
 
            <!-- Conditional Copyright Checkbox -->
@@ -177,6 +177,19 @@ export function getUploadInterfaceHTML() {
            <div style="display:flex; gap:12px; justify-content:center; margin-top:10px;">
                <button id="btnCancelProcessing" type="button" class="btn btn--outline" style="flex:1;">Cancelar</button>
                <button id="btnStartProcessing" type="button" class="btn btn--primary" style="flex:1;">Iniciar Processo</button>
+           </div>
+       </div>
+    </div>
+    
+     <div id="cancelUploadConfirmModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); backdrop-filter:blur(4px); z-index:14000; align-items:center; justify-content:center;">
+       <div style="background:var(--color-surface); padding:24px; border-radius:12px; max-width:400px; width:90%; box-shadow:0 25px 50px -12px rgba(0,0,0,0.5); border:1px solid var(--color-border); display:flex; flex-direction:column; gap:16px;">
+           <h3 style="margin:0; color:var(--color-text); font-size:1.1rem;">Cancelar Envio?</h3>
+           <p style="margin:0; color:var(--color-text-secondary); line-height:1.5;">
+               Isso interromperá todas as operações de upload e sincronização em andamento.
+           </p>
+           <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:8px;">
+               <button id="btnKeepUploading" type="button" class="btn btn--text" style="color:var(--color-text);">Não, continuar</button>
+               <button id="btnConfirmCancel" type="button" class="btn btn--sm" style="background:rgba(220, 53, 69, 0.1); color:#ff6b6b; border:1px solid rgba(220, 53, 69, 0.3);">Sim, cancelar</button>
            </div>
        </div>
     </div>
