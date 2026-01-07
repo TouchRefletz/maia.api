@@ -1,25 +1,24 @@
-import { viewerState } from '../main.js';
-import { renderizarQuestaoFinal } from '../render/final/render-questao.js';
-import { esconderPainel } from '../viewer/sidebar.js';
-import { iniciarCropper } from './cropper-core.js';
+import { viewerState } from "../main.js";
+import { renderizarQuestaoFinal } from "../render/final/render-questao.js";
+import { customAlert } from "../ui/GlobalAlertsLogic.tsx";
+import { irParaPagina } from "../viewer/pdf-core.js";
+import { mostrarPainel } from "../viewer/sidebar.js";
+import { iniciarCropper } from "./cropper-core.js";
+import { CropperState } from "./cropper-state.js";
 
 export function ativarModoRecorte() {
   if (viewerState.cropper) return;
 
-  // Auto-hide do painel ao iniciar recorte (Pedido do usuário)
-  if (window.innerWidth <= 900) esconderPainel();
+  // No novo fluxo, a sidebar deve ESTAR ABERTA para controlar os grupos
+  mostrarPainel();
 
   iniciarCropper();
 
-  // Mostra botões flutuantes
-  const floatParams = document.getElementById('floatingActionParams');
-  if (floatParams) floatParams.classList.remove('hidden');
-
   // Desativa botão do header para feedback visual
-  const btnHeader = document.getElementById('btnRecortarHeader');
+  const btnHeader = document.getElementById("btnRecortarHeader");
   if (btnHeader) {
-    btnHeader.style.opacity = '0.5';
-    btnHeader.style.pointerEvents = 'none';
+    btnHeader.style.opacity = "0.5";
+    btnHeader.style.pointerEvents = "none";
   }
 }
 
@@ -37,12 +36,12 @@ export function iniciarCapturaParaSlot(index, contexto) {
   ativarModoRecorte();
 
   const btnConfirm = document.querySelector(
-    '#floatingActionParams .btn--success'
+    "#floatingActionParams .btn--success"
   );
   if (btnConfirm) {
-    btnConfirm.innerText = '📍 Preencher Espaço';
-    btnConfirm.classList.remove('btn--success');
-    btnConfirm.classList.add('btn--primary');
+    btnConfirm.innerText = "📍 Preencher Espaço";
+    btnConfirm.classList.remove("btn--success");
+    btnConfirm.classList.add("btn--primary");
   }
 }
 
@@ -57,13 +56,13 @@ export function iniciarCapturaImagemQuestao() {
 
   // Feedback visual no botão flutuante
   const btnConfirm = document.querySelector(
-    '#floatingActionParams .btn--success'
+    "#floatingActionParams .btn--success"
   );
   if (btnConfirm) {
-    const destino = window.modo === 'gabarito' ? 'Gabarito' : 'Questão';
+    const destino = window.modo === "gabarito" ? "Gabarito" : "Questão";
     btnConfirm.innerText = `💾 Salvar Figura (${destino})`;
-    btnConfirm.classList.remove('btn--success');
-    btnConfirm.classList.add('btn--warning');
+    btnConfirm.classList.remove("btn--success");
+    btnConfirm.classList.add("btn--warning");
   }
 }
 
@@ -75,7 +74,7 @@ export function onClickImagemFinal() {
 
 export function removerImagemFinal(index, tipo) {
   // Tipo: 'questao' ou 'gabarito'
-  if (tipo === 'gabarito') {
+  if (tipo === "gabarito") {
     if (window.__ultimoGabaritoExtraido?.imagens_suporte) {
       window.__ultimoGabaritoExtraido.imagens_suporte.splice(index, 1);
       window.__imagensLimpas.gabarito_suporte.splice(index, 1); // Mantém sincronia
@@ -88,4 +87,41 @@ export function removerImagemFinal(index, tipo) {
       renderizarQuestaoFinal(window.__ultimaQuestaoExtraida);
     }
   }
+}
+
+export function iniciarCapturaDeQuestaoRestrita(pageNum) {
+  // 1. Navegar para a pÃ¡gina alvo
+  irParaPagina(pageNum);
+
+  // 2. Travar o viewer apÃ³s a animaÃ§Ã£o de scroll (aprox 600ms)
+  setTimeout(() => {
+    const container = document.getElementById("canvasContainer");
+    if (container) {
+      // Nova classe para controle global de UI (Header disabled, etc)
+      document.body.classList.add("manual-crop-active");
+      window.__isManualPageAdd = true;
+
+      container.style.overflow = "hidden";
+      // container.style.touchAction = "none"; // Removido para evitar bloqueio de seleção
+    }
+
+    // 3. Aplicar constraint
+    CropperState.setPageConstraint(pageNum);
+
+    // 4. Iniciar visualmente o cropper
+    // 4. Iniciar visualmente o cropper
+    ativarModoRecorte();
+    CropperState.createGroup({ tags: ["manual"] });
+
+    // 5. Ajustar feedback visual especÃ­fico
+    customAlert(`🔒 Modo de Adição Manual: Página ${pageNum}`, 3000);
+
+    const btnConfirm = document.querySelector(
+      "#floatingActionParams .btn--success"
+    );
+    if (btnConfirm) {
+      // Se estamos em modo restrito, talvez o texto deva ser "Salvar QuestÃ£o Manual"
+      btnConfirm.innerText = "💾 Salvar Questão Manual";
+    }
+  }, 700);
 }

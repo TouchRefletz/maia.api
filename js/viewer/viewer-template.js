@@ -1,11 +1,10 @@
-
 /**
  * Retorna a string HTML completa do visualizador.
  * Recebe 'args' para preencher dados dinâmicos como o título.
  * NOTA: Todos os onclicks foram removidos e substituídos por IDs.
  */
 export function montarTemplateViewer(args) {
-    return `
+  return `
     <div id="pdfViewerContainer" class="fade-in">
         <header id="viewerHeader">
             <div class="header-left">
@@ -65,6 +64,14 @@ export function montarTemplateViewer(args) {
 
 
         <div id="viewerBody">
+            <!-- SIDEBAR (Panel) -->
+            <aside id="viewerSidebar">
+                <!-- Conteúdo será injetado via JS (sidebar-cropper.js) -->
+            </aside>
+            
+            <!-- RESIZER HANDLE -->
+            <div id="sidebarResizer"></div>
+
             <main id="viewerMain">
                 <section class="pdf-panel" id="panelProva">
                     <div class="panel-label">
@@ -89,12 +96,13 @@ export function montarTemplateViewer(args) {
                                 <button id="btnZoomIn" class="btn-icon">+</button>
                             </div>
                         </div>
-                        <button id="btnRecortarHeader">
-                            <img src="capture.png">
-                        </button>
                     </div>
-                    <div id="canvasContainer" class="canvas-wrapper">
-                        <!-- Canvas das páginas serão inseridos via JS (renderAllPages) -->
+
+                    <div class="viewer-viewport-wrapper" style="position: relative; flex: 1; overflow: hidden; display: flex; flex-direction: column;">
+                        <div id="ai-glow-overlay" class="viewer-glow-overlay"></div>
+                        <div id="canvasContainer" class="canvas-wrapper">
+                            <!-- Canvas das páginas serão inseridos via JS (renderAllPages) -->
+                        </div>
                     </div>
                 </section>
             </main>
@@ -129,47 +137,51 @@ export function montarTemplateViewer(args) {
  * Pode ser chamada sempre que houver troca de modo.
  */
 export function atualizarUIViewerModo() {
-    // Ainda acessamos a variável global por enquanto, para não quebrar a lógica
-    const isGabaritoMode = window.__modo === 'gabarito';
+  // Ainda acessamos a variável global por enquanto, para não quebrar a lógica
+  const isGabaritoMode = window.__modo === "gabarito";
 
-    // 1. Botões do Topo (Abas do PDF)
-    document
-        .getElementById('btnModoProva')
-        ?.classList.toggle('is-active', !isGabaritoMode);
-    document
-        .getElementById('btnModoGabarito')
-        ?.classList.toggle('is-active', isGabaritoMode);
+  // 1. Botões do Topo (Abas do PDF)
+  document
+    .getElementById("btnModoProva")
+    ?.classList.toggle("is-active", !isGabaritoMode);
+  document
+    .getElementById("btnModoGabarito")
+    ?.classList.toggle("is-active", isGabaritoMode);
 
-    // Mobile Sync
-    document.getElementById('btnModoProvaMobile')?.classList.toggle('is-active', !isGabaritoMode);
-    document.getElementById('btnModoGabaritoMobile')?.classList.toggle('is-active', isGabaritoMode);
+  // Mobile Sync
+  document
+    .getElementById("btnModoProvaMobile")
+    ?.classList.toggle("is-active", !isGabaritoMode);
+  document
+    .getElementById("btnModoGabaritoMobile")
+    ?.classList.toggle("is-active", isGabaritoMode);
 
-    // 2. Controle dos Botões de Imagem
-    const btnQuestao = document.getElementById('btnImgQuestao');
-    const msgQuestao = document.getElementById('msgAvisoModo_quest');
+  // 2. Controle dos Botões de Imagem
+  const btnQuestao = document.getElementById("btnImgQuestao");
+  const msgQuestao = document.getElementById("msgAvisoModo_quest");
 
-    if (btnQuestao) {
-        btnQuestao.disabled = isGabaritoMode;
-        btnQuestao.style.opacity = isGabaritoMode ? '0.5' : '1';
-        btnQuestao.style.cursor = isGabaritoMode ? 'not-allowed' : 'pointer';
-        if (msgQuestao)
-            msgQuestao.style.display = isGabaritoMode ? 'block' : 'none';
-    }
+  if (btnQuestao) {
+    btnQuestao.disabled = isGabaritoMode;
+    btnQuestao.style.opacity = isGabaritoMode ? "0.5" : "1";
+    btnQuestao.style.cursor = isGabaritoMode ? "not-allowed" : "pointer";
+    if (msgQuestao)
+      msgQuestao.style.display = isGabaritoMode ? "block" : "none";
+  }
 
-    const btnGabarito = document.getElementById('btnImgGabarito');
-    const msgGabarito = document.getElementById('msgAvisoModo_gab');
+  const btnGabarito = document.getElementById("btnImgGabarito");
+  const msgGabarito = document.getElementById("msgAvisoModo_gab");
 
-    if (btnGabarito) {
-        btnGabarito.disabled = !isGabaritoMode;
-        btnGabarito.style.opacity = !isGabaritoMode ? '0.5' : '1';
-        btnGabarito.style.cursor = !isGabaritoMode ? 'not-allowed' : 'pointer';
-        if (msgGabarito)
-            msgGabarito.style.display = !isGabaritoMode ? 'block' : 'none';
-    }
+  if (btnGabarito) {
+    btnGabarito.disabled = !isGabaritoMode;
+    btnGabarito.style.opacity = !isGabaritoMode ? "0.5" : "1";
+    btnGabarito.style.cursor = !isGabaritoMode ? "not-allowed" : "pointer";
+    if (msgGabarito)
+      msgGabarito.style.display = !isGabaritoMode ? "block" : "none";
+  }
 
-    // 3. Botão de Confirmar (Só na Prova)
-    const btnConfirmar = document.getElementById('btnConfirmarQuestao');
-    if (btnConfirmar) {
-        btnConfirmar.style.display = isGabaritoMode ? 'none' : 'block';
-    }
+  // 3. Botão de Confirmar (Só na Prova)
+  const btnConfirmar = document.getElementById("btnConfirmarQuestao");
+  if (btnConfirmar) {
+    btnConfirmar.style.display = isGabaritoMode ? "none" : "block";
+  }
 }

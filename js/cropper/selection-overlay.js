@@ -1,21 +1,23 @@
 import { viewerState } from "../main.js";
+import { CropperState } from "./cropper-state.js";
 
 /**
  * MODULE: selection-overlay.js
  * Gerencia a camada flutuante que permite selecionar áreas livres através de múltiplas páginas.
- * Versão 5.0: Multiple Selections Support
+ * Versão 6.0: Persistent & Grouped State (State-Driven)
  */
 
 let overlayElement = null;
-let activeSelectionBox = null;
-// Removed singleton selectionBox, currentSelectionRect, storedSelectionData
-// State is now managed within each selection box DOM element
+// ActiveBox agora é apenas uma referência temporária durante o ARRASTE/CRIACAO.
+// A persistência real vem do CropperState.
+let draggingBox = null;
+let dimmingPath = null;
 
 // Listeners
-let resizeObserver = null;
+let unsubscribe = null;
 let scrollListener = null;
-let rafId = null; // Throttling for pointer move
-let dimmingPath = null; // SVG Path element
+let resizeObserver = null;
+let rafId = null;
 
 // Enum
 const DragType = {
@@ -30,6 +32,7 @@ const DragType = {
   S: "s",
   W: "w",
   E: "e",
+  // Adicione outros tipos se necessário
 };
 
 let currentDragType = DragType.NONE;
@@ -45,39 +48,96 @@ export function initSelectionOverlay() {
 
   if (!overlayElement) {
     createOverlayDOM(container);
+  } else {
+    // Se jÃ¡ existe, garantimos que estÃ¡ anexado ao container correto (caso de re-render geral)
+    if (overlayElement.parentNode !== container) {
+      container.appendChild(overlayElement);
+    }
   }
+
+  // Previna mÃºltiplas subscriÃ§Ãµes
+  if (unsubscribe) {
+    unsubscribe();
+    unsubscribe = null;
+  }
+
+  // Subscribe to changes in state to re-render
+  unsubscribe = CropperState.subscribe(() => {
+    refreshOverlayPosition();
+    updateInteractivity();
+  });
 
   // Atualiza altura e largura total
   updateOverlayDimensions();
 
   // Listeners Robustos
+  // Remove anterior se existir para nÃ£o duplicar
+  if (scrollListener) {
+    container.removeEventListener("scroll", scrollListener);
+  }
+
   scrollListener = () => {
     updateOverlayDimensions();
   };
   container.addEventListener("scroll", scrollListener);
 
   if (window.ResizeObserver) {
+    if (resizeObserver) resizeObserver.disconnect();
+
     resizeObserver = new ResizeObserver(() => {
       updateOverlayDimensions();
     });
     resizeObserver.observe(container);
   }
 
-  // RESET STATE
-  // overlayElement.style.backgroundColor = "rgba(0, 0, 0, 0.5)"; // REMOVED: Using SVG now
   updateDimmingMask();
-  activeSelectionBox = null;
+  updateInteractivity();
+}
+
+function updateInteractivity() {
+  if (!overlayElement) return;
+  const activeGroup = CropperState.getActiveGroup();
+  // Se tem grupo ativo, overlay pega cliques. Se não, deixa passar (mas mostra os crops).
+  // Porém, se clicarmos num crop existente em modo passivo, talvez queiramos selecionar o grupo?
+  // Por simplicidade v1: Só edita se tiver grupo ativo.
+  if (activeGroup) {
+    overlayElement.style.display = "block";
+    overlayElement.style.pointerEvents = "auto";
+    overlayElement.classList.add("mode-editing");
+    overlayElement.classList.remove("mode-viewing");
+
+    // FIX: Se o grupo estiver vazio (criando nova questao), não "lockar" visualmente nem scroll
+    if (activeGroup.crops.length === 0) {
+      overlayElement.style.cursor = "crosshair";
+      overlayElement.style.touchAction = "pan-y"; // Permite scroll vertical
+      if (dimmingPath) dimmingPath.style.display = "block"; // Re-habilita fundo escuro (pedido do user)
+    } else {
+      overlayElement.style.cursor = "crosshair";
+      overlayElement.style.touchAction = "none"; // Bloqueia scroll para precisão na edição
+      if (dimmingPath) dimmingPath.style.display = "block";
+    }
+
+    // Forçar atualização de dimensões ao mostrar
+    updateOverlayDimensions();
+  } else {
+    // Mantém VISÍVEL (block) para ver os crops, mas SEM INTERAÇÃO (none) para scrollar
+    overlayElement.style.display = "block";
+    overlayElement.style.pointerEvents = "none";
+    overlayElement.style.cursor = "default";
+    overlayElement.classList.add("mode-viewing");
+    overlayElement.classList.remove("mode-editing");
+    // Remove o fundo escuro
+    if (dimmingPath) dimmingPath.style.display = "none";
+  }
 }
 
 function updateOverlayDimensions() {
   const container = document.getElementById("canvasContainer");
   if (!container || !overlayElement) return;
 
-  // Pequeno hack: garante que pegamos o maior valor possível para cobrir tudo
   const w = Math.max(container.scrollWidth, container.clientWidth);
   const h = Math.max(container.scrollHeight, container.clientHeight);
 
-  // LOOP PROTECTION: Only update if changed
   if (
     overlayElement.style.width === `${w}px` &&
     overlayElement.style.height === `${h}px`
@@ -108,9 +168,8 @@ function createOverlayDOM(container) {
   overlayElement.style.left = "0";
   overlayElement.style.width = "100%";
   overlayElement.style.zIndex = "999";
-  overlayElement.style.backgroundColor = "transparent"; // Changed for SVG approach
+  overlayElement.style.backgroundColor = "transparent";
   overlayElement.style.touchAction = "none";
-  overlayElement.style.cursor = "crosshair";
 
   // SVG Mask Layer
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -119,7 +178,7 @@ function createOverlayDOM(container) {
   svg.style.left = "0";
   svg.style.width = "100%";
   svg.style.height = "100%";
-  svg.style.pointerEvents = "none"; // Let clicks pass through to div/boxes
+  svg.style.pointerEvents = "none";
 
   dimmingPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
   dimmingPath.setAttribute("fill", "rgba(0, 0, 0, 0.5)");
@@ -135,64 +194,56 @@ function createOverlayDOM(container) {
   document.addEventListener("pointerup", handlePointerUp);
 }
 
-function createSelectionBoxDOM() {
+// Helper para criar caixa DOM
+function createSelectionBoxDOM(isActiveGroup) {
   const box = document.createElement("div");
   box.className = "selection-box";
+  // Posicionamento absoluto é necessário para o funcionamento
   box.style.position = "absolute";
 
-  // VISUAL: Multi-selection friendly (no giant box-shadow)
-  box.style.border = "2px solid #39f";
-  box.style.cursor = "move";
-  box.style.backgroundColor = "rgba(51, 153, 255, 0.1)"; // Slight blue tint
+  if (isActiveGroup) {
+    box.classList.add("is-active-group");
 
-  const handles = ["nw", "ne", "sw", "se", "n", "s", "w", "e"];
-  handles.forEach((h) => {
-    const el = document.createElement("div");
-    el.className = `resize-handle handle-${h}`;
-    el.dataset.handle = h;
-    el.style.position = "absolute";
-    el.style.width = "8px";
-    el.style.height = "8px";
-    el.style.backgroundColor = "#39f";
-    el.style.zIndex = "10";
-
-    if (h.includes("n")) el.style.top = "-5px";
-    if (h.includes("s")) el.style.bottom = "-5px";
-    if (h.includes("w")) el.style.left = "-5px";
-    if (h.includes("e")) el.style.right = "-5px";
-    if (h === "n" || h === "s")
-      ((el.style.left = "50%"), (el.style.marginLeft = "-4px"));
-    if (h === "w" || h === "e")
-      ((el.style.top = "50%"), (el.style.marginTop = "-4px"));
-
-    // Specific cursor for each handle to avoid confusion with move or create
-    let cursorStyle = "pointer";
-    if (h === "nw" || h === "se") cursorStyle = "nwse-resize";
-    else if (h === "ne" || h === "sw") cursorStyle = "nesw-resize";
-    else if (h === "n" || h === "s") cursorStyle = "ns-resize";
-    else if (h === "w" || h === "e") cursorStyle = "ew-resize";
-
-    el.style.cursor = cursorStyle;
-
-    box.appendChild(el);
-  });
+    // Criar handles apenas se for do grupo ativo
+    const handles = ["nw", "ne", "sw", "se", "n", "s", "w", "e"];
+    handles.forEach((h) => {
+      const el = document.createElement("div");
+      // As classes handle-nw, handle-n, etc já cuidam do posicionamento e cursor no CSS
+      el.className = `resize-handle handle-${h}`;
+      el.dataset.handle = h;
+      box.appendChild(el);
+    });
+  } else {
+    // Passivo / Outros grupos
+    box.classList.add("is-inactive-group");
+  }
 
   return box;
 }
 
 export function removeSelectionOverlay() {
+  // Nós não removemos mais totalmente, apenas escondemos/desativamos
+  // Mas para manter compatibilidade com limpar tudo:
   const container = document.getElementById("canvasContainer");
   if (overlayElement && container) {
+    // Se quiser hard remove:
+    // container.removeChild(overlayElement);
+    // overlayElement = null;
+
+    // Mas a ideia é persistir. Então vamos apenas limpar a store SE for um reset total.
+    // Se for só 'fechar ferramenta', mantemos.
+    // A função 'removeSelectionOverlay' é chamada em 'fecharVisualizador' que limpa tudo.
+    // Então aqui Sim, removemos.
     if (overlayElement.parentNode === container) {
       container.removeChild(overlayElement);
     }
   }
 
   overlayElement = null;
-  activeSelectionBox = null;
+  draggingBox = null;
   dimmingPath = null;
-  // Cleared implicitly by removing overlayElement
 
+  // Limpar listeners
   document.removeEventListener("pointermove", handlePointerMove);
   document.removeEventListener("pointerup", handlePointerUp);
 
@@ -203,6 +254,10 @@ export function removeSelectionOverlay() {
     resizeObserver.disconnect();
     resizeObserver = null;
   }
+  if (unsubscribe) {
+    unsubscribe();
+    unsubscribe = null;
+  }
 }
 
 // --- DRAG AND RESIZE LOGIC ---
@@ -210,7 +265,15 @@ export function removeSelectionOverlay() {
 function handlePointerDown(e) {
   if (!overlayElement) return;
 
+  // 0. Bloqueio se não tiver grupo ativo
+  if (!CropperState.getActiveGroup()) {
+    // Talvez piscar a sidebar?
+    return;
+  }
+
   const target = e.target;
+  const activeGroup = CropperState.getActiveGroup();
+
   // Coordinates relative to overlay
   const rect = overlayElement.getBoundingClientRect();
   const x = e.clientX - rect.left;
@@ -219,8 +282,11 @@ function handlePointerDown(e) {
   // 1. Clicked resize handle?
   if (target.classList.contains("resize-handle")) {
     const box = target.parentElement;
-    setActiveBox(box);
 
+    // Check ownership (safety)
+    if (!box.classList.contains("is-active-group")) return;
+
+    draggingBox = box;
     currentDragType = target.dataset.handle;
     e.preventDefault();
 
@@ -230,16 +296,17 @@ function handlePointerDown(e) {
 
     refreshBoxConstraint(box);
   }
-  // 2. Clicked existing selection box?
+  // 2. Clicked existing selection box of ACTIVE group?
   else if (
-    target.classList.contains("selection-box") ||
-    target.closest(".selection-box")
+    (target.classList.contains("selection-box") &&
+      target.classList.contains("is-active-group")) ||
+    target.closest(".selection-box.is-active-group")
   ) {
     const box = target.classList.contains("selection-box")
       ? target
       : target.closest(".selection-box");
-    setActiveBox(box);
 
+    draggingBox = box;
     currentDragType = DragType.BOX;
     e.preventDefault();
 
@@ -255,9 +322,16 @@ function handlePointerDown(e) {
     const elements = document.elementsFromPoint(e.clientX, e.clientY);
     const pageEl = elements.find((el) => el.classList.contains("pdf-page"));
 
-    if (!pageEl) {
-      // Clicked outside any page (gap or margin) -> Ignore
-      return;
+    if (!pageEl) return;
+
+    // CHECK CONSTRAINT
+    if (CropperState.pageConstraint) {
+      const clickedPageNum = parseInt(pageEl.dataset.pageNum);
+      if (clickedPageNum !== CropperState.pageConstraint.pageNum) {
+        // Feedback visual (shake? alert?)
+        // Por enquanto, apenas bloqueia
+        return;
+      }
     }
 
     currentDragType = DragType.CREATE;
@@ -266,14 +340,11 @@ function handlePointerDown(e) {
     creationStartX = x;
     creationStartY = y;
 
-    // Make overlay transparent as soon as we start creating boxes
-    overlayElement.style.backgroundColor = "transparent";
-
-    const newBox = createSelectionBoxDOM();
+    // Criar caixa temporária
+    const newBox = createSelectionBoxDOM(true); // true = active
     overlayElement.appendChild(newBox);
-    setActiveBox(newBox);
+    draggingBox = newBox;
 
-    // STORE CONSTRAINT (Page Bounds relative to Overlay)
     const pRect = pageEl.getBoundingClientRect();
     const oRect = overlayElement.getBoundingClientRect();
     newBox.__constraint = {
@@ -285,23 +356,13 @@ function handlePointerDown(e) {
       height: pRect.height,
     };
 
-    // Initial update
     updateSelectionBox(newBox, creationStartX, creationStartY, 0, 0);
   }
 
   overlayElement.setPointerCapture(e.pointerId);
-  updateDimmingMask(); // Force update on click
+  updateDimmingMask();
 }
 
-function setActiveBox(box) {
-  activeSelectionBox = box;
-  // Bring to front
-  if (box.parentElement) {
-    box.parentElement.appendChild(box);
-  }
-}
-
-// Helper to refresh constraint for existing boxes (in case page moved or just to be safe)
 function refreshBoxConstraint(box) {
   if (!box || !box.__selectionRect) return;
   // Find page based on center of box
@@ -329,13 +390,10 @@ function refreshBoxConstraint(box) {
 function handlePointerMove(e) {
   if (currentDragType === DragType.NONE || !overlayElement) return;
 
-  // THROTTLING to prevent softlock/performance issues
   if (rafId) return;
 
   rafId = requestAnimationFrame(() => {
     rafId = null;
-
-    // Safety check if overlay was removed in between frames
     if (!overlayElement) return;
 
     const rect = overlayElement.getBoundingClientRect();
@@ -343,31 +401,21 @@ function handlePointerMove(e) {
     const mouseY = e.clientY - rect.top;
 
     if (currentDragType === DragType.CREATE) {
-      if (!activeSelectionBox) return;
+      if (!draggingBox) return;
 
       let left = Math.min(mouseX, creationStartX);
       let top = Math.min(mouseY, creationStartY);
       let width = Math.abs(mouseX - creationStartX);
       let height = Math.abs(mouseY - creationStartY);
 
-      // CONSTRAINT FOR CREATION
-      if (activeSelectionBox.__constraint) {
-        const c = activeSelectionBox.__constraint;
-
-        // Clamp "start" logic is tricky because startX/Y might be valid,
-        // but mouseX might be out of bounds.
-
-        // Clamp current mouse position first
+      if (draggingBox.__constraint) {
+        const c = draggingBox.__constraint;
         let curX = mouseX;
         let curY = mouseY;
-
         if (curX < c.left) curX = c.left;
         if (curX > c.right) curX = c.right;
         if (curY < c.top) curY = c.top;
         if (curY > c.bottom) curY = c.bottom;
-
-        // Re-calculate rect from clamped mouse to original start
-        // Note: creationStartX/Y should be inside because we checked on PointerDown
 
         left = Math.min(curX, creationStartX);
         top = Math.min(curY, creationStartY);
@@ -375,11 +423,10 @@ function handlePointerMove(e) {
         height = Math.abs(curY - creationStartY);
       }
 
-      updateSelectionBox(activeSelectionBox, left, top, width, height);
+      updateSelectionBox(draggingBox, left, top, width, height);
     } else {
-      if (!initialBoxState || !activeSelectionBox) return;
+      if (!initialBoxState || !draggingBox) return;
 
-      // Calculate logic identical to before
       const deltaX = e.clientX - dragStartX;
       const deltaY = e.clientY - dragStartY;
 
@@ -409,26 +456,19 @@ function handlePointerMove(e) {
       if (newHeight < 10) newHeight = 10;
 
       // --- CONSTRAINT APPLICATION ---
-      if (activeSelectionBox && activeSelectionBox.__constraint) {
-        const c = activeSelectionBox.__constraint;
-
-        // Clamp to Page Bounds
-        // 1. Clamp Left/Top
+      if (draggingBox && draggingBox.__constraint) {
+        const c = draggingBox.__constraint;
         if (newLeft < c.left) newLeft = c.left;
         if (newTop < c.top) newTop = c.top;
 
-        // 2. Clamp Right/Bottom (adjust width/height based on clamped top/left)
         if (newLeft + newWidth > c.right) {
-          // If we are moving (BOX), prevent moving past right edge
           if (currentDragType === DragType.BOX) {
             newLeft = c.right - newWidth;
-            // Double check left
             if (newLeft < c.left) {
               newLeft = c.left;
-              newWidth = c.right - c.left; // Shrink if bigger than page (unlikely)
+              newWidth = c.right - c.left;
             }
           } else {
-            // Resizing
             newWidth = c.right - newLeft;
           }
         }
@@ -444,50 +484,68 @@ function handlePointerMove(e) {
             newHeight = c.bottom - newTop;
           }
         }
-      } else {
-        // Fallback safety (Viewport/Container bounds)
-        if (newLeft < 0) newLeft = 0;
-        if (newTop < 0) newTop = 0;
       }
 
-      updateSelectionBox(
-        activeSelectionBox,
-        newLeft,
-        newTop,
-        newWidth,
-        newHeight
-      );
+      updateSelectionBox(draggingBox, newLeft, newTop, newWidth, newHeight);
     }
-
-    // Always update mask during drag
     updateDimmingMask();
   });
 }
 
 function handlePointerUp(e) {
   if (currentDragType !== DragType.NONE) {
-    if (currentDragType === DragType.CREATE && activeSelectionBox) {
-      const rect = activeSelectionBox.__selectionRect;
-      // Remove if too small (accidental click)
+    // CRIACAO NOVO CROP
+    if (currentDragType === DragType.CREATE && draggingBox) {
+      const rect = draggingBox.__selectionRect;
       if (!rect || rect.width < 5 || rect.height < 5) {
-        activeSelectionBox.remove();
-        activeSelectionBox = null;
+        draggingBox.remove();
+        draggingBox = null;
+      } else {
+        // SALVAR NO ESTADO
+        const anchorData = calculateAnchor(draggingBox, rect);
+        if (anchorData) {
+          // Adiciona ao estado (que vai disparar refreshOverlayPosition e recriar o box corretamente)
+          CropperState.addCropToActiveGroup({ anchorData });
 
-        // If no boxes left, restore dark background
-        if (overlayElement.children.length === 0) {
-          // No need to set background color, mask handles it
+          // Remove o DOM temporário (o refresh o trará de volta como permanente)
+          draggingBox.remove();
+        } else {
+          draggingBox.remove();
         }
       }
-      updateDimmingMask();
+    }
+    // EDICAO DE EXISTENTE
+    else if (draggingBox) {
+      // Se tem cropId (veio do render ou já persistido), atualizamos
+      const cropId = draggingBox.dataset.cropId;
+      const rect = draggingBox.__selectionRect;
+
+      if (cropId && rect) {
+        // Precisamos recalcular o anchorData
+        const anchorData = calculateAnchor(draggingBox, rect);
+        if (anchorData) {
+          // Converte string para number se necessário, dependendo de como foi salvo
+          // Date.now() + Math.random() cria number, mas dataset vira string.
+          // Vamos tratar comparar frouxamente ou converter.
+          // Melhor passar como está e o findIndex lidar (mas dataset é string).
+          // No addCrop fizemos: cropData.id = ... (number)
+          // Então:
+          const idNum = parseFloat(cropId);
+          CropperState.updateCrop(idNum, anchorData);
+        }
+      }
+
+      draggingBox.remove();
     }
 
     currentDragType = DragType.NONE;
-
-    if (activeSelectionBox) {
-      saveSelectionState(activeSelectionBox);
-    }
+    initialBoxState = null;
+    draggingBox = null;
 
     if (overlayElement) overlayElement.releasePointerCapture(e.pointerId);
+
+    // Força refresh para garantir sincronia
+    updateDimmingMask();
   }
 }
 
@@ -497,82 +555,50 @@ function updateSelectionBox(box, left, top, w, h) {
   box.style.top = `${top}px`;
   box.style.width = `${w}px`;
   box.style.height = `${h}px`;
-
-  // Store rect state on the DOM element
   box.__selectionRect = { left, top, width: w, height: h };
-  // Visual update of mask
-  // We don't call updateDimmingMask here to avoid thrashing during simple programmatic updates if not needed,
-  // but for drag it is needed. rely on caller or add it here?
-  // safer to add it here but debounce? For now direct call is fine with RAF in move handler.
 }
 
-// --- PERSISTENCE & ZOOM FIX ---
+// --- CALCULO ANCORA ---
 
-function saveSelectionState(box) {
-  if (!box || !box.__selectionRect) return;
-
-  const currentRect = box.__selectionRect;
+function calculateAnchor(box, currentRect) {
   const container = document.getElementById("canvasContainer");
-
-  // Coordenadas absolutas da seleção dentro do container
   const boxLeft = currentRect.left;
   const boxTop = currentRect.top;
-  const boxRight = boxLeft + currentRect.width;
-  const boxBottom = boxTop + currentRect.height;
   const boxCX = boxLeft + currentRect.width / 2;
   const boxCY = boxTop + currentRect.height / 2;
 
   const pages = Array.from(container.querySelectorAll(".pdf-page"));
   let bestPage = null;
-  let maxIntersectionArea = -1;
-  let minDistance = Infinity;
-  let fallbackPage = null;
 
-  // 1. Encontrar página âncora baseada no CENTRO do recorte
-  // Isso é muito mais estável do que interseção de área para prevenir "pulos" para a página de cima.
   for (const page of pages) {
     const pTop = page.offsetTop;
     const pHeight = page.offsetHeight;
     const pBottom = pTop + pHeight;
 
-    // A página contém o centro Y do recorte?
-    // Usamos uma margem de segurança pequena (e.g. 1px) se necessário, mas direto costuma funcionar bem.
     if (boxCY >= pTop && boxCY <= pBottom) {
       bestPage = page;
-      break; // Encontrou o dono soberano!
-    }
-
-    // Fallback: Distância do centro (caso esteja no gap entre páginas)
-    const pCY = pTop + pHeight / 2;
-    // Distância vertical apenas é o mais crítico aqui
-    const distY = Math.abs(boxCY - pCY);
-
-    if (distY < minDistance) {
-      minDistance = distY;
-      fallbackPage = page;
+      break;
     }
   }
 
-  const anchorPage = bestPage || fallbackPage;
-
-  if (!anchorPage) return;
+  if (!bestPage) return null;
 
   const currentScale = viewerState.pdfScale;
-
-  // IMPORTANTE: Coordenadas relativas à página âncora
-  const relativeTop = (boxTop - anchorPage.offsetTop) / currentScale;
-  const relativeLeft = (boxLeft - anchorPage.offsetLeft) / currentScale;
+  const relativeTop = (boxTop - bestPage.offsetTop) / currentScale;
+  const relativeLeft = (boxLeft - bestPage.offsetLeft) / currentScale;
   const unscaledW = currentRect.width / currentScale;
   const unscaledH = currentRect.height / currentScale;
 
-  box.__anchorData = {
-    anchorPageNum: parseInt(anchorPage.dataset.pageNum),
+  return {
+    anchorPageNum: parseInt(bestPage.dataset.pageNum),
     relativeTop,
     relativeLeft,
     unscaledW,
     unscaledH,
   };
 }
+
+// --- RENDERIZADOR PRINCIPAL ---
 
 export function refreshOverlayPosition() {
   const container = document.getElementById("canvasContainer");
@@ -584,57 +610,63 @@ export function refreshOverlayPosition() {
 
   updateOverlayDimensions();
 
-  const boxes = Array.from(overlayElement.querySelectorAll(".selection-box"));
-  const currentScale = viewerState.pdfScale;
-
-  if (boxes.length === 0) {
-    // handled by updateDimmingMask
-  } else {
-    overlayElement.style.backgroundColor = "transparent";
-  }
-
-  boxes.forEach((box) => {
-    // FIX: Se estiver arrastando ESTE box agora, não reposicione ele baseado em dados antigos!
-    // Isso evita que ele "pule" de volta para a posição original se um refresh ocorrer durante o arraste.
-    if (currentDragType !== DragType.NONE && activeSelectionBox === box) {
-      return;
+  // 1. Limpar boxes existentes do DOM
+  const existingBoxes = Array.from(
+    overlayElement.querySelectorAll(".selection-box")
+  );
+  existingBoxes.forEach((b) => {
+    // Se for o que estamos arrastando agora, NÃO REMOVE
+    // (Para permitir update suave enquanto o subscribe é chamado)
+    if (b !== draggingBox) {
+      b.remove();
     }
-
-    const data = box.__anchorData;
-    if (!data) {
-      // Se falta âncora (ex: criado programaticamente sem save), tentamos salvar agora
-      saveSelectionState(box);
-      if (!box.__anchorData) return; // Se falhou, ignora
-    }
-
-    const anchorPage = document.getElementById(
-      `page-wrapper-${box.__anchorData.anchorPageNum}`
-    );
-
-    // Safety check: Se a página âncora sumiu (ex: filtro de páginas?), mantenha onde está
-    if (!anchorPage) return;
-
-    const newLeft =
-      anchorPage.offsetLeft + box.__anchorData.relativeLeft * currentScale;
-    const newTop =
-      anchorPage.offsetTop + box.__anchorData.relativeTop * currentScale;
-    const newWidth = box.__anchorData.unscaledW * currentScale;
-    const newHeight = box.__anchorData.unscaledH * currentScale;
-
-    // SANITY CHECK: Evita distorções de "linha"
-    // Se a altura ficou < 0 ???
-    if (newHeight < 1 || newWidth < 1) return;
-
-    updateSelectionBox(box, newLeft, newTop, newWidth, newHeight);
-    box.style.opacity = "1";
   });
 
-  overlayElement.style.opacity = "1";
+  // 2. Pegar estado
+  const allCrops = CropperState.getAllCrops();
+  const currentScale = viewerState.pdfScale;
+
+  allCrops.forEach((crop) => {
+    // Se for o crop que estamos criando/arrastando ID match?
+    // Não temos match de ID ainda no draggingBox.
+    // Simplesmente renderiza todos que estão no STORE. O draggingBox temporário é extra-store.
+
+    const anchorData = crop.anchorData;
+    const anchorPage = document.getElementById(
+      `page-wrapper-${anchorData.anchorPageNum}`
+    );
+    if (!anchorPage) return; // Pagina não renderizada
+
+    const newLeft =
+      anchorPage.offsetLeft + anchorData.relativeLeft * currentScale;
+    const newTop = anchorPage.offsetTop + anchorData.relativeTop * currentScale;
+    const newWidth = anchorData.unscaledW * currentScale;
+    const newHeight = anchorData.unscaledH * currentScale;
+
+    if (newHeight < 1 || newWidth < 1) return;
+
+    const box = createSelectionBoxDOM(crop.isActiveGroup);
+    updateSelectionBox(box, newLeft, newTop, newWidth, newHeight);
+
+    // Add status class
+    if (crop.status === "verified") {
+      box.classList.add("status-verified");
+    } else if (crop.status === "draft") {
+      // box.classList.add("status-draft"); // Optional, default is ok
+    }
+
+    // Armazena ID para futuro (edição)
+    box.dataset.cropId = crop.id;
+    box.dataset.groupId = crop.groupId;
+
+    overlayElement.appendChild(box);
+  });
+
   updateDimmingMask();
 }
 
 /**
- * Updates the SVG path to create a dark overlay with "holes" for selection boxes
+ * Updates the SVG path
  */
 function updateDimmingMask() {
   if (!dimmingPath || !overlayElement) return;
@@ -642,24 +674,20 @@ function updateDimmingMask() {
   const w = Math.max(overlayElement.offsetWidth, 100);
   const h = Math.max(overlayElement.offsetHeight, 100);
 
-  // Outer rectangle (covers entire scrollable area)
+  // Outer rectangle
   let d = `M 0 0 h ${w} v ${h} h -${w} Z `;
 
-  // Create holes for each box
+  // Create holes
+  // Usa o DOM atual (incluindo draggingBox e renderizados)
   const boxes = overlayElement.querySelectorAll(".selection-box");
   boxes.forEach((box) => {
     if (box.style.display === "none") return;
-
-    // We rely on the DOM style for current visual position
-    // parsing string "10px" -> 10
     const bx = parseFloat(box.style.left) || 0;
     const by = parseFloat(box.style.top) || 0;
     const bw = parseFloat(box.style.width) || 0;
     const bh = parseFloat(box.style.height) || 0;
 
     if (bw > 0 && bh > 0) {
-      // Inner rectangle (hole)
-      // Direction doesn't matter much for 'evenodd', but standard is typically same direction with evenodd
       d += `M ${bx} ${by} h ${bw} v ${bh} h -${bw} Z `;
     }
   });
@@ -667,38 +695,41 @@ function updateDimmingMask() {
   dimmingPath.setAttribute("d", d);
 }
 
-export function hideOverlayDuringRender() {
-  if (!overlayElement) return;
-  const boxes = overlayElement.querySelectorAll(".selection-box");
-  boxes.forEach((b) => (b.style.opacity = "0"));
+// Função legada/compatibilidade para pegar a imagem 'atual' (última do grupo ativo)
+export async function extractImageFromSelection() {
+  const activeGroup = CropperState.getActiveGroup();
+  if (!activeGroup || activeGroup.crops.length === 0) {
+    return null;
+  }
+  // Pega o último crop adicionado (suposição de fluxo linear de recorte único por vez no botão de confirmar)
+  const lastCrop = activeGroup.crops[activeGroup.crops.length - 1];
+  return await extractImageFromCropData(lastCrop.anchorData);
 }
 
-/**
- * Capture Logic
- */
-export async function extractImageFromSelection() {
-  // Uses activeSelectionBox, or falls back to last created
-  let targetBox = activeSelectionBox;
-
-  if (!targetBox && overlayElement) {
-    const boxes = overlayElement.querySelectorAll(".selection-box");
-    if (boxes.length > 0) {
-      targetBox = boxes[boxes.length - 1];
-    }
-  }
-
-  if (!targetBox || !targetBox.__selectionRect) return null;
-
+// Necessário para exportar porem usar lógica nova (extração baseada em crop data)
+export async function extractImageFromCropData(anchorData) {
   const container = document.getElementById("canvasContainer");
-  const { left: x, top: y, width, height } = targetBox.__selectionRect;
+  const currentScale = viewerState.pdfScale;
 
+  // Reconstruir coordenadas atuais
+  const anchorPage = document.getElementById(
+    `page-wrapper-${anchorData.anchorPageNum}`
+  );
+  if (!anchorPage) return null; // Pagina nao visivel
+
+  const x = anchorPage.offsetLeft + anchorData.relativeLeft * currentScale;
+  const y = anchorPage.offsetTop + anchorData.relativeTop * currentScale;
+  const width = anchorData.unscaledW * currentScale;
+  const height = anchorData.unscaledH * currentScale;
+
+  // Lógica de canvas drawImage
   const finalCanvas = document.createElement("canvas");
   finalCanvas.width = width;
   finalCanvas.height = height;
   const ctx = finalCanvas.getContext("2d");
   const pages = Array.from(container.querySelectorAll(".pdf-page"));
-  let intersected = false;
 
+  // Mesma lógica de interseção de extractImageFromSelection original
   for (const pageWrapper of pages) {
     const pLeft = pageWrapper.offsetLeft;
     const pTop = pageWrapper.offsetTop;
@@ -715,7 +746,6 @@ export async function extractImageFromSelection() {
     );
 
     if (x_overlap > 0 && y_overlap > 0) {
-      intersected = true;
       const sourceX = Math.max(0, x - pLeft);
       const sourceY = Math.max(0, y - pTop);
       const destX = Math.max(0, pLeft - x);
@@ -747,7 +777,6 @@ export async function extractImageFromSelection() {
     }
   }
 
-  if (!intersected) return null;
   return new Promise((resolve) => {
     finalCanvas.toBlob((blob) => {
       const url = URL.createObjectURL(blob);

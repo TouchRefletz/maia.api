@@ -1,9 +1,12 @@
 import { cancelarRecorte } from "../cropper/cropper-core.js";
 import { fecharModalConfirmacao } from "../cropper/gallery.js";
+import { loadSelectionsFromJson } from "../cropper/json-loader.js";
 import { ativarModoRecorte } from "../cropper/mode.js";
 import { salvarQuestao } from "../cropper/save-handlers.js";
 import { confirmarEnvioIA } from "../envio/ui-estado.js";
 import { viewerState } from "../main.js";
+import { AiScanner } from "../services/ai-scanner.js";
+import { showConfirmModal } from "../ui/modal-confirm.js";
 import { inicializarContextoViewer } from "./contexto.js";
 import {
   carregarDocumentoPDF,
@@ -16,6 +19,10 @@ import {
   atualizarUIViewerModo,
   montarTemplateViewer,
 } from "./viewer-template.js";
+
+// Expose for external usage
+window.MaiaPlugin = window.MaiaPlugin || {};
+window.MaiaPlugin.loadSelections = loadSelectionsFromJson;
 
 /**
  * Configura todos os listeners de clique da interface do visualizador.
@@ -83,9 +90,6 @@ export function configurarEventosViewer() {
   aoClicar("btnZoomOutMobile", () => mudarZoom(-0.1));
   aoClicar("btnZoomInMobile", () => mudarZoom(0.1));
 
-  // --- Ferramenta de Recorte (Header) ---
-  aoClicar("btnRecortarHeader", ativarModoRecorte);
-
   // --- Ações Flutuantes (Durante o Recorte) ---
   aoClicar("btnConfirmarRecorte", salvarQuestao);
   aoClicar("btnCancelarRecorte", cancelarRecorte);
@@ -107,8 +111,9 @@ export function configurarEventosViewer() {
 
     container.addEventListener("mousedown", (e) => {
       // 1. Bloqueia se estiver em modo de recorte (verifica overlay)
+      // 1. Bloqueia se estiver em modo de recorte (verifica se está editando)
       const overlay = document.getElementById("selection-overlay");
-      if (overlay && overlay.offsetParent !== null) return;
+      if (overlay && overlay.classList.contains("mode-editing")) return;
 
       // 2. Bloqueia se clicar em algum botão ou controle dentro do container (se houver)
       if (e.target.closest("button, .resizer")) return;
@@ -219,11 +224,18 @@ export function realizarLimpezaCompleta() {
   };
 }
 
-export function fecharVisualizador() {
+export async function fecharVisualizador() {
   // 1. Pergunta de Segurança
-  const msg =
-    "Tem certeza que deseja fechar e voltar ao início? \n\nTodo o progresso não salvo desta questão será perdido.";
-  if (!confirm(msg)) {
+  const msg = "Todo o progresso não salvo desta questão será perdido.";
+
+  const confirmou = await showConfirmModal(
+    "Voltar ao início?",
+    msg,
+    "Sair",
+    "Cancelar"
+  );
+
+  if (!confirmou) {
     return;
   }
 
@@ -255,11 +267,24 @@ export async function gerarVisualizadorPDF(args) {
 
   atualizarUIViewerModo();
 
+  // INICIALIZA A SIDEBAR NOVA (Cropper UI)
+  import("./sidebar.js").then((mod) => {
+    if (mod.inicializarSidebarCompleta) mod.inicializarSidebarCompleta();
+  });
+
   // Tenta carregar. Se der sucesso, fecha qualquer modal de conflito que ainda esteja na tela
   // (Caso o usuário tenha vindo do conflito e o modal ficou aberto por algum motivo, ou "Processing" toaster)
   const carregou = await carregarDocumentoPDF(urlProva);
 
   if (carregou) {
+    // --- 1. INICIALIZA PÁGINAS DA SIDEBAR AGORA ---
+    // User Request: "muda aqui pra ter página 3,4,5 e etc, todas do pdf, existindo no primeiro segundo"
+    if (viewerState.pdfDoc) {
+      import("../ui/sidebar-page-manager.js").then((mod) => {
+        mod.SidebarPageManager.init(viewerState.pdfDoc.numPages);
+      });
+    }
+
     const modalConflict = document.getElementById("unified-decision-modal");
     if (modalConflict) modalConflict.remove();
 
@@ -268,6 +293,14 @@ export async function gerarVisualizadorPDF(args) {
       "search-toaster-container"
     );
     if (toasterContainer) toasterContainer.innerHTML = "";
+
+    // --- AI AUTO-SCANNER TRIGGER ---
+    console.log("🚀 Iniciando AI Scanner...");
+    setTimeout(() => {
+      if (viewerState.pdfDoc) {
+        AiScanner.start(viewerState.pdfDoc);
+      }
+    }, 200); // Pequeno delay pra UI estabilizar
   }
 
   try {

@@ -1,16 +1,16 @@
 // --- HELPER: Detecta o container correto de scroll (Mobile vs Desktop) ---
-import { refreshOverlayPosition } from '../cropper/selection-overlay.js';
+import { refreshOverlayPosition } from "../cropper/selection-overlay.js";
 
 export function getScrollContainer() {
-  const sidebar = document.getElementById('viewerSidebar');
+  const sidebar = document.getElementById("viewerSidebar");
   if (!sidebar) return null;
 
   // Mobile: O scroll fica no wrapper explícito
   if (window.innerWidth <= 900) {
-    const wrapper = document.getElementById('maia-scroll-wrapper');
+    const wrapper = document.getElementById("maia-scroll-wrapper");
     if (wrapper) return wrapper;
     // Fallback para selector caso o ID não esteja lá
-    const contentDiv = sidebar.querySelector('div:not(#header-mobile-toggle)');
+    const contentDiv = sidebar.querySelector("div:not(#header-mobile-toggle)");
     if (contentDiv) return contentDiv;
   }
 
@@ -19,31 +19,31 @@ export function getScrollContainer() {
 }
 
 export function criarBackdropSeNecessario() {
-  let backdrop = document.getElementById('sidebarBackdrop');
-  const viewerBody = document.getElementById('viewerBody');
+  let backdrop = document.getElementById("sidebarBackdrop");
+  const viewerBody = document.getElementById("viewerBody");
   if (!backdrop && viewerBody) {
-    backdrop = document.createElement('div');
-    backdrop.id = 'sidebarBackdrop';
+    backdrop = document.createElement("div");
+    backdrop.id = "sidebarBackdrop";
     viewerBody.appendChild(backdrop);
-    backdrop.onclick = () => esconderPainel();
+    // backdrop.onclick = () => esconderPainel(); // REMOVIDO: Sidebar agora é fixa
   }
   return backdrop;
 }
 
 export function esconderPainel(mostrarBotao = true) {
-  const viewerBody = document.getElementById('viewerBody');
+  const viewerBody = document.getElementById("viewerBody");
   // 1. Esconde o Painel (CSS)
-  if (viewerBody) viewerBody.classList.add('sidebar-collapsed');
+  if (viewerBody) viewerBody.classList.add("sidebar-collapsed");
 
   // 2. Esconde o Backdrop
-  const bd = document.getElementById('sidebarBackdrop');
+  const bd = document.getElementById("sidebarBackdrop");
   if (bd) {
-    bd.style.opacity = '0';
-    bd.style.pointerEvents = 'none';
+    bd.style.opacity = "0";
+    bd.style.pointerEvents = "none";
   }
 
   // 3. Destrava scroll do site
-  document.body.style.overflow = '';
+  document.body.style.overflow = "";
 
   if (mostrarBotao) mostrarBotaoReabrirPainel();
 
@@ -53,15 +53,15 @@ export function esconderPainel(mostrarBotao = true) {
 }
 
 export function mostrarPainel() {
-  const viewerBody = document.getElementById('viewerBody');
+  const viewerBody = document.getElementById("viewerBody");
   // 1. Mostra o Painel
-  if (viewerBody) viewerBody.classList.remove('sidebar-collapsed');
+  if (viewerBody) viewerBody.classList.remove("sidebar-collapsed");
 
   // Remove Glow Effects
   document
-    .getElementById('header-mobile-toggle')
-    ?.classList.remove('glow-effect');
-  document.getElementById('reopenSidebarBtn')?.classList.remove('glow-effect');
+    .getElementById("header-mobile-toggle")
+    ?.classList.remove("glow-effect");
+  document.getElementById("reopenSidebarBtn")?.classList.remove("glow-effect");
 
   // 2. Lógica Mobile (Backdrop e Scroll)
   if (window.innerWidth <= 900) {
@@ -70,15 +70,15 @@ export function mostrarPainel() {
     if (bd) {
       // Forçar reflow se necessário, mas geralmente não precisa
       requestAnimationFrame(() => {
-        bd.style.opacity = '1';
-        bd.style.pointerEvents = 'auto';
+        bd.style.opacity = "1";
+        bd.style.pointerEvents = "auto";
       });
     }
-    document.body.style.overflow = 'hidden';
+    document.body.style.overflow = "hidden";
   }
 
   // 3. REMOVE O BOTÃO DE REABRIR
-  const btnReabrir = document.getElementById('reopenSidebarBtn');
+  const btnReabrir = document.getElementById("reopenSidebarBtn");
   if (btnReabrir) {
     btnReabrir.remove();
   }
@@ -91,27 +91,27 @@ export function mostrarPainel() {
 export function mostrarBotaoReabrirPainel() {
   // 1. Guard Clauses (Verificações iniciais para sair rápido da função)
   const isMobile = window.innerWidth <= 900;
-  const jaExiste = document.getElementById('reopenSidebarBtn');
-  const container = document.getElementById('canvasContainer');
+  const jaExiste = document.getElementById("reopenSidebarBtn");
+  const container = document.getElementById("canvasContainer");
 
   if (isMobile || jaExiste || !container) return;
 
   // 2. Prepara o Container
   // Garante contexto de posicionamento apenas se necessário
-  if (getComputedStyle(container).position === 'static') {
-    container.style.position = 'relative';
+  if (getComputedStyle(container).position === "static") {
+    container.style.position = "relative";
   }
 
   // 3. Criação do Elemento
-  const btn = document.createElement('button');
+  const btn = document.createElement("button");
 
   // Atributos básicos
   Object.assign(btn, {
-    id: 'reopenSidebarBtn',
-    className: 'flyingBtn botao-reabrir-flutuante', // Usa classes CSS!
-    type: 'button',
-    title: 'Reabrir painel da questão',
-    innerHTML: '💬',
+    id: "reopenSidebarBtn",
+    className: "flyingBtn botao-reabrir-flutuante", // Usa classes CSS!
+    type: "button",
+    title: "Reabrir painel da questão",
+    innerHTML: "💬",
   });
 
   // 4. Comportamento
@@ -129,30 +129,30 @@ export function configurarResizer(resizer) {
   if (!resizer || resizer.dataset.bound) return;
 
   // Marca como configurado
-  resizer.dataset.bound = '1';
+  resizer.dataset.bound = "1";
 
   const MIN_WIDTH = 260;
   const MAX_WIDTH = 700;
   let isResizing = false;
 
   // 1. Início do arraste
-  resizer.addEventListener('mousedown', (e) => {
+  resizer.addEventListener("mousedown", (e) => {
     isResizing = true;
-    resizer.classList.add('resizing');
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
+    resizer.classList.add("resizing");
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
     e.preventDefault();
   });
 
   // 2. Movimento
-  document.addEventListener('mousemove', (e) => {
+  document.addEventListener("mousemove", (e) => {
     if (!isResizing) return;
 
     let newWidth = e.clientX;
     if (newWidth < MIN_WIDTH) newWidth = MIN_WIDTH;
     if (newWidth > MAX_WIDTH) newWidth = MAX_WIDTH;
 
-    const sb = document.getElementById('viewerSidebar');
+    const sb = document.getElementById("viewerSidebar");
     if (sb) sb.style.width = `${newWidth}px`;
 
     // SYNC CROPPER
@@ -160,12 +160,34 @@ export function configurarResizer(resizer) {
   });
 
   // 3. Fim do arraste
-  document.addEventListener('mouseup', () => {
+  document.addEventListener("mouseup", () => {
     if (!isResizing) return;
 
     isResizing = false;
-    resizer.classList.remove('resizing');
-    document.body.style.cursor = '';
-    document.body.style.userSelect = '';
+    resizer.classList.remove("resizing");
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
   });
+}
+
+// --- INTEGRAÇÃO COM MÓDULO DE CROPPER (NOVO) ---
+import { initSidebarCropper } from "./sidebar-cropper.js";
+
+export function inicializarSidebarCompleta() {
+  const sidebar = document.getElementById("viewerSidebar");
+  if (sidebar) {
+    const header = document.createElement("div");
+    header.className = "sidebar-header";
+
+    const closeBtn = document.createElement("button");
+    closeBtn.innerHTML = "✕";
+    closeBtn.title = "Ocultar painel";
+    closeBtn.className = "sidebar-close-btn";
+
+    closeBtn.onclick = () => esconderPainel();
+
+    header.appendChild(closeBtn);
+    sidebar.prepend(header);
+  }
+  initSidebarCropper();
 }

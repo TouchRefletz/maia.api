@@ -1,0 +1,162 @@
+/* --- Selection Overlay & Cropper Styles --- */
+
+/* Selection Overlay: O posicionamento absoluto é mantido via JS */
+/* mas cores e comportamentos visuais vêm pra cá */
+
+/* --- Selection Box Base --- */
+.selection-box {
+  position: absolute;
+  /* Transições suaves para hover e ativação */
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+/* --- Active Group (Editável) --- */
+.selection-box.is-active-group {
+  border: 2px solid var(--color-primary, #3b82f6);
+  background-color: rgba(var(--color-primary-rgb, 59, 130, 246), 0.1);
+  cursor: move;
+  z-index: 100; /* Garante que fique acima de outros */
+}
+
+/* --- Inactive Group (Visualização) --- */
+.selection-box.is-inactive-group {
+  border: 2px dashed var(--color-text-secondary, #9ca3af);
+  background-color: rgba(var(--color-text-secondary, 156, 163, 175), 0.05);
+  cursor: default;
+  z-index: 90;
+}
+
+/* --- Verified Group (Corrigido IA) --- */
+.selection-box.status-verified {
+  border: 2px solid var(--color-primary, #00d4ff);
+  background-color: rgba(var(--color-primary-rgb, 59, 130, 246), 0.15);
+  box-shadow: 0 0 8px rgba(var(--color-primary-rgb, 59, 130, 246), 0.3);
+  cursor: default;
+  z-index: 95;
+  transition: all 0.3s ease;
+}
+
+/* Hover effect on Active Group to indicate interactivity */
+.selection-box.is-active-group:hover {
+  background-color: rgba(var(--color-primary-rgb, 59, 130, 246), 0.15);
+}
+
+/* --- Resize Handles --- */
+.resize-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background-color: var(--color-primary, #3b82f6);
+  border: 1px solid var(--color-surface, white); /* Contraste para ver melhor o handle */
+  border-radius: 50%; /* Bolinhas são mais modernas que quadrados */
+  z-index: 110;
+  transition: transform 0.1s;
+}
+
+.resize-handle:hover {
+  transform: scale(1.2);
+  background-color: var(--color-primary-hover, #2563eb);
+}
+
+/* Posicionamento dos handles com offsets ajustados para centralizar na linha */
+/* Assumindo handle de 10px, o offset para centralizar é -5px */
+
+.handle-n { top: -6px; left: 50%; margin-left: -5px; cursor: ns-resize; }
+.handle-s { bottom: -6px; left: 50%; margin-left: -5px; cursor: ns-resize; }
+.handle-w { left: -6px; top: 50%; margin-top: -5px; cursor: ew-resize; }
+.handle-e { right: -6px; top: 50%; margin-top: -5px; cursor: ew-resize; }
+
+.handle-nw { top: -6px; left: -6px; cursor: nwse-resize; }
+.handle-ne { top: -6px; right: -6px; cursor: nesw-resize; }
+.handle-sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
+.handle-se { bottom: -6px; right: -6px; cursor: nwse-resize; }
+
+/* --- Dimming Mask (SVG) --- */
+#selection-overlay path {
+  fill: rgba(0, 0, 0, 0.6); /* Escurecimento do fundo */
+  pointer-events: none;
+}
+
+/* --- Overlay Modes --- */
+#selection-overlay.mode-editing {
+  pointer-events: auto;
+  cursor: crosshair;
+}
+
+#selection-overlay.mode-viewing {
+  pointer-events: none;
+  cursor: default;
+}
+
+/* --- Sidebar Cropper Styles (Copiado do inline antigo e melhorado) --- */
+#sidebar-cropper-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding-bottom: 2rem; /* Espaço extra no final */
+}
+
+/* Cropper Card Unificado */
+.cropper-group-item {
+  background: var(--color-surface, #1e1e1e);
+  border: 1px solid var(--color-border, #333);
+  border-radius: var(--radius-base, 8px);
+  padding: 1rem;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Estado Ativo (Sendo Editado) */
+.cropper-group-item.active {
+  background: rgba(var(--color-primary-rgb, 59, 130, 246), 0.05); /* Tint leve */
+  border-color: var(--color-primary, #3b82f6);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.cropper-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.cropper-group-title {
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--color-text, #fff);
+}
+
+.cropper-group-count {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary, #aaa);
+  background: var(--color-background, #000);
+  padding: 2px 8px;
+  border-radius: 99px;
+}
+
+/* Área de ações do card */
+.cropper-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* Em modo edição, as ações podem mudar de layout se necessário */
+.cropper-group-item.active .cropper-actions {
+  flex-direction: column;
+}
+
+/* Botão de adicionar nova questão */
+.btn-add-question {
+  margin-top: 1rem;
+}
+
+/* Empty State */
+.cropper-empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--color-text-secondary, #888);
+  border: 2px dashed var(--color-border, #333);
+  border-radius: var(--radius-lg, 12px);
+}

@@ -23,6 +23,7 @@
 @import url('components/status.css');
 @import url('components/tags.css');
 @import url('components/terminal.css');
+@import url('components/cropper.css');
 
 @import url('elements/badge.css');
 @import url('elements/button.css');
@@ -48,6 +49,7 @@
 @import url('handlers/steps.css');
 @import url('handlers/thoughts.css');
 @import url('handlers/toogle-mode.css');
+@import url('handlers/sidebar-pages.css');
 
 @import url('mobile/dropdown.css');
 
@@ -60,6 +62,7 @@
 @import url('pdf/navegation.css');
 @import url('pdf/upload.css');
 @import url('pdf/viewer.css');
+@import url('components/viewer.css');
 
 @import url('responsivity/mobile.css');
 

@@ -15,6 +15,22 @@
   overflow: scroll;
 }
 
+.sidebar-header {
+  display: flex;
+  justify-content: flex-end;
+  padding-bottom: var(--space-12);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-background);
+  top: 0;
+  z-index: 5;
+  margin-left: calc(-1 * var(--space-20)); /* Compensa o padding do pai */
+  margin-right: calc(-1 * var(--space-20));
+  padding-right: var(--space-20); /* Restaura o padding interno */
+  padding-left: var(--space-20);
+  padding-top: var(--space-20);
+  margin-top: calc(-1 * var(--space-20));
+}
+
 .sidebar-actions {
   display: flex;
   flex-direction: column;
@@ -61,6 +77,30 @@
   flex-shrink: 0;
   min-width: 500px;
   /* Limite Mínimo (segurança via CSS também) */
-  max-width: 50vw;
   /* Limite Máximo relativo à tela */
+}
+
+.sidebar-close-btn {
+  /* position: absolute; REMOVIDO */
+  /* top: 10px; REMOVIDO */
+  /* right: 10px; REMOVIDO */
+  background: transparent;
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: 1.2rem;
+  cursor: pointer;
+  z-index: 20;
+  padding: 8px; /* Reduzido levemente */
+  line-height: 1;
+  transition: color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.sidebar-close-btn:hover {
+  color: var(--color-text);
+  background-color: var(--color-surface);
+  border-radius: 50%;
 }

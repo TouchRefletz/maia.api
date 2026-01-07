@@ -102,3 +102,96 @@
 #viewerBody.sidebar-collapsed #sidebarResizer {
   display: none !important;
 }
+
+/* --- AI SCANNING LOCK STATE --- */
+body.ai-scanning-active .mode-toggle,
+body.ai-scanning-active .pdf-controls-box,
+body.ai-scanning-active #mobileHeaderContainer {
+  pointer-events: none;
+  opacity: 0.5;
+  filter: grayscale(100%);
+  transition: all 0.3s ease;
+}
+
+body.ai-scanning-active #btn-stop-ai {
+  pointer-events: auto !important;
+  opacity: 1 !important;
+  filter: none !important;
+  cursor: pointer !important;
+}
+
+/* Desabilitar botões de edição de questão durante o scan, MAS manter scroll */
+body.ai-scanning-active .cropper-actions button,
+body.ai-scanning-active .btn-add-question,
+body.ai-scanning-active #viewerSidebar button:not(#btn-header-pause):not(#btn-header-resume):not(#btn-stop-ai):not(#btn-float-pause):not(#btn-float-resume):not(#btn-float-cancel) {
+  pointer-events: none;
+  opacity: 0.5;
+  filter: grayscale(100%);
+}
+
+/* Garante que os controles flutuantes também sejam clicáveis */
+body.ai-scanning-active #ai-floating-controls,
+body.ai-scanning-active #ai-floating-controls button {
+    pointer-events: auto !important;
+    opacity: 1 !important;
+    filter: none !important;
+}
+
+/* LOCK STATE FOR MANUAL CROP */
+/* LOCK STATE FOR MANUAL CROP */
+body.manual-crop-active #viewerHeader,
+body.manual-crop-active .pdf-controls-box,
+body.manual-crop-active .mode-toggle,
+body.manual-crop-active #sidebar-actions-footer {
+    pointer-events: none;
+    opacity: 0.5;
+    filter: grayscale(100%);
+    transition: all 0.3s ease;
+}
+
+body.manual-crop-active #canvasContainer {
+    overflow: hidden !important;
+    user-select: none; /* Previne seleção de texto nativa enquanto recorta */
+}
+
+/* Ensure overlay is always clickable above locked layers */
+body.manual-crop-active #selection-overlay {
+    pointer-events: auto !important;
+    z-index: 9999 !important;
+}
+
+/* Ensure PDF Pages are detectable by elementFromPoint (hit test) */
+body.manual-crop-active .pdf-page {
+    pointer-events: auto !important;
+}
+
+/* --- QUESTION BADGES --- */
+.question-badge {
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  font-weight: bold;
+  background-color: var(--color-surface-hover, #f5f5f5); /* Default fallback */
+  color: var(--color-text-secondary);
+  border: 1px solid transparent;
+}
+
+/* Dark Theme Badge Variants */
+.question-badge.manual {
+  background-color: #424242;
+  color: #e0e0e0;
+  border: 1px solid #616161;
+}
+
+.question-badge.ia {
+  background-color: rgba(var(--color-primary-rgb), 0.15);
+  color: var(--color-primary);
+  border: 1px solid rgba(var(--color-primary-rgb), 0.3);
+}
+
+.question-badge.revisada {
+  background-color: rgba(46, 125, 50, 0.15); /* Green tint */
+  color: #66bb6a; /* Lighter green for dark readability */
+  border: 1px solid rgba(46, 125, 50, 0.3);
+}
