@@ -24,7 +24,6 @@ export function montarTemplateViewer(args) {
 
         <!-- MOBILE DROPDOWN OPTIONS -->
         <div id="mobileMenuOptions" class="mobile-dropdown hidden">
-            <button class="mobile-menu-item" id="optMobileModo">Alternar Modo</button>
             <button class="mobile-menu-item" id="optMobileNav">Navegação</button>
             <button class="mobile-menu-item" id="optMobileZoom">Zoom</button>
             <button class="mobile-menu-item" id="optMobileRecortar">Recortar</button>
@@ -33,16 +32,7 @@ export function montarTemplateViewer(args) {
 
         <!-- FLOATING CONTROL PANELS (Initially Hidden) -->
         
-        <!-- 1. MODE TOGGLE PANEL -->
-        <div id="mobileModePanel" class="floating-glass-panel hidden">
-            <div class="mode-toggle mobile-mode-toggle">
-                <button type="button" id="btnModoProvaMobile" class="mode-toggle__btn is-active">Prova</button>
-                <button type="button" id="btnModoGabaritoMobile" class="mode-toggle__btn">Gabarito</button>
-            </div>
-            <button class="panel-close-btn" onclick="this.parentElement.classList.add('hidden')">✕</button>
-        </div>
-
-        <!-- 2. NAVIGATION PANEL -->
+        <!-- NAVIGATION PANEL -->
         <div id="mobileNavPanel" class="floating-glass-panel hidden">
              <div class="control-row mobile-control-row">
                 <button id="btnPrevMobile" class="btn-icon">◀</button>
@@ -75,11 +65,6 @@ export function montarTemplateViewer(args) {
             <main id="viewerMain">
                 <section class="pdf-panel" id="panelProva">
                     <div class="panel-label">
-                        <div id="modeToggle" class="mode-toggle" role="tablist" aria-label="Alternar PDF">
-                            <button type="button" id="btnModoProva" class="mode-toggle__btn is-active">Prova</button>
-                            <button type="button" id="btnModoGabarito" class="mode-toggle__btn">Gabarito</button>
-                        </div>
-
                         <div class="pdf-controls-box">
                             <label class="control-label">Navegação</label>
                             <div class="control-row">
@@ -130,58 +115,4 @@ export function montarTemplateViewer(args) {
         </div>
     </div>
     `;
-}
-
-/**
- * Atualiza a interface (botões, avisos) baseada no modo atual (Prova vs Gabarito).
- * Pode ser chamada sempre que houver troca de modo.
- */
-export function atualizarUIViewerModo() {
-  // Ainda acessamos a variável global por enquanto, para não quebrar a lógica
-  const isGabaritoMode = window.__modo === "gabarito";
-
-  // 1. Botões do Topo (Abas do PDF)
-  document
-    .getElementById("btnModoProva")
-    ?.classList.toggle("is-active", !isGabaritoMode);
-  document
-    .getElementById("btnModoGabarito")
-    ?.classList.toggle("is-active", isGabaritoMode);
-
-  // Mobile Sync
-  document
-    .getElementById("btnModoProvaMobile")
-    ?.classList.toggle("is-active", !isGabaritoMode);
-  document
-    .getElementById("btnModoGabaritoMobile")
-    ?.classList.toggle("is-active", isGabaritoMode);
-
-  // 2. Controle dos Botões de Imagem
-  const btnQuestao = document.getElementById("btnImgQuestao");
-  const msgQuestao = document.getElementById("msgAvisoModo_quest");
-
-  if (btnQuestao) {
-    btnQuestao.disabled = isGabaritoMode;
-    btnQuestao.style.opacity = isGabaritoMode ? "0.5" : "1";
-    btnQuestao.style.cursor = isGabaritoMode ? "not-allowed" : "pointer";
-    if (msgQuestao)
-      msgQuestao.style.display = isGabaritoMode ? "block" : "none";
-  }
-
-  const btnGabarito = document.getElementById("btnImgGabarito");
-  const msgGabarito = document.getElementById("msgAvisoModo_gab");
-
-  if (btnGabarito) {
-    btnGabarito.disabled = !isGabaritoMode;
-    btnGabarito.style.opacity = !isGabaritoMode ? "0.5" : "1";
-    btnGabarito.style.cursor = !isGabaritoMode ? "not-allowed" : "pointer";
-    if (msgGabarito)
-      msgGabarito.style.display = !isGabaritoMode ? "block" : "none";
-  }
-
-  // 3. Botão de Confirmar (Só na Prova)
-  const btnConfirmar = document.getElementById("btnConfirmarQuestao");
-  if (btnConfirmar) {
-    btnConfirmar.style.display = isGabaritoMode ? "none" : "block";
-  }
 }

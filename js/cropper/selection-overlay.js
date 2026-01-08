@@ -42,6 +42,9 @@ let initialBoxState = null;
 let creationStartX = 0;
 let creationStartY = 0;
 
+// Highlight state (hover da sidebar)
+let highlightedGroupId = null;
+
 export function initSelectionOverlay() {
   const container = document.getElementById("canvasContainer");
   if (!container) return;
@@ -92,6 +95,51 @@ export function initSelectionOverlay() {
 
   updateDimmingMask();
   updateInteractivity();
+
+  // Keyboard shortcuts para Undo/Redo
+  setupKeyboardShortcuts();
+}
+
+// Listener de teclado para Ctrl+Z / Ctrl+Shift+Z
+let keyboardListenerAdded = false;
+
+function setupKeyboardShortcuts() {
+  if (keyboardListenerAdded) return;
+  keyboardListenerAdded = true;
+
+  document.addEventListener("keydown", (e) => {
+    // Só funciona se tiver grupo ativo (modo edição)
+    if (!CropperState.getActiveGroup()) return;
+
+    // Ignora se estiver em um input/textarea
+    if (
+      e.target.tagName === "INPUT" ||
+      e.target.tagName === "TEXTAREA" ||
+      e.target.isContentEditable
+    ) {
+      return;
+    }
+
+    // Ctrl+Z = Undo
+    if (
+      (e.ctrlKey || e.metaKey) &&
+      e.key.toLowerCase() === "z" &&
+      !e.shiftKey
+    ) {
+      e.preventDefault();
+      CropperState.undo();
+    }
+
+    // Ctrl+Shift+Z ou Ctrl+Y = Redo
+    if (
+      (e.ctrlKey || e.metaKey) &&
+      ((e.key.toLowerCase() === "z" && e.shiftKey) ||
+        e.key.toLowerCase() === "y")
+    ) {
+      e.preventDefault();
+      CropperState.redo();
+    }
+  });
 }
 
 function updateInteractivity() {
@@ -192,6 +240,52 @@ function createOverlayDOM(container) {
   overlayElement.addEventListener("pointerdown", handlePointerDown);
   document.addEventListener("pointermove", handlePointerMove);
   document.addEventListener("pointerup", handlePointerUp);
+
+  // Listener para detectar hover em handles "abaixo" de outras boxes e ajustar cursor
+  overlayElement.addEventListener("mousemove", handleHoverCursor);
+}
+
+// Mapa de handles para cursores CSS
+const handleCursorMap = {
+  nw: "nwse-resize",
+  se: "nwse-resize",
+  ne: "nesw-resize",
+  sw: "nesw-resize",
+  n: "ns-resize",
+  s: "ns-resize",
+  w: "ew-resize",
+  e: "ew-resize",
+};
+
+function handleHoverCursor(e) {
+  if (!overlayElement || currentDragType !== DragType.NONE) return;
+
+  // Não precisa checar se tem grupo ativo para hover, só para clique
+  const elementsAtPoint = document.elementsFromPoint(e.clientX, e.clientY);
+
+  // Procura por resize-handle em QUALQUER camada
+  const handleEl = elementsAtPoint.find((el) =>
+    el.classList.contains("resize-handle")
+  );
+  if (handleEl && handleEl.dataset.handle) {
+    const cursor = handleCursorMap[handleEl.dataset.handle] || "pointer";
+    overlayElement.style.cursor = cursor;
+    return;
+  }
+
+  // Procura por selection-box do grupo ativo
+  const boxEl = elementsAtPoint.find(
+    (el) =>
+      el.classList.contains("selection-box") &&
+      el.classList.contains("is-active-group")
+  );
+  if (boxEl) {
+    overlayElement.style.cursor = "move";
+    return;
+  }
+
+  // Default: crosshair para criar nova seleção
+  overlayElement.style.cursor = "crosshair";
 }
 
 // Helper para criar caixa DOM
@@ -279,45 +373,61 @@ function handlePointerDown(e) {
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
 
-  // 1. Clicked resize handle?
-  if (target.classList.contains("resize-handle")) {
-    const box = target.parentElement;
+  // IMPORTANT: Use elementsFromPoint para encontrar handles que podem estar "abaixo" de outras boxes
+  const elementsAtPoint = document.elementsFromPoint(e.clientX, e.clientY);
 
-    // Check ownership (safety)
-    if (!box.classList.contains("is-active-group")) return;
+  // 1. Procura por resize-handle em QUALQUER camada (não só e.target)
+  const handleEl = elementsAtPoint.find((el) =>
+    el.classList.contains("resize-handle")
+  );
+  if (handleEl) {
+    const box = handleEl.parentElement;
 
-    draggingBox = box;
-    currentDragType = target.dataset.handle;
-    e.preventDefault();
+    // Check ownership (safety) - só permite editar boxes do grupo ativo
+    if (box && box.classList.contains("is-active-group")) {
+      draggingBox = box;
+      currentDragType = handleEl.dataset.handle;
+      e.preventDefault();
+      e.stopPropagation(); // Impede que o evento propague e crie nova seleção
 
-    initialBoxState = { ...box.__selectionRect };
-    dragStartX = e.clientX;
-    dragStartY = e.clientY;
+      initialBoxState = { ...box.__selectionRect };
+      dragStartX = e.clientX;
+      dragStartY = e.clientY;
 
-    refreshBoxConstraint(box);
+      refreshBoxConstraint(box);
+
+      overlayElement.setPointerCapture(e.pointerId);
+      cacheBoxPositionsForDrag();
+      updateDimmingMask();
+      return; // Encerra aqui - não cria nova box
+    }
   }
-  // 2. Clicked existing selection box of ACTIVE group?
-  else if (
-    (target.classList.contains("selection-box") &&
-      target.classList.contains("is-active-group")) ||
-    target.closest(".selection-box.is-active-group")
-  ) {
-    const box = target.classList.contains("selection-box")
-      ? target
-      : target.closest(".selection-box");
 
-    draggingBox = box;
+  // 2. Procura por selection-box do grupo ativo em QUALQUER camada
+  const boxEl = elementsAtPoint.find(
+    (el) =>
+      el.classList.contains("selection-box") &&
+      el.classList.contains("is-active-group")
+  );
+  if (boxEl) {
+    draggingBox = boxEl;
     currentDragType = DragType.BOX;
     e.preventDefault();
 
-    initialBoxState = { ...box.__selectionRect };
+    initialBoxState = { ...boxEl.__selectionRect };
     dragStartX = e.clientX;
     dragStartY = e.clientY;
 
-    refreshBoxConstraint(box);
+    refreshBoxConstraint(boxEl);
+
+    overlayElement.setPointerCapture(e.pointerId);
+    cacheBoxPositionsForDrag();
+    updateDimmingMask();
+    return; // Encerra aqui - não cria nova box
   }
+
   // 3. Clicked empty space -> Create new box
-  else {
+  {
     // 3a. CHECK: Start strictly inside a page?
     const elements = document.elementsFromPoint(e.clientX, e.clientY);
     const pageEl = elements.find((el) => el.classList.contains("pdf-page"));
@@ -342,6 +452,21 @@ function handlePointerDown(e) {
 
     // Criar caixa temporária
     const newBox = createSelectionBoxDOM(true); // true = active
+
+    // Apply immediate color to the temporary box (so handles/border look right during creation)
+    if (activeGroup) {
+      const color = CropperState.getGroupColor(activeGroup);
+      newBox.style.borderColor = color;
+      newBox.style.setProperty("--color-primary", color);
+
+      const rgb = hexToRgb(color);
+      if (rgb) {
+        newBox.style.setProperty("--color-primary-rgb", rgb);
+      }
+
+      newBox.style.backgroundColor = `${color}1A`;
+    }
+
     overlayElement.appendChild(newBox);
     draggingBox = newBox;
 
@@ -360,6 +485,7 @@ function handlePointerDown(e) {
   }
 
   overlayElement.setPointerCapture(e.pointerId);
+  cacheBoxPositionsForDrag(); // Cache other box positions for optimized updateDimmingMask
   updateDimmingMask();
 }
 
@@ -544,6 +670,8 @@ function handlePointerUp(e) {
 
     if (overlayElement) overlayElement.releasePointerCapture(e.pointerId);
 
+    clearBoxPositionCache(); // Clear cache after drag ends
+
     // Força refresh para garantir sincronia
     updateDimmingMask();
   }
@@ -622,7 +750,7 @@ export function refreshOverlayPosition() {
     }
   });
 
-  // 2. Pegar estado
+  // 2. Pegar estado - TODOS os crops são renderizados para permitir transições
   const allCrops = CropperState.getAllCrops();
   const currentScale = viewerState.pdfScale;
 
@@ -648,11 +776,53 @@ export function refreshOverlayPosition() {
     const box = createSelectionBoxDOM(crop.isActiveGroup);
     updateSelectionBox(box, newLeft, newTop, newWidth, newHeight);
 
+    // Apply Dynamic Color
+    // Apply Dynamic Color
+    if (crop.color) {
+      box.style.borderColor = crop.color;
+      // Set CSS variable so handles (children) inherit the color
+      box.style.setProperty("--color-primary", crop.color);
+
+      const rgb = hexToRgb(crop.color);
+      if (rgb) {
+        box.style.setProperty("--color-primary-rgb", rgb);
+      }
+
+      // Background with opacity (unless draft/gray, then keep gray default or handle here)
+      // Note: We use the rgb variable for background in CSS, but explicit set here ensures it works if class fails
+      if (crop.status !== "draft") {
+        box.style.backgroundColor = `${crop.color}1A`; // ~10% opacity
+      } else {
+        // Drafts also get color now
+        box.style.backgroundColor = `${crop.color}1A`;
+      }
+    }
+
+    // Apply Line Style (Dashed vs Solid)
+    if (crop.tipo === "parte_questao") {
+      box.style.borderStyle = "dashed";
+    } else {
+      box.style.borderStyle = "solid";
+    }
+
     // Add status class
     if (crop.status === "verified") {
       box.classList.add("status-verified");
     } else if (crop.status === "draft") {
       // box.classList.add("status-draft"); // Optional, default is ok
+    }
+
+    // HIGHLIGHT LOGIC: Aplica classes de destaque quando hover na sidebar
+    if (highlightedGroupId !== null) {
+      if (crop.groupId === highlightedGroupId) {
+        box.classList.add("is-highlighted");
+        // Adiciona glow com a cor do crop
+        if (crop.color) {
+          box.style.boxShadow = `0 0 20px 5px ${crop.color}80, 0 0 40px 10px ${crop.color}40`;
+        }
+      } else {
+        box.classList.add("is-dimmed");
+      }
     }
 
     // Armazena ID para futuro (edição)
@@ -666,8 +836,66 @@ export function refreshOverlayPosition() {
 }
 
 /**
- * Updates the SVG path
+ * Destaca visualmente os crops de um grupo específico (usado no hover da sidebar)
+ * @param {number|null} groupId - ID do grupo para destacar, ou null para remover destaque
  */
+export function highlightGroup(groupId) {
+  highlightedGroupId = groupId;
+
+  // Atualiza a classe no overlay para controlar o dimming geral
+  if (overlayElement) {
+    if (groupId !== null) {
+      overlayElement.classList.add("highlight-mode");
+    } else {
+      overlayElement.classList.remove("highlight-mode");
+    }
+  }
+
+  // Atualiza apenas as classes nos elementos existentes (SEM recriar!)
+  // Isso permite que as transições CSS funcionem
+  updateHighlightClasses();
+  updateDimmingMask();
+}
+
+/**
+ * Atualiza apenas as classes de highlight nos crops existentes
+ * NÃO recria os elementos DOM, para permitir transições CSS
+ */
+function updateHighlightClasses() {
+  if (!overlayElement) return;
+
+  const boxes = overlayElement.querySelectorAll(".selection-box");
+
+  boxes.forEach((box) => {
+    const groupId = parseFloat(box.dataset.groupId);
+
+    // Remove classes anteriores
+    box.classList.remove("is-highlighted", "is-dimmed");
+    box.style.boxShadow = "";
+
+    // Aplica novas classes baseado no estado de highlight
+    if (highlightedGroupId !== null) {
+      if (groupId === highlightedGroupId) {
+        box.classList.add("is-highlighted");
+        // Pega a cor do CSS variable ou usa default
+        const color =
+          getComputedStyle(box).getPropertyValue("--color-primary").trim() ||
+          "#3b82f6";
+        box.style.boxShadow = `0 0 20px 5px ${color}80, 0 0 40px 10px ${color}40`;
+      } else {
+        box.classList.add("is-dimmed");
+      }
+    }
+  });
+}
+
+/**
+ * Updates the SVG path
+ * OPTIMIZED: Uses cached box data during drag operations to avoid expensive DOM queries
+ * HIGHLIGHT MODE: Em modo highlight, apenas os crops do grupo destacado criam "buracos" na máscara
+ */
+let cachedBoxPositions = null; // Cache for box positions during drag
+
 function updateDimmingMask() {
   if (!dimmingPath || !overlayElement) return;
 
@@ -677,22 +905,81 @@ function updateDimmingMask() {
   // Outer rectangle
   let d = `M 0 0 h ${w} v ${h} h -${w} Z `;
 
-  // Create holes
-  // Usa o DOM atual (incluindo draggingBox e renderizados)
+  // HIGHLIGHT MODE: Apenas os crops destacados criam "spotlight"
+  if (highlightedGroupId !== null) {
+    // Só adiciona buracos para os crops do grupo em destaque
+    const boxes = overlayElement.querySelectorAll(
+      ".selection-box.is-highlighted"
+    );
+    boxes.forEach((box) => {
+      if (box.style.display === "none") return;
+      const bx = parseFloat(box.style.left) || 0;
+      const by = parseFloat(box.style.top) || 0;
+      const bw = parseFloat(box.style.width) || 0;
+      const bh = parseFloat(box.style.height) || 0;
+
+      if (bw > 0 && bh > 0) {
+        d += `M ${bx} ${by} h ${bw} v ${bh} h -${bw} Z `;
+      }
+    });
+  }
+  // OPTIMIZATION: During drag, use cached positions for other boxes
+  else if (
+    currentDragType !== DragType.NONE &&
+    draggingBox &&
+    cachedBoxPositions
+  ) {
+    // Use cached positions for all boxes except the one being dragged
+    cachedBoxPositions.forEach((pos) => {
+      d += `M ${pos.x} ${pos.y} h ${pos.w} v ${pos.h} h -${pos.w} Z `;
+    });
+
+    // Add current draggingBox position (from DOM)
+    const bx = parseFloat(draggingBox.style.left) || 0;
+    const by = parseFloat(draggingBox.style.top) || 0;
+    const bw = parseFloat(draggingBox.style.width) || 0;
+    const bh = parseFloat(draggingBox.style.height) || 0;
+    if (bw > 0 && bh > 0) {
+      d += `M ${bx} ${by} h ${bw} v ${bh} h -${bw} Z `;
+    }
+  } else {
+    // Not dragging and not highlighting - do full DOM query (only happens on init/refresh)
+    const boxes = overlayElement.querySelectorAll(".selection-box");
+    boxes.forEach((box) => {
+      if (box.style.display === "none") return;
+      const bx = parseFloat(box.style.left) || 0;
+      const by = parseFloat(box.style.top) || 0;
+      const bw = parseFloat(box.style.width) || 0;
+      const bh = parseFloat(box.style.height) || 0;
+
+      if (bw > 0 && bh > 0) {
+        d += `M ${bx} ${by} h ${bw} v ${bh} h -${bw} Z `;
+      }
+    });
+  }
+
+  dimmingPath.setAttribute("d", d);
+}
+
+// Helper to cache box positions when drag starts
+function cacheBoxPositionsForDrag() {
+  if (!overlayElement) return;
+  cachedBoxPositions = [];
   const boxes = overlayElement.querySelectorAll(".selection-box");
   boxes.forEach((box) => {
-    if (box.style.display === "none") return;
+    if (box === draggingBox || box.style.display === "none") return;
     const bx = parseFloat(box.style.left) || 0;
     const by = parseFloat(box.style.top) || 0;
     const bw = parseFloat(box.style.width) || 0;
     const bh = parseFloat(box.style.height) || 0;
-
     if (bw > 0 && bh > 0) {
-      d += `M ${bx} ${by} h ${bw} v ${bh} h -${bw} Z `;
+      cachedBoxPositions.push({ x: bx, y: by, w: bw, h: bh });
     }
   });
+}
 
-  dimmingPath.setAttribute("d", d);
+function clearBoxPositionCache() {
+  cachedBoxPositions = null;
 }
 
 // Função legada/compatibilidade para pegar a imagem 'atual' (última do grupo ativo)
@@ -783,4 +1070,27 @@ export async function extractImageFromCropData(anchorData) {
       resolve(url);
     }, "image/png");
   });
+}
+
+// Helper para converter Hex para RGB ("r, g, b") para uso em variáveis CSS
+function hexToRgb(hex) {
+  if (!hex) return null;
+  // Remove # if present
+  hex = hex.replace(/^#/, "");
+
+  // Handle shorthand (e.g. #FFF)
+  if (hex.length === 3) {
+    hex = hex
+      .split("")
+      .map((char) => char + char)
+      .join("");
+  }
+
+  // Parse
+  let bigint = parseInt(hex, 16);
+  let r = (bigint >> 16) & 255;
+  let g = (bigint >> 8) & 255;
+  let b = bigint & 255;
+
+  return `${r}, ${g}, ${b}`;
 }

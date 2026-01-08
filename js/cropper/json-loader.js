@@ -27,7 +27,7 @@ export function loadSelectionsFromJson(
   const isY1X1 = data.coordinateSystem === "normalized_0_1000_y1x1y2x2";
 
   data.regions.forEach((region) => {
-    // Tenta encontrar grupo existente para fazer merging (caso seja split question)
+    // Tenta encontrar grupo existente para fazer merging (caso seja split question ou atualização de rascunho)
     const questionId = region.questionId;
     let group = null;
     let isMerge = false;
@@ -35,27 +35,65 @@ export function loadSelectionsFromJson(
     if (questionId && CropperState.findGroupByExternalId) {
       const existingGroup = CropperState.findGroupByExternalId(questionId);
       if (existingGroup) {
-        // Lógica de merging refinada:
-        // Só une se pelo menos um dos lados for "parte_questao".
-        // Isso evita unir duas "questão completa" por engano (duplicatas),
-        // mas permite unir "Parte + Parte", "Parte + Completa" ou "Completa + Parte".
-        const isExistingPart = existingGroup.tipo === "parte_questao";
-        const isNewPart = region.tipo === "parte_questao";
+        // LÓGICA DE ATUALIZAÇÃO "DRAFT" -> "VERIFIED"
+        // Se o grupo existente for RASCUNHO e o novo for VERIFICADO (ou estamos numa fase final 'sent'/'verified'),
+        // Limpamos os crops antigos para substituir pelos novos refinados.
+        // Assim evitamos "sombra" ou duplicidade.
+        if (
+          existingGroup.status === "draft" &&
+          (options.status === "verified" || options.status === "sent")
+        ) {
+          // Smart Merge/Upgrade Logic
+          // Determine types involved
+          const isNewComplete =
+            (region.tipo || "questao_completa") === "questao_completa";
+          const isNewPart = region.tipo === "parte_questao";
 
-        if (isExistingPart || isNewPart) {
+          const hasExistingComplete = existingGroup.crops.some(
+            (c) => (c.tipo || "questao_completa") === "questao_completa"
+          );
+          const hasExistingPart = existingGroup.crops.some(
+            (c) => c.tipo === "parte_questao"
+          );
+
+          console.log(
+            `🔄 Upgrading Draft Q${questionId}. New: ${region.tipo}, Existing Has: [Complete:${hasExistingComplete}, Part:${hasExistingPart}]`
+          );
+
+          if (isNewComplete && hasExistingComplete) {
+            // Collision: New Main Body replacing Old Main Body.
+            // Filter out old complete, keep parts.
+            console.log("   -> Replacing old 'questao_completa' crops.");
+            existingGroup.crops = existingGroup.crops.filter(
+              (c) => (c.tipo || "questao_completa") !== "questao_completa"
+            );
+          } else if (isNewPart && hasExistingPart) {
+            // Collision: New Part (Support Text) with Existing Part.
+            // We APPEND instead of replacing, because support text can be split across multiple boxes (multicast).
+            console.log(
+              "   -> Appending new 'parte_questao' to existing parts."
+            );
+          }
+
+          // If we didn't clear above, we are Merging (Appending).
+
+          existingGroup.status = options.status; // Upgrade status
           group = existingGroup;
           isMerge = true;
-          console.log(
-            `🔄 Merging question ${questionId} (Existing: ${existingGroup.tipo}, New: ${region.tipo})`
-          );
-          // Opcional: Atualizar status do grupo se necessÃ¡rio
+          // Continue to add the new crop
+        }
+        // LÓGICA DE MERGING (Partes da mesma questão)
+        else {
+          // Só une se pelo menos um dos lados for "parte_questao" OU se for continuação.
+          // Se ambos forem "questao_completa", pode ser colisão, mas se o ID é igual, assumimos que é split
+          // ou erro da IA que mandou 2 caixas. Na dúvida, mergeamos para não perder dados.
+          group = existingGroup;
+          isMerge = true;
+          console.log(`🔄 Merging additional part to Question ${questionId}`);
+
           if (options.status && existingGroup.status !== options.status) {
             existingGroup.status = options.status;
           }
-        } else {
-          console.warn(
-            `⚠️ Collision detected for Question ${questionId}. Both are 'questao_completa'. Creating duplicate.`
-          );
         }
       }
     }
@@ -89,6 +127,16 @@ export function loadSelectionsFromJson(
       bottom = c4;
     }
 
+    // APLY PADDING IF PROVIDED (options.padding)
+    // Expand the box by 'padding' amount in all directions, clamping to 0..1000
+    if (options.padding && typeof options.padding === "number") {
+      const p = options.padding;
+      top = Math.max(0, top - p);
+      left = Math.max(0, left - p);
+      bottom = Math.min(1000, bottom + p);
+      right = Math.min(1000, right + p);
+    }
+
     // Convert normalized 0-1000 to relative 0-1
     const relTop = top / 1000;
     const relLeft = left / 1000;
@@ -97,15 +145,6 @@ export function loadSelectionsFromJson(
 
     const relWidth = relRight - relLeft;
     const relHeight = relBottom - relTop;
-
-    // Note: The system needs 'unscaledW' which is pixel width relative to original PDF size?
-    // Let's check selection-overlay.js logic again.
-    // It uses: newLeft = anchorPage.offsetLeft + anchorData.relativeLeft * currentScale
-    // So relativeLeft is fraction * pageDimension? NO.
-    // In selection-overlay.js:
-    // relativeLeft = (boxLeft - bestPage.offsetLeft) / currentScale;
-    // relativeLeft IS PIXELS (unscaled).
-    // Wait, if scale is 1.0, relativeLeft is pixels from left.
 
     // We need the PAGE DIMENSIONS to convert normalized -> unscaled pixels.
     const pageContainer = document.getElementById(
@@ -116,18 +155,10 @@ export function loadSelectionsFromJson(
       return;
     }
 
-    // We can get the original unscaled dimensions from the viewport if stored,
-    // OR we just reverse calc from current DOM dimensions.
-    // viewerState.pdfScale is the current scale.
-    // pageContainer.offsetWidth is scaled width.
-    // originalWidth = pageContainer.offsetWidth / viewerState.pdfScale
-
     const currentW = pageContainer.offsetWidth;
     const currentH = pageContainer.offsetHeight;
 
     // Unscaled dimensions (the "100%" size of the page in PDF coordinate terms)
-    // Actually, CropperState seems to store 'unscaledW' and 'relativeLeft' (unscaled pixels).
-
     const unscaledPageW = currentW / viewerState.pdfScale;
     const unscaledPageH = currentH / viewerState.pdfScale;
 
@@ -140,15 +171,18 @@ export function loadSelectionsFromJson(
       unscaledH: relHeight * unscaledPageH,
     };
 
+    // Store type on crop data as well for rendering
+    const cropData = {
+      anchorData,
+      tipo: region.tipo || "questao_completa", // IMPORTANT: Pass type to crop
+    };
+
     if (isMerge) {
-      CropperState.addCropToGroup(group.id, { anchorData });
+      CropperState.addCropToGroup(group.id, cropData);
     } else {
-      CropperState.addCropToActiveGroup({ anchorData });
-      // Mantém o status passado nas opções (created with specific status e.g. 'draft', 'verified')
-      // Se não houver opção, o default já foi setado na criação do grupo
-      if (options.status) {
-        group.status = options.status;
-      }
+      // Create new group done above, just add crop to active (which is the new one)
+      // Actually createGroup sets activeGroupId.
+      CropperState.addCropToActiveGroup(cropData);
     }
     CropperState.notify();
   });

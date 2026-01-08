@@ -15,14 +15,12 @@ export function inicializarContextoViewer(args) {
 
   // 3. Define Estado Global Inicial
   window.__viewerArgs = args;
-  window.__modo = "prova";
 
   // 4. Gerenciamento de URLs (Limpa antigas e cria novas)
   // Garante que o objeto existe antes de tentar acessar
   if (!window.__pdfUrls) window.__pdfUrls = {};
 
   if (window.__pdfUrls.prova) URL.revokeObjectURL(window.__pdfUrls.prova);
-  if (window.__pdfUrls.gabarito) URL.revokeObjectURL(window.__pdfUrls.gabarito);
 
   // Helper simples para lidar com File/Blob vs String URL
   const getUrl = (fileOrUrl) => {
@@ -47,10 +45,6 @@ export function inicializarContextoViewer(args) {
   };
 
   window.__pdfUrls.prova = getUrl(args.fileProva);
-  window.__pdfUrls.gabarito = getUrl(args.fileGabarito);
-
-  // Persist raw gabarito file/url as requested
-  window.__fileGabarito = args.fileGabarito;
 
   // Retorna a URL inicial para quem chamou usar
   return window.__pdfUrls.prova;

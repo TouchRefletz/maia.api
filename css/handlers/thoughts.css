@@ -203,6 +203,11 @@
     margin-top: 0;
 }
 
+/* skeleton wrapper (card level) */
+.maia-thought-card--skeleton {
+  margin-bottom: 20px !important;
+}
+
 /* skeleton dentro do card (placeholder) */
 .maia-thought-title-skel {
   height: 12px;
@@ -228,7 +233,7 @@
 }
 
 .maia-thought-card {
-  margin-bottom: 0;
+  margin: 20px 20px 0 20px;
   /* remove o margin-bottom: 20px antigo */
 }
 
@@ -248,7 +253,7 @@
   /* abaixo da estrela */
   transform: translateX(-50%);
   width: 2px;
-  height: calc(100% + var(--thought-gap) - 20px);
+  height: calc(100% + var(--thought-gap) + 20px - 20px);
   background: rgba(33, 128, 141, 0.35);
   /* ou use sua var de cor primária */
   border-radius: 2px;

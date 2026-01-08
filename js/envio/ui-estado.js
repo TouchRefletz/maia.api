@@ -1,16 +1,25 @@
-import { gerarConteudoEmJSONComImagemStream, gerarGabaritoComPesquisa } from '../api/worker.js';
-import { obterConfiguracaoIA } from '../ia/config.js';
-import { renderizarQuestaoFinal } from '../render/final/render-questao.js';
-import { urlToBase64 } from '../services/image-utils.js';
-import { prepararAreaDeResposta, pushThought } from '../sidebar/thoughts-scroll.js';
-import { customAlert } from '../ui/GlobalAlertsLogic.tsx';
-import { coletarESalvarImagensParaEnvio, prepararImagensParaEnvio } from './imagens.js';
+import {
+  gerarConteudoEmJSONComImagemStream,
+  gerarGabaritoComPesquisa,
+} from "../api/worker.js";
+import { obterConfiguracaoIA } from "../ia/config.js";
+import { renderizarQuestaoFinal } from "../render/final/render-questao.js";
+import {
+  prepararAreaDeResposta,
+  pushThought,
+} from "../sidebar/thoughts-scroll.js";
+import { customAlert } from "../ui/GlobalAlertsLogic.tsx";
+import {
+  coletarESalvarImagensParaEnvio,
+  prepararImagensParaEnvio,
+} from "./imagens.js";
 
 export function iniciarEstadoProcessamento() {
   // 1. Verificação de Segurança
   if (window.__isProcessing) return null; // Retorna null para sinalizar ABORTO
 
-  // 2. Injeção de CSS
+  // 2. Injeção de CSS (REMOVIDO: O scroll agora é gerenciado pelo container de abas)
+  /*
   var styleviewerSidebar = document.createElement('style');
   styleviewerSidebar.innerHTML = `
     #viewerSidebar {
@@ -18,20 +27,21 @@ export function iniciarEstadoProcessamento() {
     }
     `;
   document.body.appendChild(styleviewerSidebar);
+  */
 
   // 3. Definição de Estado
   window.__isProcessing = true;
   window.__userInterruptedScroll = false; // Reset smart scroll flag
 
-  // Retorna o elemento para que a função principal possa removê-lo depois
-  return styleviewerSidebar;
+  // Retorna objeto compatível com a API anterior (que esperava um elemento style)
+  return { remove: () => {} };
 }
 
 export function setarEstadoLoadingModal() {
   const btnProcessar = document.querySelector(
-    '#cropConfirmModal .btn--primary'
+    "#cropConfirmModal .btn--primary"
   );
-  const btnVoltar = document.querySelector('#cropConfirmModal .btn--secondary');
+  const btnVoltar = document.querySelector("#cropConfirmModal .btn--secondary");
 
   // Segurança: se não achar o botão principal, nem segue.
   if (!btnProcessar) return null;
@@ -39,7 +49,7 @@ export function setarEstadoLoadingModal() {
   const originalText = btnProcessar.innerText;
 
   // Aplica as mudanças visuais
-  btnProcessar.innerText = 'Iniciando...';
+  btnProcessar.innerText = "Iniciando...";
   btnProcessar.disabled = true;
   if (btnVoltar) btnVoltar.disabled = true;
 
@@ -92,46 +102,38 @@ export async function inicializarEnvioCompleto() {
 }
 
 export function finalizarProcessamentoVisual() {
-  // 1. Atualiza o estado global
+  // Desliga flags de processamento
   window.__isProcessing = false;
 
-  // 2. Verifica se precisa de Glow (só se estiver fechado)
-  const viewerBody = document.getElementById('viewerBody');
-  if (!viewerBody || !viewerBody.classList.contains('sidebar-collapsed')) {
-    return;
-  }
+  // Remove efeitos visuais (se houver)
+  const reopenBtn = document.getElementById("reopenSidebarBtn");
+  if (reopenBtn) reopenBtn.remove();
+}
 
-  // 3. Determina o alvo do brilho
-  const isMobile = window.innerWidth <= 900;
-  const targetId = isMobile ? 'header-mobile-toggle' : 'reopenSidebarBtn';
+export function addGlowEffect(targetEl) {
+  if (!targetEl) return;
 
-  const targetEl = document.getElementById(targetId);
+  targetEl.classList.add("glow-on-change");
 
-  // 4. Aplica o efeito
-  if (targetEl) {
-    targetEl.classList.add('glow-effect');
+  const removeGlow = () => {
+    targetEl.classList.remove("glow-on-change");
+  };
 
-    // DICA EXTRA: Remove o glow automaticamente quando o usuário clicar/abrir
-    const removeGlow = () => {
-      targetEl.classList.remove('glow-effect');
-      targetEl.removeEventListener('click', removeGlow);
-    };
-    targetEl.addEventListener('click', removeGlow, { once: true });
+  // Remove após 4s de timeout OU se o usuário interagir
+  setTimeout(removeGlow, 4000);
+  if (typeof targetEl.addEventListener === "function") {
+    targetEl.addEventListener("click", removeGlow, { once: true });
   }
 }
 
-export function finalizarInterfacePosSucesso(styleviewerSidebar, uiState, modo) {
+export function finalizarInterfacePosSucesso(styleviewerSidebar, uiState) {
   // 1. Limpeza Visual
   if (styleviewerSidebar) styleviewerSidebar.remove();
-  const btnResume = document.getElementById('resumeScrollBtn');
+  const btnResume = document.getElementById("resumeScrollBtn");
   if (btnResume) btnResume.remove();
 
   // 2. Feedback ao Usuário
-  const mensagem =
-    modo === 'gabarito'
-      ? '✅ Gabarito identificado e anexado!'
-      : '✅ Questão processada com sucesso!';
-  customAlert(mensagem, 3000);
+  customAlert("✅ Questão e gabarito processados com sucesso!", 3000);
 
   restaurarEstadoBotoes(uiState);
 }
@@ -152,7 +154,7 @@ export function restaurarEstadoBotoes(uiState) {
 }
 
 export function tratarErroEnvio(error, uiState, refsLoader) {
-  console.error('Erro no processamento:', error);
+  console.error("Erro no processamento:", error);
 
   // 1. Reset Global
   window.__isProcessing = false;
@@ -163,162 +165,163 @@ export function tratarErroEnvio(error, uiState, refsLoader) {
   }
 
   // 3. Feedback Visual e Reabertura do Modal
-  customAlert('❌ Erro ao processar. Tente novamente.', 3000);
+  customAlert("❌ Erro ao processar. Tente novamente.", 3000);
 
-  const modal = document.getElementById('cropConfirmModal');
-  if (modal) modal.classList.add('visible');
+  const modal = document.getElementById("cropConfirmModal");
+  if (modal) modal.classList.add("visible");
 
   // 4. Restaura os botões (Reutilizando a lógica)
   restaurarEstadoBotoes(uiState);
 }
 
-export async function confirmarEnvioIA() {
+/**
+ * Fluxo Unificado: Extrai questão E busca gabarito automaticamente
+ */
+export async function confirmarEnvioIA(tabId = null) {
   // --- PASSO 1: PREPARAÇÃO DE DADOS E ESTADO ---
   const dadosIniciais = await inicializarEnvioCompleto();
   if (!dadosIniciais) return;
-  // Desempacota dados (Adicione styleviewerSidebar na lista)
   const { styleviewerSidebar, listaImagens, uiState } = dadosIniciais;
-  // --- PASSO 2: PREPARAÇÃO VISUAL (SIDEBAR E LOADER) ---
-  // A mágica acontece aqui: uma linha resolve toda a UI
-  const uiTools = prepararAreaDeResposta();
-  if (!uiTools) return;
 
-  // AGORA SIM: Extraímos o setStatus E o refsLoader para usar depois
-  const { setStatus, refsLoader } = uiTools;
+  // --- PASSO 2: PREPARAÇÃO VISUAL (SIDEBAR E LOADER) ---
+  let setStatus;
+  let refsLoader = null;
+
+  if (tabId) {
+    const { addLogToQuestionTab } = await import("../ui/sidebar-tabs.js");
+    setStatus = (s) => {
+      if (s) addLogToQuestionTab(tabId, `[STATUS] ${s}`);
+    };
+  } else {
+    const uiTools = prepararAreaDeResposta();
+    if (!uiTools) return;
+    setStatus = uiTools.setStatus;
+    refsLoader = uiTools.refsLoader;
+  }
 
   try {
-    setStatus(`Enviando ${listaImagens.length} imagens para IA...`);
+    // ============================================================
+    // FASE 1: EXTRAÇÃO DA QUESTÃO
+    // ============================================================
+    setStatus("📝 [QUESTÃO] Enviando imagens para IA...");
 
-    const { promptDaIA, JSONEsperado } = obterConfiguracaoIA(window.__modo);
+    const { promptDaIA: promptQuestao, JSONEsperado: JSONQuestao } =
+      obterConfiguracaoIA("prova");
 
-    setStatus(`Analisando ${listaImagens.length} imagem(ns)...`);
+    setStatus(`📝 [QUESTÃO] Analisando ${listaImagens.length} imagem(ns)...`);
 
-    // Seleciona a função adequada baseada no modo
-    // Se for 'gabarito', usa a nova função com pesquisa
-    // Seleciona a função adequada baseada no modo
-    let resposta;
-
-    if (window.__modo === 'gabarito') {
-      // Tenta recuperar imagens originais da questão para a pesquisa
-      let imagensPesquisa = window.__BACKUP_IMGS_Q || [];
-
-      // Fallback: se não tiver backup, tenta usar o scan_original salvo no JSON anterior
-      if ((!imagensPesquisa || imagensPesquisa.length === 0) && window.ultimaQuestaoExtraida?.scan_original) {
-        imagensPesquisa = [window.ultimaQuestaoExtraida.scan_original];
+    const respostaQuestao = await gerarConteudoEmJSONComImagemStream(
+      promptQuestao,
+      JSONQuestao,
+      listaImagens,
+      "image/jpeg",
+      {
+        onStatus: (s) => setStatus(`📝 [QUESTÃO] ${s}`),
+        onThought: (t) => pushThought(`📝 ${t}`, tabId),
+        onAnswerDelta: () => setStatus("📝 [QUESTÃO] Gerando JSON..."),
       }
+    );
 
-      // --- USER REQUEST: Adicionar também a imagem do Gabarito (listaImagens) para o Pesquisador ---
-      // O pesquisador precisa ver a questão original E o gabarito que está sendo analisado
-      if (listaImagens && listaImagens.length > 0) {
-        imagensPesquisa = [...imagensPesquisa, ...listaImagens];
-      }
+    console.log("Resposta QUESTÃO recebida:", respostaQuestao);
 
-      // IMPORTANTE: Converter blobs para Base64 antes de enviar para o Worker
-      if (imagensPesquisa && imagensPesquisa.length > 0) {
-        imagensPesquisa = await Promise.all(imagensPesquisa.map(async (img) => {
-          if (typeof img === 'string' && img.startsWith('blob:')) {
-            try {
-              return await urlToBase64(img);
-            } catch (e) {
-              console.error("Falha ao converter blob de pesquisa:", e);
-              return img;
-            }
-          }
-          return img;
-        }));
-      }
+    // Anexa imagens locais à questão
+    enriquecerRespostaComImagensLocais(respostaQuestao);
 
-      // Prepara o texto da questão para auxiliar a busca
-      const textoQuestao = window.questaoAtual ? JSON.stringify(window.questaoAtual) : "";
+    // Salva questão no global (mas não renderiza ainda!)
+    window.__ultimaQuestaoExtraida = respostaQuestao;
+    window.questaoAtual = respostaQuestao;
 
-      resposta = await gerarGabaritoComPesquisa(
-        promptDaIA,
-        JSONEsperado,
-        listaImagens,
-        'image/jpeg',
-        {
-          onStatus: (s) => setStatus(s),
-          onThought: (t) => pushThought(t),
-          onAnswerDelta: () => setStatus('Gerando JSON...'),
-        },
-        imagensPesquisa, // <--- Passando as imagens originais para o Researcher!
-        textoQuestao     // <--- Passando o TEXTO da questão para o Researcher!
-      );
-    } else {
-      // Modo Questão (Padrão)
-      resposta = await gerarConteudoEmJSONComImagemStream(
-        promptDaIA,
-        JSONEsperado,
-        listaImagens,
-        'image/jpeg',
-        {
-          onStatus: (s) => setStatus(s),
-          onThought: (t) => pushThought(t),
-          onAnswerDelta: () => setStatus('Gerando JSON...'),
-        }
-      );
-    }
+    // ============================================================
+    // FASE 2: BUSCA DO GABARITO VIA PESQUISA
+    // ============================================================
+    setStatus("🔍 [GABARITO] Iniciando pesquisa de resposta...");
 
-    console.log('Resposta recebida:', resposta);
+    const { promptDaIA: promptGabarito, JSONEsperado: JSONGabarito } =
+      obterConfiguracaoIA("gabarito");
 
-    // Desliga flag e aplica efeitos visuais
+    // Prepara texto da questão para ajudar na pesquisa
+    const textoQuestao = JSON.stringify(respostaQuestao);
+
+    const respostaGabarito = await gerarGabaritoComPesquisa(
+      promptGabarito,
+      JSONGabarito,
+      listaImagens,
+      "image/jpeg",
+      {
+        onStatus: (s) => setStatus(`🔍 [GABARITO] ${s}`),
+        onThought: (t) => pushThought(`🔍 ${t}`, tabId),
+        onAnswerDelta: () => setStatus("🔍 [GABARITO] Gerando JSON..."),
+      },
+      listaImagens, // Usa as mesmas imagens para pesquisa
+      textoQuestao // Passa o texto da questão para ajudar na busca
+    );
+
+    console.log("Resposta GABARITO recebida:", respostaGabarito);
+
+    // Salva gabarito no global
+    window.__ultimoGabaritoExtraido = respostaGabarito;
+
+    // ============================================================
+    // FASE 3: FINALIZAÇÃO E RENDERIZAÇÃO
+    // ============================================================
     finalizarProcessamentoVisual();
 
-    // 1. Anexa as imagens locais ao JSON da IA
-    enriquecerRespostaComImagensLocais(resposta, window.__modo);
+    // Limpa recortes temporários
+    window.__recortesAcumulados = [];
 
-    // 2. Salva nas variáveis globais
-    salvarResultadoNoGlobal(resposta, window.__modo);
+    // Renderiza o resultado FINAL (questão + gabarito)
+    if (tabId) {
+      import("../ui/sidebar-tabs.js").then(({ updateTabStatus }) => {
+        updateTabStatus(tabId, {
+          status: "complete",
+          response: respostaQuestao, // Passa a questão, o render vai pegar o gabarito do global
+        });
+      });
+    } else {
+      renderizarQuestaoFinal(respostaQuestao);
+    }
 
-    // 3. Renderiza o resultado na tela (sua função existente)
-    renderizarQuestaoFinal(resposta);
-
-    // 4. Limpa a bagunça e avisa o usuário
-    finalizarInterfacePosSucesso(styleviewerSidebar, uiState, window.__modo);
+    // Limpa a bagunça e avisa o usuário
+    finalizarInterfacePosSucesso(styleviewerSidebar, uiState);
   } catch (error) {
-    if (error.message === 'RECITATION_ERROR') {
-      handleRecitationError(uiState, window.__modo, refsLoader, dadosIniciais.styleviewerSidebar);
+    if (error.message === "RECITATION_ERROR") {
+      handleRecitationError(
+        uiState,
+        refsLoader,
+        dadosIniciais.styleviewerSidebar
+      );
     } else {
       tratarErroEnvio(error, uiState, refsLoader);
     }
   }
 }
 
-export function enriquecerRespostaComImagensLocais(resposta, modo) {
+export function enriquecerRespostaComImagensLocais(resposta) {
   const imagens = window.__imagensLimpas || {};
 
-  if (modo === 'gabarito') {
-    // Modo Gabarito: Anexa suporte
-    resposta.imagens_suporte = imagens.gabarito_suporte || [];
-  } else {
-    // Modo Questão: Anexa suporte e scan original
-    resposta.imagens_suporte = imagens.questao_suporte || [];
+  // Modo Questão: Anexa suporte e scan original
+  resposta.imagens_suporte = imagens.questao_suporte || [];
 
-    // Salva o scan original (a imagem grandona)
-    if (imagens.questao_original && imagens.questao_original.length > 0) {
-      resposta.scan_original = imagens.questao_original[0];
-    }
-
-    // Importante: Limpa a lista de originais para os próximos slots nascerem vazios
-    imagens.questao_original = [];
+  // Salva o scan original (a imagem grandona)
+  if (imagens.questao_original && imagens.questao_original.length > 0) {
+    resposta.scan_original = imagens.questao_original[0];
   }
+
+  // Importante: Limpa a lista de originais para os próximos slots nascerem vazios
+  imagens.questao_original = [];
 
   return resposta;
 }
 
-export function salvarResultadoNoGlobal(resposta, modo) {
-  if (modo === 'gabarito') {
-    window.__ultimoGabaritoExtraido = resposta;
-  } else {
-    window.__ultimaQuestaoExtraida = resposta;
-    window.questaoAtual = resposta;
-  }
+export function salvarResultadoNoGlobal(resposta) {
+  window.__ultimaQuestaoExtraida = resposta;
+  window.questaoAtual = resposta;
 
   // Limpa a lista de recortes temporários
   window.__recortesAcumulados = [];
 }
 
-export function handleRecitationError(uiState, modo, refsLoader, styleviewerSidebar) {
+export function handleRecitationError(uiState, refsLoader, styleviewerSidebar) {
   // 1. Limpa Estado de Processamento
   window.__isProcessing = false;
   if (refsLoader && refsLoader.loadingContainer) {
@@ -327,24 +330,31 @@ export function handleRecitationError(uiState, modo, refsLoader, styleviewerSide
   if (styleviewerSidebar) styleviewerSidebar.remove();
 
   // 2. Feedback
-  customAlert('⚠️ Conteúdo identificado, mas não estruturado (RECITAÇÃO). Por favor, edite manualmente.', 5000);
+  customAlert(
+    "⚠️ Conteúdo identificado, mas não estruturado (RECITAÇÃO). Por favor, edite manualmente.",
+    5000
+  );
 
   // 3. Cria Skeleton
   const recitationSkeleton = {
     identificacao: "⚠️ Questão não extraída",
     conteudo: "", // Deixa vazio para não aparecer texto feio no card
     estrutura: [
-      { tipo: 'texto', conteudo: '⚠️ HOUVE UM ERRO DE RECITAÇÃO. Clique em "Editar Conteúdo" para transcrever a questão manualmente.' }
+      {
+        tipo: "texto",
+        conteudo:
+          '⚠️ HOUVE UM ERRO DE RECITAÇÃO. Clique em "Editar Conteúdo" para transcrever a questão manualmente.',
+      },
     ],
     alternativas: [],
     materias_possiveis: [],
     palavras_chave: [],
-    isRecitation: true
+    isRecitation: true,
   };
 
   // 4. Salva e Renderiza (como se fosse sucesso)
-  enriquecerRespostaComImagensLocais(recitationSkeleton, modo);
-  salvarResultadoNoGlobal(recitationSkeleton, modo);
+  enriquecerRespostaComImagensLocais(recitationSkeleton);
+  salvarResultadoNoGlobal(recitationSkeleton);
   renderizarQuestaoFinal(recitationSkeleton);
 
   // 5. Finalização Visual
@@ -352,6 +362,6 @@ export function handleRecitationError(uiState, modo, refsLoader, styleviewerSide
   restaurarEstadoBotoes(uiState);
 
   // Fecha o modal de crop se estiver aberto (já que fomos para a tela de edição)
-  const modal = document.getElementById('cropConfirmModal');
-  if (modal) modal.classList.remove('visible');
+  const modal = document.getElementById("cropConfirmModal");
+  if (modal) modal.classList.remove("visible");
 }

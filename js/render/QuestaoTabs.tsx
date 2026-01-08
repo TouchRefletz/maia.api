@@ -11,10 +11,6 @@ import { renderLatexIn } from '../libs/loader';
 import { joinLines } from '../normalize/primitives.js';
 // ... (imports)
 import { validarProgressoImagens } from '../validation/metricas-imagens.js';
-// import { renderAlternativas } from './alternativas.js'; // REMOVIDO
-// import { renderizarEstruturaHTML } from './structure.js'; // REMOVIDO
-import { trocarModo } from '../viewer/pdf-core.js';
-import { esconderPainel } from '../viewer/sidebar.js';
 import { Alternativas } from './AlternativasRender';
 import { renderizarTelaFinal } from './final/json-e-modal.js';
 import { renderTags } from './final/render-components.js';
@@ -51,9 +47,7 @@ interface Props {
 
 const QuestaoTabs: React.FC<Props> = ({ questao, gabarito, containerRef }) => {
   // Estado para controlar as abas
-  const [activeTab, setActiveTab] = useState<'questao' | 'gabarito'>(
-    (window as any).__modo === 'gabarito' && gabarito ? 'gabarito' : 'questao'
-  );
+  const [activeTab, setActiveTab] = useState<'questao' | 'gabarito'>('questao');
 
   // Estado para controlar modo de edição da questão
   const [isEditing, setIsEditing] = useState(!!questao.isRecitation);
@@ -181,19 +175,7 @@ const QuestaoTabs: React.FC<Props> = ({ questao, gabarito, containerRef }) => {
   };
 
   const handleConfirmarQuestao = async () => {
-    const urls = (window as any).__pdfUrls || (window as any).pdfUrls;
-    if (urls?.gabarito) (window as any).__preferirPdfGabarito = true;
-
-    if (typeof trocarModo === 'function') {
-      const trocou = await trocarModo('gabarito');
-      if (trocou === false) return;
-    }
-
-    if ((window as any).modo == 'gabarito' && window.innerWidth <= 900) {
-      if (typeof esconderPainel === 'function') esconderPainel();
-    }
-
-    // Força atualização de estado local se necessário
+    // Questão confirmada - agora o usuário pode editar ou finalizar
     setActiveTab('gabarito');
   };
 

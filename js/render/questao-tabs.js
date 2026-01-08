@@ -1,6 +1,6 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import ReactDOMServer from 'react-dom/server';
+import React from "react";
+import ReactDOM from "react-dom/client";
+import ReactDOMServer from "react-dom/server";
 import {
   AcoesGabaritoView,
   DetalhesTecnicos,
@@ -9,14 +9,30 @@ import {
   MetaGabarito,
   OpcoesGabarito,
   PassosExplicacao,
-  prepararDadosGabarito as prepararDadosGabaritoTSX
-} from './GabaritoCard.tsx';
-import QuestaoTabs from './QuestaoTabs.tsx';
+  prepararDadosGabarito as prepararDadosGabaritoTSX,
+} from "./GabaritoCard.tsx";
+import QuestaoTabs from "./QuestaoTabs.tsx";
 
 export function mountQuestaoTabs(container, questao, gabarito) {
   if (!container) return;
-  const root = ReactDOM.createRoot(container);
-  root.render(React.createElement(QuestaoTabs, { questao, gabarito, containerRef: container }));
+
+  // Verifica se já existe uma root React anexada ao container
+  let root = container._reactRoot;
+
+  if (!root) {
+    // Se não existir, cria uma nova e salva no container
+    root = ReactDOM.createRoot(container);
+    container._reactRoot = root;
+  }
+
+  // Renderiza (ou re-renderiza) usando a root existente
+  root.render(
+    React.createElement(QuestaoTabs, {
+      questao,
+      gabarito,
+      containerRef: container,
+    })
+  );
   return root;
 }
 
@@ -67,9 +83,17 @@ export function _renderMetaGabarito(confianca, creditos) {
   );
 }
 
-export function _renderOpcoesGabarito(questao, respostaLetra, alternativasAnalisadas) {
+export function _renderOpcoesGabarito(
+  questao,
+  respostaLetra,
+  alternativasAnalisadas
+) {
   return ReactDOMServer.renderToStaticMarkup(
-    React.createElement(OpcoesGabarito, { questao, respostaLetra, alternativasAnalisadas })
+    React.createElement(OpcoesGabarito, {
+      questao,
+      respostaLetra,
+      alternativasAnalisadas,
+    })
   );
 }
 
@@ -85,8 +109,8 @@ export function _renderDetalhesTecnicos(dados) {
   );
 }
 
-// As sub-funções do editor (_renderEditorPassos, etc) eram usadas apenas internamente 
-// pelo renderFormularioEditor no original. Como renderFormularioEditor agora renderiza 
-// o componente React completo <GabaritoEditorView>, não é estritamente necessário 
+// As sub-funções do editor (_renderEditorPassos, etc) eram usadas apenas internamente
+// pelo renderFormularioEditor no original. Como renderFormularioEditor agora renderiza
+// o componente React completo <GabaritoEditorView>, não é estritamente necessário
 // exportar as sub-partes do editor, a menos que haja código externo dependendo especificamente delas.
 // Se necessário, seguiria o mesmo padrão: renderToStaticMarkup(<EditorPassos ... />).

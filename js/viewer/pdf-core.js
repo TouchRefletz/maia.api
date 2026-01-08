@@ -1,7 +1,5 @@
 import { viewerState } from "../main.js";
 import { customAlert } from "../ui/GlobalAlertsLogic.tsx";
-import { validarProgressoImagens } from "../validation/metricas-imagens.js";
-import { atualizarUIViewerModo } from "./viewer-template.js";
 
 // --- CONTROLE DE LAZY LOADING ---
 let observer = null;
@@ -511,73 +509,16 @@ export function irParaPagina(targetPage) {
   }
 }
 
-// Compatibilidade
-export async function trocarModo(novoModo) {
-  const permitido = await verificarBloqueiosTroca(novoModo);
-  if (!permitido) return false;
-
-  window.__modo = novoModo;
-  window.modo = novoModo;
-  window.__recortesAcumulados = [];
-  atualizarUIViewerModo();
-
-  let url = window.__pdfUrls.prova;
-  if (novoModo === "gabarito") {
-    url = window.__pdfUrls.gabarito || window.__pdfUrls.prova;
-  }
-
-  try {
-    const pdf = await pdfjsLib.getDocument(url).promise;
-    viewerState.pdfDoc = pdf;
-    viewerState.pageNum = 1;
-    await renderAllPages();
-    return true;
-  } catch (err) {
-    console.error("Erro ao trocar modo", err);
-    customAlert("Erro ao carregar PDF.", 2000);
-    return false;
-  }
-}
-
 // --- Funções Auxiliares de Validação (Mantidas) ---
 export function ensurePdfUrls() {
-  if (!window.__pdfUrls) window.__pdfUrls = { prova: null, gabarito: null };
+  if (!window.__pdfUrls) window.__pdfUrls = { prova: null };
   const args = window.__viewerArgs;
   const fileProva = args?.fileProva;
-  const fileGabarito = args?.fileGabarito;
 
   if (!window.__pdfUrls.prova && fileProva)
     window.__pdfUrls.prova = URL.createObjectURL(fileProva);
-  if (!window.__pdfUrls.gabarito && fileGabarito)
-    window.__pdfUrls.gabarito = URL.createObjectURL(fileGabarito);
 
   return !!window.__pdfUrls.prova;
-}
-
-export async function verificarBloqueiosTroca(novoModo) {
-  if (!ensurePdfUrls()) return false;
-  if (!document.getElementById("pdfViewerContainer")) return false;
-
-  if (window.__modo === "prova" && novoModo === "gabarito") {
-    const podeIr = await validarProgressoImagens();
-    if (!podeIr) return false;
-  }
-
-  if (novoModo === "gabarito") {
-    if (window.__isProcessing) {
-      customAlert("⏳ Aguarde...", 3000);
-      return false;
-    }
-    if (!window.__ultimaQuestaoExtraida) {
-      customAlert("⚠️ Capture a Questão primeiro!", 3000);
-      return false;
-    }
-    if (window.questaoAtual && window.questaoAtual.isRecitation) {
-      if (!window.confirm("Questão manual/recitation incompleta. Continuar?"))
-        return false;
-    }
-  }
-  return true;
 }
 
 // Mantido para compatibilidade com Cropper

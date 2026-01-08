@@ -70,6 +70,14 @@ O QUE COMPÕE UMA QUESTÃO (Deve estar DENTRO da caixa):
 3. **Referências Bibliográficas / Fontes**: Linhas miúdas como "Disponível em...", "Acesso em...", "Autor X". ISSO É CRUCIAL e frequentemente esquecido. INCLUA AS FONTES.
 4. **Imagens/Figuras/Gráficos**: Qualquer elemento visual associado.
 5. **Alternativas**: Todas as opções de resposta (A, B, C, D, E). A caixa só termina DEPOIS da última alternativa.
+6. **Material de Apoio (Texto/Imagem)**: Textos longos, poemas, tirinhas, mapas, figuras associadas.
+   - **ATENÇÃO AO TEXTO COMPARTILHADO**: Se houver "Texto para as questões 10 e 11", VOCÊ DEVE CRIAR ENTRADAS SEPARADAS PARA CADA QUESTÃO.
+   - Crie uma region para a Questão 10 contendo esse texto (tipo: "parte_questao").
+   - Crie OUTRA region para a Questão 11 contendo O MESMO texto (tipo: "parte_questao").
+
+REGRAS ESTRITAS DE TIPO ("tipo"):
+- **"parte_questao"**: Use para textos de apoio, imagens, gráficos ou trechos que servem de base para a questão, mas não contêm as alternativas.
+- **"questao_completa"**: Use para o bloco principal que contém o enunciado específico e as alternativas.
 
 REGRAS ESTRITAS DE SEGMENTAÇÃO:
 - **Limite Inferior**: A questão só acaba quando começa o cabeçalho da PRÓXIMA questão ou no fim da coluna/página.
@@ -668,7 +676,12 @@ export class AiScanner {
   static applyResults(json, pageNum, status = "sent") {
     try {
       // Import CropperState dynamic if needed or assume loaded
-      loadSelectionsFromJson(json, pageNum, { tags: ["ia"], status });
+      // Padding 15 (aprox 1.5%) para dar "ar" na questão conforme pedido
+      loadSelectionsFromJson(json, pageNum, {
+        tags: ["ia"],
+        status,
+        padding: 15,
+      });
     } catch (e) {
       console.error("Erro ao aplicar JSON", e);
     }

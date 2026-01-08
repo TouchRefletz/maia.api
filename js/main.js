@@ -83,21 +83,11 @@ export const viewerState = {
   scrollPos: { top: 0, left: 0 },
 };
 window.__viewerArgs = null; // guarda os arquivos e title
-window.__modo = "prova"; // "prova" | "gabarito"
-window.__pdfUrls = { prova: null, gabarito: null };
-window.__preferirPdfGabarito = true; // por padrÃ£o, quando existir PDF do gabarito, troca
+window.__pdfUrls = { prova: null };
 
 window.__imagensLimpas = window.__imagensLimpas || {
   questao_original: [],
   questao_suporte: [],
-  gabarito_original: [],
-  gabarito_suporte: [],
-  // ADICIONE ISSO AQUI:
-  gabarito_passos: {}, // Estrutura: { 0: [img, img], 1: [img] } (chave Ã© o index do passo)
-  alternativas: {
-    questao: {},
-    gabarito: {},
-  },
 };
 
 window.__target_alt_letra = null;
@@ -282,14 +272,9 @@ window.generatePDFUploadInterface = function (initialData = null) {
   const elements = {
     titleInput: document.getElementById("pdfTitleInput"),
     yearInput: document.getElementById("pdfYearInput"),
-    gabaritoCheck: document.getElementById("gabaritoNaProvaCheck"),
-    gabaritoGroup: document.getElementById("gabaritoInputGroup"),
-    gabaritoInput: document.getElementById("gabaritoFileInput"),
     pdfInput: document.getElementById("pdfFileInput"),
     fileNameDisplay: document.getElementById("fileName"),
-    gabaritoFileNameDisplay: document.getElementById("gabaritoFileName"),
     dropZoneProva: document.getElementById("dropZoneProva"),
-    dropZoneGabarito: document.getElementById("dropZoneGabarito"),
     form: document.getElementById("pdfUploadForm"),
   };
 
@@ -298,11 +283,6 @@ window.generatePDFUploadInterface = function (initialData = null) {
     elements.dropZoneProva,
     elements.pdfInput,
     elements.fileNameDisplay
-  );
-  setupDragAndDrop(
-    elements.dropZoneGabarito,
-    elements.gabaritoInput,
-    elements.gabaritoFileNameDisplay
   );
 
   // 4. Iniciar LÃ³gica do FormulÃ¡rio

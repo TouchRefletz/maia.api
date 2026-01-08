@@ -3,7 +3,7 @@ import { criarHtmlBlocoEditor } from '../editor/structure-editor.js';
 import { normalizeAlternativasAnalisadas } from '../normalize/alternativas.js';
 import { normCreditos } from '../normalize/creditos.js';
 import { normalizeExplicacao } from '../normalize/explicacao.js';
-import { asStringArray, safe } from '../normalize/primitives.js';
+import { asStringArray, safe, safeMarkdown } from '../normalize/primitives.js';
 import { pick } from '../utils/pick';
 // @ts-ignore - Importação legado pode não ter tipos
 import { renderComplexidade as renderComplexidadeLegado } from './complexidade.js';
@@ -118,6 +118,10 @@ const RawHTML = ({ html, className = '', style = {} }: { html: string, className
 
 const SafeText = ({ text }: { text: any }) => <>{safe(text)}</>;
 
+const SafeMarkdown = ({ text }: { text: any }) => (
+  <div className="markdown-content" dangerouslySetInnerHTML={{ __html: safeMarkdown(text) }} />
+);
+
 // Sub-componente: Meta Gabarito (Chips e Barra de Confiança)
 export const MetaGabarito: React.FC<{ confianca: number | null, creditos: CreditosData | null }> = ({ confianca, creditos }) => {
   const clamp01 = (n: any) => Math.max(0, Math.min(1, Number(n)));
@@ -177,8 +181,8 @@ export const OpcoesGabarito: React.FC<{ questao: any, respostaLetra: string, alt
           <div key={idx} className={`answerOption ${isCorrect ? 'correct' : ''}`}>
             <span className="option-letter"><SafeText text={letra} /></span>
             <div className="option-text">
-              <SafeText text={alt?.texto} />
-              {analise?.motivo && <div className="option-reason"><SafeText text={analise.motivo} /></div>}
+              <SafeMarkdown text={alt?.texto} />
+              {analise?.motivo && <div className="option-reason"><SafeMarkdown text={analise.motivo} /></div>}
             </div>
           </div>
         );
@@ -409,7 +413,7 @@ export const GabaritoCardView: React.FC<{ dados: GabaritoData }> = ({ dados }) =
         <div className="questionText gabarito-head">
           <p><strong>Alternativa correta:</strong> <SafeText text={respostaLetra} /></p>
           {justificativaCurta && (
-            <p className="gabarito-just markdown-content"><SafeText text={justificativaCurta} /></p>
+            <div className="gabarito-just markdown-content"><SafeMarkdown text={justificativaCurta} /></div>
           )}
         </div>
 

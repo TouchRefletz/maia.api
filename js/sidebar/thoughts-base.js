@@ -44,13 +44,19 @@ export function construirSkeletonLoader(sidebar) {
   loadingContainer.id = "maia-scroll-wrapper"; // ID explícito para scroll mobile
   loadingContainer.innerHTML = skeletonHTML;
 
-  sidebar.appendChild(loadingContainer);
+  // FIX: Usar estritamente o container passado como argumento (Contexto da Aba)
+  // Remover lógica antiga que tentava adivinhar o container global e quebrava o sistema de abas persistentes.
+  const targetContainer = sidebar;
 
-  // Retorna as referências para não precisarmos buscar com getElementById depois
+  // Limpa apenas o container específico da aba
+  targetContainer.innerHTML = "";
+  targetContainer.appendChild(loadingContainer);
+
+  // Retorna as referências buscando dentro do container criado para evitar conflitos de ID global
   return {
     loadingContainer,
-    thoughtListEl: document.getElementById("maiaThoughts"),
-    textElement: document.getElementById("loading-text"),
+    thoughtListEl: loadingContainer.querySelector("#maiaThoughts"),
+    textElement: loadingContainer.querySelector("#loading-text"),
   };
 }
 

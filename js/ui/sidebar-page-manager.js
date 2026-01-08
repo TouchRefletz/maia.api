@@ -3,12 +3,13 @@ import { splitThought } from "../sidebar/thoughts-base.js";
 export const SidebarPageManager = {
   containerId: "sidebar-pages-container",
 
-  init(totalPages = 0) {
+  init(totalPages = 0, specificContainer = null) {
     const parent = document.getElementById("viewerSidebar");
     if (!parent) return;
 
-    // Verificar se container já existe
-    let container = document.getElementById(this.containerId);
+    // Verificar se container já existe ou usar o fornecido
+    let container =
+      specificContainer || document.getElementById(this.containerId);
     if (!container) {
       container = document.createElement("div");
       container.id = this.containerId;
@@ -16,6 +17,15 @@ export const SidebarPageManager = {
 
       // POINTER EVENTS AUTO (Garante que cliques nos details funcionem)
       container.style.pointerEvents = "auto";
+
+      // SEGURANÇA: Se o sistema de abas estiver ativo e NÃO for uma injeção explícita
+      if (
+        !specificContainer &&
+        document.getElementById("sidebar-tabs-header")
+      ) {
+        // Estamos provavelmente numa aba de Questão, então não devemos recriar o Hub aqui.
+        return;
+      }
 
       // Inserir após o header da sidebar ou no topo
       const sidebarHeader = parent.querySelector(".sidebar-header");

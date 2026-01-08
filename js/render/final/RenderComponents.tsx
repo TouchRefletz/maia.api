@@ -1,10 +1,10 @@
 // --- components/RenderComponents.tsx ---
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { safe } from '../../normalize/primitives.js';
+import { decodeEntities, safe, safeMarkdown } from '../../normalize/primitives.js';
 import { renderizarEstruturaHTML, renderizar_estrutura_alternativa } from '../structure.js';
 
-// --- Interfaces para Tipagem (Inferidas do código original) ---
+// --- Interfaces para Tipagem ---
 interface ImgProps {
   lista: string[];
   titulo: string;
@@ -30,7 +30,7 @@ interface CreditosProps {
 interface Alternativa {
   letra: string;
   texto?: string;
-  estrutura?: any[]; // Estrutura complexa vinda do legado
+  estrutura?: any[];
 }
 
 interface TagsProps {
@@ -75,7 +75,7 @@ interface GabaritoProps {
   explicacaoArray: PassoExplicacao[];
 }
 
-// --- Novos Componentes de Pesquisa ---
+// --- Componentes ---
 
 export const SourcesList: React.FC<{ sources: Array<{ uri: string; title: string }> }> = ({ sources }) => {
   if (!sources || sources.length === 0) return null;
@@ -107,14 +107,12 @@ export const ResearchReport: React.FC<{ text: string }> = ({ text }) => {
         <div
           className="markdown-content relatorio-content"
           style={{ padding: '12px', fontSize: '12px', background: 'var(--color-background)', maxHeight: '300px', overflowY: 'auto' }}
-          dangerouslySetInnerHTML={{ __html: safe(content) }}
+          dangerouslySetInnerHTML={{ __html: safeMarkdown(content) }}
         />
       </details>
     </div>
   );
 };
-
-// --- Componentes ---
 
 export const ImgsLimpas: React.FC<ImgProps> = ({ lista, titulo }) => {
   if (!lista || lista.length === 0) return null;
@@ -179,7 +177,7 @@ export const ComplexidadeVisual: React.FC<ComplexidadeProps> = ({ comp }) => {
           className="markdown-content"
           data-raw={safe(comp.justificativa_dificuldade)}
           style={{ fontSize: '12px', fontStyle: 'italic', color: 'var(--color-text-secondary)', marginTop: '8px' }}
-          dangerouslySetInnerHTML={{ __html: safe(comp.justificativa_dificuldade) }}
+          dangerouslySetInnerHTML={{ __html: safeMarkdown(comp.justificativa_dificuldade) }}
         />
       )}
     </div>
@@ -236,9 +234,17 @@ export const ListaAlternativas: React.FC<{ alternativas: Alternativa[] }> = ({ a
   return (
     <>
       {alternativas.map((alt, idx) => {
-        const estrutura = Array.isArray(alt.estrutura)
+        let estrutura = Array.isArray(alt.estrutura)
           ? alt.estrutura
           : [{ tipo: 'texto', conteudo: alt.texto || '' }];
+
+        // Decodifica entities no conteúdo de cada bloco de texto para evitar "&quot;"
+        estrutura = estrutura.map(bloco => {
+          if (bloco.tipo === 'texto' && bloco.conteudo) {
+            return { ...bloco, conteudo: decodeEntities(bloco.conteudo) };
+          }
+          return bloco;
+        });
 
         // Mantém chamada à função legada que retorna string HTML
         const htmlAlt = renderizar_estrutura_alternativa(estrutura, alt.letra);
@@ -263,12 +269,8 @@ export const PassosGabarito: React.FC<{ explicacaoArray: PassoExplicacao[] }> = 
       <div className="gabarito-steps" style={{ overflowY: 'auto', paddingRight: '5px' }}>
         <ol className="steps-list">
           {explicacaoArray.map((p, idx) => {
-            // Acesso global mantido conforme lógica original
             const imgsPasso = (window as any).__imagensLimpas?.gabarito_passos?.[idx] || [];
-
-            // Função legada de renderização
             const htmlPasso = renderizarEstruturaHTML(p.estrutura, imgsPasso, `final_view_gab_${idx}`);
-
             const isExtraido = String(p.origem || '').includes('extraido');
 
             return (
@@ -295,7 +297,6 @@ export const PassosGabarito: React.FC<{ explicacaoArray: PassoExplicacao[] }> = 
 };
 
 export const PainelQuestao: React.FC<QuestaoProps> = ({ q, tituloMaterial, imagensFinais }) => {
-  // Função legada de renderização
   const htmlEstruturaQuestao = renderizarEstruturaHTML(
     q.estrutura,
     imagensFinais.q_original,
@@ -373,7 +374,7 @@ export const PainelGabarito: React.FC<GabaritoProps> = ({ g, imagensFinais, expl
         <div
           className="data-box markdown-content"
           style={{ background: 'var(--color-background)', fontSize: '13px' }}
-          dangerouslySetInnerHTML={{ __html: safe(g.justificativa_curta) }}
+          dangerouslySetInnerHTML={{ __html: safeMarkdown(g.justificativa_curta) }}
         />
       </div>
 

@@ -11,29 +11,34 @@
 }
 
 /* --- Active Group (Editável) --- */
+/* IMPORTANTE: Crops ativos SEMPRE ficam no topo e são interagíveis */
 .selection-box.is-active-group {
   border: 2px solid var(--color-primary, #3b82f6);
   background-color: rgba(var(--color-primary-rgb, 59, 130, 246), 0.1);
   cursor: move;
-  z-index: 100; /* Garante que fique acima de outros */
+  z-index: 500; /* Alto o suficiente para ficar SEMPRE acima de crops inativos */
+  pointer-events: auto; /* Sempre interagível */
 }
 
 /* --- Inactive Group (Visualização) --- */
+/* IMPORTANTE: Crops inativos NUNCA bloqueiam interação com crops ativos */
 .selection-box.is-inactive-group {
   border: 2px dashed var(--color-text-secondary, #9ca3af);
   background-color: rgba(var(--color-text-secondary, 156, 163, 175), 0.05);
   cursor: default;
-  z-index: 90;
+  z-index: 50;
+  pointer-events: none; /* Não bloqueia cliques/hover em elementos abaixo ou acima */
 }
 
 /* --- Verified Group (Corrigido IA) --- */
+/* Verificados também são inativos, não bloqueiam interação */
 .selection-box.status-verified {
   border: 2px solid var(--color-primary, #00d4ff);
   background-color: rgba(var(--color-primary-rgb, 59, 130, 246), 0.15);
   box-shadow: 0 0 8px rgba(var(--color-primary-rgb, 59, 130, 246), 0.3);
   cursor: default;
-  z-index: 95;
-  transition: all 0.3s ease;
+  z-index: 55;
+  pointer-events: none; /* Não bloqueia interação */
 }
 
 /* Hover effect on Active Group to indicate interactivity */
@@ -49,7 +54,8 @@
   background-color: var(--color-primary, #3b82f6);
   border: 1px solid var(--color-surface, white); /* Contraste para ver melhor o handle */
   border-radius: 50%; /* Bolinhas são mais modernas que quadrados */
-  z-index: 110;
+  z-index: 1000; /* Alto o suficiente para ficar acima de qualquer selection-box */
+  pointer-events: auto; /* Garante que sempre recebe cliques, mesmo sob outra box */
   transition: transform 0.1s;
 }
 
@@ -88,6 +94,39 @@
   cursor: default;
 }
 
+/* --- Highlight Mode (Hover da Sidebar) --- */
+
+/* Em modo highlight, o SVG path escurece tudo EXCETO os crops destacados */
+#selection-overlay.highlight-mode path {
+  fill: rgba(0, 0, 0, 0.75);
+  transition: fill 0.4s ease;
+}
+
+/* Quando NÃO está em highlight, o path fica transparente (ou usa o valor original se em modo edição) */
+#selection-overlay:not(.highlight-mode) path {
+  transition: fill 0.4s ease;
+}
+
+/* Crops base: Transições suaves para todas as mudanças */
+.selection-box {
+  transition: opacity 0.4s ease, box-shadow 0.4s ease, transform 0.4s ease;
+}
+
+/* Crops que estão em DESTAQUE (do grupo em hover) */
+.selection-box.is-highlighted {
+  z-index: 600 !important;
+  opacity: 1 !important;
+  pointer-events: none;
+}
+
+/* Crops que estão OCULTOS (de outros grupos) */
+.selection-box.is-dimmed {
+  opacity: 0 !important;
+  z-index: 0 !important;
+  pointer-events: none;
+  transform: scale(0.98);
+}
+
 /* --- Sidebar Cropper Styles (Copiado do inline antigo e melhorado) --- */
 #sidebar-cropper-content {
   display: flex;
@@ -113,6 +152,8 @@
   border-color: var(--color-primary, #3b82f6);
   box-shadow: 0 4px 12px rgba(0,0,0,0.2);
 }
+
+/* Animações de hover do card são controladas via JavaScript */
 
 .cropper-group-header {
   display: flex;

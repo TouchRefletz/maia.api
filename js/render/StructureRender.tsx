@@ -31,9 +31,13 @@ interface CommonProps {
   isReadOnly: boolean;
 }
 
-// --- HELPER DE SANITIZAÇÃO (Para manter compatibilidade com o regex original) ---
-import { marked } from 'marked';
+// Importar safeMarkdown
+import { safeMarkdown } from '../normalize/primitives.js';
 
+// ... (imports existentes)
+
+// --- HELPER DE SANITIZAÇÃO (Para manter compatibilidade com o regex original) ---
+// Mantemos sanitizeContent apenas para o atributo data-raw
 const sanitizeContent = (content: string) => {
   return content
     .replace(/"/g, '&quot;')
@@ -52,11 +56,14 @@ const StructureTextBlock: React.FC<{
   const conteudoRaw = bloco.conteudo ? String(bloco.conteudo) : '';
   const conteudoSafe = dataRaw || sanitizeContent(conteudoRaw);
 
+  // Usamos safeMarkdown para renderizar o conteúdo, garantindo decode de entities e parse de markdown
+  const conteudoRenderizado = safeMarkdown(conteudoRaw);
+
   const criarMarkdown = (classeExtra: string) => (
     <div
       className={`structure-block ${classeExtra} markdown-content ${className}`}
       data-raw={conteudoSafe}
-      dangerouslySetInnerHTML={{ __html: conteudoRaw }}
+      dangerouslySetInnerHTML={{ __html: conteudoRenderizado }}
     />
   );
 
@@ -68,36 +75,15 @@ const StructureTextBlock: React.FC<{
     case 'subtitulo': return criarMarkdown('structure-subtitulo');
     case 'fonte': return criarMarkdown('structure-fonte');
     case 'tabela':
-      // Renderiza Tabela usando Marked
-      // Precisamos garantir que o estilo de tabela seja aplicado
-      try {
-         const htmlTabela = marked.parse(conteudoRaw) as string;
-         return (
-            <div
-              className={`structure-block structure-tabela markdown-content ${className}`}
-              data-raw={conteudoSafe} // Mantem o markdown original no data-raw
-              dangerouslySetInnerHTML={{ __html: htmlTabela }}
-            />
-         );
-      } catch (e) {
-          console.error("Erro ao renderizar tabela markdown:", e);
-          return criarMarkdown('structure-tabela-error');
-      }
+      // Renderiza Tabela usando Marked (já integrado no safeMarkdown se disponível, mas aqui tratamos explicitamente se precisar lógica custom)
+      // Como safeMarkdown já usa marked, podemos simplificar ou manter lógica específica de tabela se necessário.
+      // Vou simplificar para usar criarMarkdown, já que safeMarkdown deve lidar com tabelas se for markdown padrão.
+      // Mas para garantir compatibilidade com tabelas que podem não ser markdown padrão ou exigir processamento extra:
+      return criarMarkdown('structure-tabela');
     case 'lista':
-      // Adiciona 2 espaços antes da quebra de linha para forçar quebra no Markdown (Hard Line Break)
-      const conteudoListaMarkdown = conteudoRaw.replace(/\n/g, '  \n');
-      const conteudoListaSafe = sanitizeContent(conteudoListaMarkdown);
-
-      // Também mantemos o HTML direto com <br> para caso o Markdown não seja aplicado
-      const htmlLista = conteudoRaw.replace(/\n/g, '<br>');
-
-      return (
-        <div
-          className={`structure-block structure-lista markdown-content ${className}`}
-          data-raw={conteudoListaSafe}
-          dangerouslySetInnerHTML={{ __html: htmlLista }}
-        />
-      );
+      // Para listas, garantimos que quebras de linha virem <br> se o markdown não pegar, 
+      // mas safeMarkdown já deve tratar isso.
+      return criarMarkdown('structure-lista');
     case 'equacao': return (
       <div className={`structure-block structure-equacao ${className}`}>{`\\[${conteudoRaw}\\]`}</div>
     );

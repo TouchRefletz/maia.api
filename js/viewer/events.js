@@ -8,17 +8,9 @@ import { viewerState } from "../main.js";
 import { AiScanner } from "../services/ai-scanner.js";
 import { showConfirmModal } from "../ui/modal-confirm.js";
 import { inicializarContextoViewer } from "./contexto.js";
-import {
-  carregarDocumentoPDF,
-  mudarPagina,
-  mudarZoom,
-  trocarModo,
-} from "./pdf-core.js";
+import { carregarDocumentoPDF, mudarPagina, mudarZoom } from "./pdf-core.js";
 import { configurarResizerSidebar } from "./resizer.js";
-import {
-  atualizarUIViewerModo,
-  montarTemplateViewer,
-} from "./viewer-template.js";
+import { montarTemplateViewer } from "./viewer-template.js";
 
 // Expose for external usage
 window.MaiaPlugin = window.MaiaPlugin || {};
@@ -50,10 +42,6 @@ export function configurarEventosViewer() {
   aoClicar("btnZoomOut", () => mudarZoom(-0.1));
   aoClicar("btnZoomIn", () => mudarZoom(0.1));
 
-  // --- Modos de Visualização ---
-  aoClicar("btnModoProva", () => trocarModo("prova"));
-  aoClicar("btnModoGabarito", () => trocarModo("gabarito"));
-
   // --- Mobile Menu & Controls ---
   aoClicar("btnMobileMenu", () => {
     const menu = document.getElementById("mobileMenuOptions");
@@ -70,7 +58,6 @@ export function configurarEventosViewer() {
     if (target) target.classList.remove("hidden");
   };
 
-  aoClicar("optMobileModo", () => toggleMobilePanel("mobileModePanel"));
   aoClicar("optMobileNav", () => toggleMobilePanel("mobileNavPanel"));
   aoClicar("optMobileZoom", () => toggleMobilePanel("mobileZoomPanel"));
 
@@ -82,9 +69,6 @@ export function configurarEventosViewer() {
 
   aoClicar("optMobileFechar", fecharVisualizador);
 
-  // Mobile Control binding
-  aoClicar("btnModoProvaMobile", () => trocarModo("prova"));
-  aoClicar("btnModoGabaritoMobile", () => trocarModo("gabarito"));
   aoClicar("btnPrevMobile", () => mudarPagina(-1));
   aoClicar("btnNextMobile", () => mudarPagina(1));
   aoClicar("btnZoomOutMobile", () => mudarZoom(-0.1));
@@ -201,16 +185,14 @@ export function realizarLimpezaCompleta() {
   } catch (_) {}
 
   // 4. Reset das Variáveis Globais (Estado)
-  window.__pdfUrls = { prova: null, gabarito: null };
+  window.__pdfUrls = { prova: null };
   window.__fileGabarito = null;
   window.__viewerArgs = null;
-  window.__modo = "prova";
-  window.modo = "prova";
+
   window.__isProcessing = false;
   window.__capturandoImagemFinal = false;
 
   window.__ultimaQuestaoExtraida = null;
-  window.__ultimoGabaritoExtraido = null;
   window.questaoAtual = {};
 
   window.__recortesAcumulados = [];
@@ -219,8 +201,6 @@ export function realizarLimpezaCompleta() {
   window.__imagensLimpas = {
     questao_original: [],
     questao_suporte: [],
-    gabarito_original: [],
-    gabarito_suporte: [],
   };
 }
 
@@ -264,8 +244,6 @@ export async function gerarVisualizadorPDF(args) {
 
   // Configurações finais (resize, etc)
   configurarResizerSidebar();
-
-  atualizarUIViewerModo();
 
   // INICIALIZA A SIDEBAR NOVA (Cropper UI)
   import("./sidebar.js").then((mod) => {

@@ -1,12 +1,32 @@
 import { CropperState } from "../cropper/cropper-state.js";
-import { initSelectionOverlay } from "../cropper/selection-overlay.js";
+import {
+  highlightGroup,
+  initSelectionOverlay,
+} from "../cropper/selection-overlay.js";
 import { viewerState } from "../main.js";
 import { showConfirmModal } from "../ui/modal-confirm.js";
 import { SidebarPageManager } from "../ui/sidebar-page-manager.js";
+import {
+  addLogToQuestionTab,
+  createQuestionTab,
+  getTabsState,
+  initSidebarTabs,
+  isHubActive,
+  setHubRenderCallback,
+  updateTabStatus,
+} from "../ui/sidebar-tabs.js";
 
 export function initSidebarCropper() {
   const sidebar = document.getElementById("viewerSidebar");
   if (!sidebar) return;
+
+  // Inicializa o sistema de abas
+  initSidebarTabs();
+
+  // Define o callback para renderizar o Hub
+  setHubRenderCallback((container) => {
+    renderHubContent(container);
+  });
 
   // Inicializa o gerenciador de páginas (cria o container de páginas)
   SidebarPageManager.init();
@@ -35,7 +55,12 @@ export function initSidebarCropper() {
   }
 
   // Inscrever-se nas mudanças de estado
-  CropperState.subscribe(() => renderSidebarContent());
+  CropperState.subscribe(() => {
+    // Só renderiza se a aba Hub estiver ativa
+    if (isHubActive()) {
+      renderSidebarContent();
+    }
+  });
 
   // Render inicial
   renderSidebarContent();
@@ -52,6 +77,37 @@ export function initSidebarCropper() {
       renderSidebarContent();
     }
   });
+}
+
+/**
+ * Renderiza o conteúdo do Hub (Lista de questões por página)
+ * Chamado pelo sistema de abas quando a aba Hub está ativa
+ */
+function renderHubContent(container) {
+  // Garantir que os containers necessários existam dentro do container fornecido
+  let pagesContainer = container.querySelector("#sidebar-pages-container");
+  if (!pagesContainer) {
+    pagesContainer = document.createElement("div");
+    pagesContainer.id = "sidebar-pages-container";
+    pagesContainer.className = "sidebar-pages-container";
+    pagesContainer.style.pointerEvents = "auto";
+    container.appendChild(pagesContainer);
+  }
+
+  let btnContainer = container.querySelector("#sidebar-actions-footer");
+  if (!btnContainer) {
+    btnContainer = document.createElement("div");
+    btnContainer.id = "sidebar-actions-footer";
+    btnContainer.style.padding = "10px";
+    btnContainer.style.borderTop = "1px solid var(--border-color)";
+    container.appendChild(btnContainer);
+  }
+
+  // Reinicializar o SidebarPageManager com o novo container
+  SidebarPageManager.init(0, pagesContainer);
+
+  // Renderizar o conteúdo
+  renderSidebarContent();
 }
 
 function renderSidebarContent() {
@@ -229,6 +285,116 @@ function createGroupCard(group, isEditing) {
   const item = document.createElement("div");
   item.className = `cropper-group-item ${isEditing ? "active" : ""}`;
 
+  // Apply visual color indicator (Left Border + Subtle BG)
+  const color = CropperState.getGroupColor(group);
+  item.style.borderLeft = `5px solid ${color}`;
+
+  // Estado inicial do background
+  const initialBackground = `linear-gradient(90deg, ${color}15 0%, transparent 40%)`;
+  const fullBackground = `linear-gradient(90deg, ${color}40 0%, ${color}20 50%, transparent 100%)`;
+  item.style.background = initialBackground;
+  item.style.transition = "background 0.4s ease";
+
+  // HOVER ANIMATION: Controlada 100% via JavaScript
+  let hoverTimeout = null;
+  let isHighlightActive = false;
+  let animationFrame = null;
+  let animationStartTime = null;
+  let isAnimating = false;
+  let currentProgress = 0; // 0 a 1
+
+  // Função que gera o background baseado no progresso (0 a 1)
+  function getGradientForProgress(progress) {
+    // Interpola os valores:
+    // opacity: 15 -> 40 (hex: 15 = 0.08, 40 = 0.25)
+    // stop1: 40% -> 100%
+    const opacity1 = Math.round(15 + (40 - 15) * progress); // 15 -> 40
+    const opacity2 = Math.round(0 + 20 * progress); // 0 -> 20
+    const stop1 = Math.round(40 + (100 - 40) * progress); // 40% -> 100%
+    const stop2 = Math.round(0 + 50 * progress); // 0% -> 50%
+
+    if (progress < 0.1) {
+      return `linear-gradient(90deg, ${color}${opacity1.toString(16).padStart(2, "0")} 0%, transparent ${stop1}%)`;
+    }
+    return `linear-gradient(90deg, ${color}${opacity1.toString(16).padStart(2, "0")} 0%, ${color}${opacity2.toString(16).padStart(2, "0")} ${stop2}%, transparent ${stop1}%)`;
+  }
+
+  // Animação de entrada (0% -> 100% em 1 segundo)
+  function animateIn(timestamp) {
+    if (!animationStartTime) animationStartTime = timestamp;
+    const elapsed = timestamp - animationStartTime;
+    const duration = 1000; // 1 segundo
+
+    currentProgress = Math.min(elapsed / duration, 1);
+    item.style.background = getGradientForProgress(currentProgress);
+
+    if (currentProgress < 1 && isAnimating) {
+      animationFrame = requestAnimationFrame(animateIn);
+    } else if (currentProgress >= 1) {
+      // Animação completa - ativa highlight
+      isHighlightActive = true;
+      isAnimating = false;
+      highlightGroup(group.id);
+    }
+  }
+
+  // Animação de saída (currentProgress -> 0% em 0.4 segundos)
+  function animateOut(timestamp) {
+    if (!animationStartTime) animationStartTime = timestamp;
+    const elapsed = timestamp - animationStartTime;
+    const duration = 400; // 0.4 segundos
+    const startProgress = currentProgress;
+
+    const progress = Math.min(elapsed / duration, 1);
+    const newProgress = startProgress * (1 - progress); // Interpola de startProgress para 0
+
+    currentProgress = newProgress;
+    item.style.background = getGradientForProgress(currentProgress);
+
+    if (progress < 1 && isAnimating) {
+      animationFrame = requestAnimationFrame(animateOut);
+    } else {
+      // Animação completa - volta ao estado inicial
+      item.style.background = initialBackground;
+      isAnimating = false;
+      currentProgress = 0;
+    }
+  }
+
+  item.addEventListener("mouseenter", () => {
+    // Bloqueia hover se estiver editando ou se a IA estiver rodando
+    if (isEditing) return;
+    if (document.body.classList.contains("ai-scanning-active")) return;
+
+    // Cancela qualquer animação em andamento
+    if (animationFrame) {
+      cancelAnimationFrame(animationFrame);
+    }
+
+    // Inicia animação de entrada
+    isAnimating = true;
+    animationStartTime = null;
+    animationFrame = requestAnimationFrame(animateIn);
+  });
+
+  item.addEventListener("mouseleave", () => {
+    // Cancela animação de entrada se ainda não completou
+    if (animationFrame) {
+      cancelAnimationFrame(animationFrame);
+    }
+
+    // Remove highlight do visualizador
+    if (isHighlightActive) {
+      highlightGroup(null);
+      isHighlightActive = false;
+    }
+
+    // Inicia animação de saída
+    isAnimating = true;
+    animationStartTime = null;
+    animationFrame = requestAnimationFrame(animateOut);
+  });
+
   // HEADER (Título + Contador)
   const header = document.createElement("div");
   header.className = "cropper-group-header";
@@ -290,14 +456,47 @@ function createGroupCard(group, isEditing) {
 
   if (isEditing) {
     // --- MODO EDIÇÃO (INLINE) ---
+
+    // Container para botões de undo lado a lado
+    const undoContainer = document.createElement("div");
+    undoContainer.style.display = "flex";
+    undoContainer.style.gap = "0.5rem";
+    undoContainer.style.marginBottom = "0.5rem";
+
     const btnUndo = document.createElement("button");
-    btnUndo.className = "btn btn--secondary btn--sm btn--full-width";
-    btnUndo.innerText = "Desfazer Último";
-    btnUndo.style.marginBottom = "0.5rem";
-    btnUndo.disabled = group.crops.length === 0;
+    btnUndo.className = "btn btn--secondary btn--sm";
+    btnUndo.style.flex = "1";
+    btnUndo.innerText = "⟲ Desfazer";
+    btnUndo.title = "Desfazer última ação (Ctrl+Z)";
+    btnUndo.disabled = !CropperState.canUndo();
     btnUndo.onclick = (e) => {
       e.stopPropagation();
-      CropperState.removeLastCropFromActiveGroup();
+      CropperState.undo();
+    };
+
+    const btnRedo = document.createElement("button");
+    btnRedo.className = "btn btn--secondary btn--sm";
+    btnRedo.style.flex = "1";
+    btnRedo.innerText = "⟳ Refazer";
+    btnRedo.title = "Refazer ação desfeita (Ctrl+Shift+Z)";
+    btnRedo.disabled = !CropperState.canRedo();
+    btnRedo.onclick = (e) => {
+      e.stopPropagation();
+      CropperState.redo();
+    };
+
+    undoContainer.appendChild(btnUndo);
+    undoContainer.appendChild(btnRedo);
+
+    const btnRevert = document.createElement("button");
+    btnRevert.className = "btn btn--outline btn--sm btn--full-width";
+    btnRevert.innerText = "↺ Reverter Tudo";
+    btnRevert.title = "Voltar ao estado antes de começar a editar";
+    btnRevert.style.marginBottom = "0.5rem";
+    btnRevert.disabled = !CropperState.editingSnapshot;
+    btnRevert.onclick = (e) => {
+      e.stopPropagation();
+      CropperState.revert();
     };
 
     const btnCancel = document.createElement("button");
@@ -363,52 +562,122 @@ function createGroupCard(group, isEditing) {
       CropperState.setActiveGroup(null);
     };
 
-    actionsDiv.appendChild(btnUndo);
+    actionsDiv.appendChild(undoContainer);
+    actionsDiv.appendChild(btnRevert);
     actionsDiv.appendChild(btnCancel);
     actionsDiv.appendChild(btnDone);
   } else {
-    // --- MODO VISUALIZAÇÃO ---
-    const btnSend = document.createElement("button");
-    btnSend.className = "btn btn--sm btn--primary";
-    btnSend.style.flex = "1";
-    btnSend.innerText = "Enviar";
-    btnSend.onclick = (e) => {
-      e.stopPropagation();
-      import("../cropper/save-handlers.js").then((mod) => {
-        mod.salvarQuestaoEmLote(group.id);
-      });
-    };
+    // --- VERIFICAÇÃO DE ESTADO DE PROCESSAMENTO (FIX) ---
+    // Verifica se existe uma aba de processamento ativa para este grupo
+    let isProcessing = false;
+    // Import dinâmico ou acesso global? tabsState é exportado?
+    // Vamos usar uma abordagem baseada em classe CSS ou atributo no grupo se possível.
+    // Mas o estado está no sidebar-tabs. Precisamos checar lá.
+    // Como estamos dentro de um loop de render, import pode ser lento.
+    // Melhor: Adicionar uma propriedade 'isProcessing' ao objeto group no CropperState?
+    // OU: Verificar se existe um elemento visual indicando processamento? Não, estamos recriando.
 
-    const btnEdit = document.createElement("button");
-    btnEdit.className = "btn btn--sm btn--secondary";
-    btnEdit.innerText = "Editar";
-    btnEdit.onclick = (e) => {
-      e.stopPropagation();
-      CropperState.setActiveGroup(group.id);
-    };
+    // Vamos checar o tabsState via função exportada que adicionamos
+    const tabs = getTabsState().tabs;
+    const relatedTab = tabs.find((t) => t.groupId === group.id);
 
-    const btnDel = document.createElement("button");
-    btnDel.className = "btn btn--sm btn--outline btn-icon";
-    btnDel.style.color = "var(--color-error)";
-    btnDel.style.borderColor = "var(--color-error)";
-    btnDel.innerHTML = "🗑️";
-    btnDel.title = "Excluir Questão";
-    btnDel.onclick = async (e) => {
-      e.stopPropagation();
-      const confirmed = await showConfirmModal(
-        "Excluir Questão",
-        `Tem certeza que deseja excluir "${group.label}"?`,
-        "Excluir",
-        "Cancelar"
-      );
-      if (confirmed) {
-        CropperState.deleteGroup(group.id);
-      }
-    };
+    if (relatedTab) {
+      // User request: "coloca só em processamento pra sempre"
+      // Independente do status real (complete/error), aqui mostramos que está rolando/foi enviado.
+      actionsDiv.innerHTML = `
+        <div style="
+            width: 100%;
+            padding: 8px;
+            text-align: center;
+            background: rgba(var(--color-primary-rgb), 0.1);
+            border: 1px dashed var(--color-primary);
+            border-radius: 4px;
+            color: var(--color-primary);
+            font-size: 0.9em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        ">
+            <span class="spinner-sm" style="width: 14px; height: 14px; border-width: 2px;"></span>
+            Em processamento...
+        </div>
+      `;
+    } else {
+      // --- MODO VISUALIZAÇÃO NORMAL ---
+      const btnSend = document.createElement("button");
+      btnSend.className = "btn btn--sm btn--primary";
+      btnSend.style.flex = "1";
+      btnSend.innerText = "Enviar";
+      btnSend.onclick = async (e) => {
+        e.stopPropagation();
 
-    actionsDiv.appendChild(btnSend);
-    actionsDiv.appendChild(btnEdit);
-    actionsDiv.appendChild(btnDel);
+        // Modal de confirmação
+        const confirmed = await showConfirmModal(
+          "Enviar Questão",
+          "Você está prestes a enviar esta questão para processamento. Este processo envolve chamadas à IA e não pode ser cancelado após iniciado.",
+          "Enviar",
+          "Cancelar",
+          true // isPositiveAction - cor primária
+        );
+
+        if (!confirmed) return;
+
+        // Criar nova aba para esta questão
+        const tabId = createQuestionTab(group.id, group.label);
+
+        // Atualizar status inicial
+        updateTabStatus(tabId, { status: "processing", progress: 10 });
+        addLogToQuestionTab(tabId, "Iniciando processamento...");
+
+        // Força um update no CropperState para disparar re-render (agora com estado 'processing' detectado)
+        // Mas como o render é async por causa do import, talvez seja melhor setar manual agora também
+        // para feedback instantâneo.
+        // FIX: Substituir botões por aviso de processamento (Visual Imediato)
+        actionsDiv.innerHTML = `
+                <div style="... (style igual acima) ...">
+                    <span class="spinner-sm" style="width: 14px; height: 14px; border-width: 2px;"></span>
+                    Em processamento...
+                </div>
+            `;
+
+        // Processar a questão
+        import("../cropper/save-handlers.js").then((mod) => {
+          mod.salvarQuestaoEmLote(group.id, tabId);
+        });
+      };
+
+      const btnEdit = document.createElement("button");
+      btnEdit.className = "btn btn--sm btn--secondary";
+      btnEdit.innerText = "Editar";
+      btnEdit.onclick = (e) => {
+        e.stopPropagation();
+        CropperState.setActiveGroup(group.id);
+      };
+
+      const btnDel = document.createElement("button");
+      btnDel.className = "btn btn--sm btn--outline btn-icon";
+      btnDel.style.color = "var(--color-error)";
+      btnDel.style.borderColor = "var(--color-error)";
+      btnDel.innerHTML = "🗑️";
+      btnDel.title = "Excluir Questão";
+      btnDel.onclick = async (e) => {
+        e.stopPropagation();
+        const confirmed = await showConfirmModal(
+          "Excluir Questão",
+          `Tem certeza que deseja excluir "${group.label}"?`,
+          "Excluir",
+          "Cancelar"
+        );
+        if (confirmed) {
+          CropperState.deleteGroup(group.id);
+        }
+      };
+
+      actionsDiv.appendChild(btnSend);
+      actionsDiv.appendChild(btnEdit);
+      actionsDiv.appendChild(btnDel);
+    }
   }
 
   item.appendChild(actionsDiv);

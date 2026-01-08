@@ -1,35 +1,53 @@
 import { renderizarQuestaoFinal } from "../render/final/render-questao.js";
 import { customAlert } from "../ui/GlobalAlertsLogic.tsx";
+import { updateTabStatus } from "../ui/sidebar-tabs.js";
 import { mostrarPainel } from "../viewer/sidebar.js";
 import { restaurarVisualizacaoOriginal } from "./cropper-core.js";
 import { CropperState } from "./cropper-state.js";
 import { renderizarGaleriaModal } from "./gallery.js";
 import { extractImageFromCropData } from "./selection-overlay.js";
 
+// Imports para processamento de IA
+import { confirmarEnvioIA } from "../envio/ui-estado.js";
+
 // --- BATCH SAVING (NOVO) ---
 
-export async function salvarQuestaoEmLote(groupId) {
+export async function salvarQuestaoEmLote(groupId, tabId = null) {
   const group = CropperState.groups.find((g) => g.id === groupId);
   if (!group || group.crops.length === 0) {
     customAlert("Nenhum recorte para enviar nesta questão!", 2000);
     return;
   }
 
+  // Definir status inicial básico
+  if (tabId) {
+    updateTabStatus(tabId, { status: "processing", progress: 0 });
+  }
+
   // Processar todas as imagens
   const images = [];
-  for (const crop of group.crops) {
+
+  for (let i = 0; i < group.crops.length; i++) {
+    const crop = group.crops[i];
     const blobUrl = await extractImageFromCropData(crop.anchorData);
     if (blobUrl) images.push(blobUrl);
   }
 
-  if (images.length === 0) return;
+  if (images.length === 0) {
+    return;
+  }
 
   // Adiciona ao acumulado global (compatibilidade com modal antigo)
   window.__recortesAcumulados = images;
 
-  // Atualiza modal e exibe
-  renderizarGaleriaModal();
-  document.getElementById("cropConfirmModal").classList.add("visible");
+  if (tabId) {
+    // Iniciar o processo de envio real (Usa a função oficial do sistema)
+    confirmarEnvioIA(tabId);
+  } else {
+    // Modo antigo (sem abas): Atualiza modal e exibe
+    renderizarGaleriaModal();
+    document.getElementById("cropConfirmModal").classList.add("visible");
+  }
 
   // Opcional: Marcar grupo como 'enviado' ou similar?
   // group.status = 'sent';

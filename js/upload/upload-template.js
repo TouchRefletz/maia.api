@@ -72,22 +72,9 @@ export function getUploadInterfaceHTML() {
                 <input type="text" id="sourceUrlProva" class="form-control" placeholder="Link original da prova (Opcional)" style="margin-top: 10px; width: 100%; padding: 10px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface); color: var(--color-text);">
             </div>
 
-            <div class="form-group" id="gabaritoInputGroup">
-                <label class="form-label">Arquivo do Gabarito</label>
-                <label id="dropZoneGabarito" for="gabaritoFileInput" class="btn btn--primary btn--full-width file-upload-btn">
-                    Selecionar ou Soltar Gabarito (PDF)
-                </label>
-                <input type="file" id="gabaritoFileInput" accept=".pdf" style="display: none;">
-                <span id="gabaritoFileName" class="file-name-display">Nenhum arquivo selecionado</span>
-                <input type="text" id="sourceUrlGabarito" class="form-control" placeholder="Link original do gabarito (Opcional)" style="margin-top: 10px; width: 100%; padding: 10px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface); color: var(--color-text);">
-            </div>
 
 
 
-            <div class="form-group checkbox-group">
-                <input type="checkbox" id="gabaritoNaProvaCheck">
-                <label for="gabaritoNaProvaCheck" class="checkbox-label">O gabarito está no mesmo arquivo</label>
-            </div>
 
             <div class="modal-footer">
                 <button type="submit" id="submitPdfBtn" class="btn btn--primary btn--full-width">Extrair Questões</button>

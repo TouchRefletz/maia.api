@@ -1,34 +1,24 @@
-import { cancelarRecorte } from '../cropper/cropper-core.js';
-import { customAlert } from '../ui/GlobalAlertsLogic.tsx';
-import { trocarModo } from '../viewer/pdf-core.js';
-import { esconderPainel } from '../viewer/sidebar.js';
+import { cancelarRecorte } from "../cropper/cropper-core.js";
+import { customAlert } from "../ui/GlobalAlertsLogic.tsx";
+import { esconderPainel } from "../viewer/sidebar.js";
 
 export function limparElementosVisuais() {
   // 1. Remove o Modal Final
-  const finalModal = document.getElementById('finalModal');
+  const finalModal = document.getElementById("finalModal");
   if (finalModal) finalModal.remove();
 
   // Remove também o container do modal React (Novo)
-  const finalModalReact = document.getElementById('finalModalReactContainer');
+  const finalModalReact = document.getElementById("finalModalReactContainer");
   if (finalModalReact) finalModalReact.remove();
 
   // 2. Limpa a UI da Sidebar (Onde ficava o texto extraído)
-  const resultContainer = document.getElementById('extractionResult');
+  const resultContainer = document.getElementById("extractionResult");
   if (resultContainer) resultContainer.remove();
 }
 
 export function resetarVariaveisGlobais() {
   window.__ultimaQuestaoExtraida = null;
-  window.__ultimoGabaritoExtraido = null;
   window.questaoAtual = {};
-  window.__isProcessing = false;
-  window.__capturandoImagemFinal = false;
-
-  // LIMPEZA DOS NOVOS BACKUPS
-  window.__BACKUP_IMGS_Q = null;
-  window.__BACKUP_IMGS_G = null;
-  window.__BACKUP_IMG_Q = null; // Limpa legado
-  window.__BACKUP_IMG_G = null; // Limpa legado
 }
 
 export function resetarBuffersImagem() {
@@ -36,25 +26,18 @@ export function resetarBuffersImagem() {
   window.__imagensLimpas = {
     questao_original: [],
     questao_suporte: [],
-    gabarito_original: [],
-    gabarito_suporte: [],
   };
 }
 
 export function gerenciarEstadoInterface() {
   // Recolhe a sidebar (se existir a função)
-  if (typeof esconderPainel === 'function') esconderPainel(false);
+  if (typeof esconderPainel === "function") esconderPainel(false);
 
   // Cancela modo de recorte
-  if (typeof cancelarRecorte === 'function') cancelarRecorte();
+  if (typeof cancelarRecorte === "function") cancelarRecorte();
 
   // Feedback para o usuário
-  customAlert('✅ Salvo! Pronto para a próxima questão.', 3000);
-
-  // Voltar para a visualização da Prova se estiver no Gabarito
-  if (window.__modo === 'gabarito' && typeof trocarModo === 'function') {
-    trocarModo('prova');
-  }
+  customAlert("✅ Salvo! Pronto para a próxima questão.", 3000);
 }
 
 /**

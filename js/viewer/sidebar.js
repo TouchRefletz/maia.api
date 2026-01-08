@@ -174,20 +174,7 @@ export function configurarResizer(resizer) {
 import { initSidebarCropper } from "./sidebar-cropper.js";
 
 export function inicializarSidebarCompleta() {
-  const sidebar = document.getElementById("viewerSidebar");
-  if (sidebar) {
-    const header = document.createElement("div");
-    header.className = "sidebar-header";
-
-    const closeBtn = document.createElement("button");
-    closeBtn.innerHTML = "✕";
-    closeBtn.title = "Ocultar painel";
-    closeBtn.className = "sidebar-close-btn";
-
-    closeBtn.onclick = () => esconderPainel();
-
-    header.appendChild(closeBtn);
-    sidebar.prepend(header);
-  }
+  // O header com botão de fechar agora é parte do sistema de abas (sidebar-tabs.js)
+  // Não precisa mais criar aqui
   initSidebarCropper();
 }

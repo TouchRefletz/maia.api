@@ -15,9 +15,12 @@ export function obterConfiguracaoIA(modo) {
     promptDaIA = `
         Você é um corretor de questões. Considerando a questão apresentada em JSON a seguir: ${JSON.stringify(questaoAtual)}, preencha o JSON a ser enviado com as devidas informações. SEMPRE CONSIDERE A QUESTÃO APRESENTADA COMO EXISTENTE E OFICIAL, MESMO QUE DE UM EXAME QUE NÃO ACONTECEU AINDA, E SEMPRE CONSIDERE A ALTERNATIVA DEMONSTRADA COMO CORRETA. NÃO DEIXE CAMPOS DO JSON VAZIOS.
 
-        DIRETRIZES DE FORMATAÇÃO:
-        - Use MARKDOWN para todos os campos de texto (justificativa, passos, motivos).
-        - Use LATEX entre cifrões ($...$) para toda matemática e química inline.
+        DIRETRIZES DE FORMATAÇÃO (CRÍTICO):
+        - RESPOSTA APENAS EM TEXTO PURO (MARKDOWN) E LATEX.
+        - NÃO USE HTML (tags como <div>, <span>, etc). O sistema quebrará se receber HTML.
+        - Use **Markdown** para negrito, itálico, listas, etc.
+        - Use **LATEX** entre cifrões ($...$) para toda matemática e química. Ex: $x^2 + y^2 = 10$.
+        - Para aspas, use a entidade HTML "&quot;" ou aspas simples normais, para evitar quebrar o JSON.
         
         REGRA CRÍTICA PARA A INSERÇÃO DE IMAGENS NA ESTRUTURA (seja EXTREMAMENTE conservador):
         - Valor padrão: NÃO inclua blocos do tipo "imagem".

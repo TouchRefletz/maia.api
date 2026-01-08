@@ -62,38 +62,14 @@ async function downloadPdfFromUrl(url, signal = null) {
 }
 
 export function setupFormLogic(elements, initialData) {
-  const {
-    yearInput,
-    gabaritoCheck,
-    gabaritoGroup,
-    gabaritoInput,
-    form,
-    pdfInput,
-  } = elements;
+  const { yearInput, form, pdfInput } = elements;
 
   // Title is now auto-detected, so we don't need the input binding.
   // We will send a placeholder "Auto-Detect" to satisfy backend requirements until refined.
   const AUTO_TITLE = "Auto-Detect";
 
-  // A. Lógica de Checkbox (Esconder/Mostrar Gabarito)
-  const toggleGabarito = () => {
-    if (gabaritoCheck.checked) {
-      gabaritoGroup.style.display = "none";
-      gabaritoInput.value = "";
-      gabaritoInput.required = false;
-    } else {
-      gabaritoGroup.style.display = "block";
-      gabaritoInput.required = true;
-    }
-  };
-  gabaritoCheck.addEventListener("change", toggleGabarito);
-
   // B. Preenchimento de Dados Iniciais (Se houver)
   if (initialData) {
-    // titleInput removed
-    gabaritoCheck.checked = initialData.gabaritoNaProva;
-    toggleGabarito(); // Aplica o estado visual
-
     const fileNameDisplay = document.getElementById("fileName");
     fileNameDisplay.textContent =
       "⚠️ Por favor, selecione o arquivo novamente.";
@@ -104,7 +80,6 @@ export function setupFormLogic(elements, initialData) {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const fileProva = pdfInput.files[0];
-    const fileGabarito = gabaritoInput.files[0];
 
     if (!fileProva) {
       alert("Selecione a prova.");
@@ -311,8 +286,8 @@ export function setupFormLogic(elements, initialData) {
               : "Processando..."),
           rawTitle: aiData?.formatted_title_general || "Documento",
           fileProva: proxyUrl,
-          fileGabarito: proxyGabUrl || aiData?.gabarito_url || fileGabarito,
-          gabaritoNaProva: gabaritoCheck.checked,
+          fileGabarito: proxyGabUrl || aiData?.gabarito_url || null,
+          gabaritoNaProva: false,
           isManualLocal: false,
           slug: slug,
         });
@@ -498,13 +473,8 @@ export function setupFormLogic(elements, initialData) {
           console.log("[Manual] TmpUrl Prova:", tmpUrlProva);
         }
 
-        // B. Upload Gabarito to TmpFiles
-        if (fileGabarito) {
-          progress.setTarget(15);
-          progress.addLog("Enviando gabarito para servidor temporário...");
-          tmpUrlGab = await uploadToTmpFiles(fileGabarito, null, signal);
-          console.log("[Manual] TmpUrl Gabarito:", tmpUrlGab);
-        }
+        // B. Upload Gabarito to TmpFiles - REMOVIDO (gabarito não é mais suportado)
+        // fileGabarito não existe mais
 
         // C. Request Hash from GitHub (via Worker Proxy) (PARALLEL EXECUTION)
         progress.setTarget(20, "Verificando Integridade");
@@ -983,7 +953,7 @@ export function setupFormLogic(elements, initialData) {
                 fileGabarito: fileGabarito
                   ? URL.createObjectURL(fileGabarito)
                   : null,
-                gabaritoNaProva: gabaritoCheck.checked,
+                gabaritoNaProva: false,
                 isManualLocal: true, // Força modo local
                 slug: targetSlug || "local-preview",
               });
@@ -1232,7 +1202,7 @@ export function setupFormLogic(elements, initialData) {
             fileGabarito: fileGabarito
               ? URL.createObjectURL(fileGabarito)
               : null, // SEMPRE LOCAL
-            gabaritoNaProva: gabaritoCheck.checked,
+            gabaritoNaProva: false,
             isManualLocal: true,
             slug: finalSlug,
           });
@@ -1266,10 +1236,8 @@ export function setupFormLogic(elements, initialData) {
             title: AUTO_TITLE || "Documento Local (Offline)",
             rawTitle: "Documento Local",
             fileProva: fileProva ? URL.createObjectURL(fileProva) : null,
-            fileGabarito: fileGabarito
-              ? URL.createObjectURL(fileGabarito)
-              : null,
-            gabaritoNaProva: gabaritoCheck.checked,
+            fileGabarito: null,
+            gabaritoNaProva: false,
             isManualLocal: true,
             slug:
               "local-" + (isAbort ? "cancelled" : "error") + "-" + Date.now(),
