@@ -15,6 +15,8 @@ declare global {
     iniciar_ocr_campo?: (elementId: string) => void;
     expandirImagem?: (src: string) => void;
     iniciar_captura_para_slot_alternativa?: (letra: string, idx: number) => void;
+    __targetSlotIndex?: number | null;
+    __targetSlotContext?: string | null;
   }
 }
 
@@ -98,6 +100,8 @@ const StructureTextBlock: React.FC<{
 };
 
 // --- COMPONENTE: BLOCO DE IMAGEM (QUESTÃO) ---
+import { ImageSlotCard } from '../ui/ImageSlotCard';
+
 const ImageBlock: React.FC<{
   bloco: EstruturaBloco;
   imgIndex: number;
@@ -120,60 +124,48 @@ const ImageBlock: React.FC<{
     );
   };
 
-  if (src) {
-    // CENÁRIO A: IMAGEM EXISTE
-    return (
-      <div className="structure-block structure-image-wrapper">
-        <img
-          src={src}
-          className="structure-img"
-          onClick={() => window.expandirImagem?.(src!)}
-          title={isReadOnly ? "Clique para ampliar" : undefined}
-          style={isReadOnly ? { cursor: 'zoom-in' } : undefined}
-          alt=""
-        />
-        {renderCaption(isReadOnly ? '' : 'IA: ')}
-
-        {!isReadOnly && (
-          <button
-            className="btn-trocar-img js-captura-trigger"
-            data-idx={imgIndex}
-            data-ctx={contexto}
-          >
-            <span className="btn-ico">🔄</span><span>Trocar Imagem</span>
-          </button>
-        )}
-      </div>
-    );
-  } else {
-    // CENÁRIO B: IMAGEM FALTANDO
-    if (isReadOnly) {
-      return (
-        <div className="structure-block" style={{ padding: '10px', border: '1px dashed #ccc', color: 'gray', fontSize: '11px', textAlign: 'center' }}>
-          (Imagem não disponível)
-        </div>
-      );
-    } else {
-      return (
-        <div
-          className="structure-block structure-image-placeholder js-captura-trigger"
-          data-idx={imgIndex}
-          data-ctx={contexto}
-        >
-          <div className="icon">📷</div><strong>Adicionar Imagem Aqui</strong>
-          {conteudoRaw && (
-            <div
-              className="markdown-content"
-              data-raw={conteudoSafe}
-              style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '4px' }}
-            >
-              IA: {conteudoRaw}
+  // If in ReadOnly mode (Bank View), keep the simpler static rendering
+  if (isReadOnly) {
+      if (src) {
+        return (
+          <div className="structure-block structure-image-wrapper">
+            <img
+              src={src}
+              className="structure-img"
+              data-action="expand-image"
+              data-src={src}
+              title="Clique para ampliar"
+              style={{ cursor: 'zoom-in' }}
+              alt=""
+            />
+            {renderCaption('')}
+          </div>
+        );
+      } else {
+         return (
+            <div className="structure-block" style={{ padding: '10px', border: '1px dashed #ccc', color: 'gray', fontSize: '11px', textAlign: 'center' }}>
+              (Imagem não disponível)
             </div>
-          )}
-        </div>
-      );
-    }
+          );
+      }
   }
+
+  // INTERACTIVE MODE (Creation/Editing)
+  // We delegate everything to ImageSlotCard which handles Empty vs Filled vs Capturing internally.
+  // Force column layout so caption is BELOW the card, and allow card to take full width.
+  return (
+    <div className="structure-block" style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+        <ImageSlotCard
+            slotId={String(imgIndex)}
+            label="Imagem"
+            currentData={src ? { id: String(imgIndex), previewUrl: src } : null}
+        />
+        {/* Caption is separate, or should it be inside card? 
+            The card has a header, but caption is usually below image. 
+            Let's keep it below the card for now. */}
+        {renderCaption('IA: ')}
+    </div>
+  );
 };
 
 // --- COMPONENTE: ESTRUTURA PRINCIPAL (ORQUESTRADOR) ---
@@ -238,7 +230,8 @@ const AlternativeImageBlock: React.FC<{
         <img
           src={src}
           className="structure-img"
-          onClick={() => window.expandirImagem?.(src!)}
+          data-action="expand-image"
+          data-src={src}
           style={isReadOnly ? { cursor: 'zoom-in' } : undefined}
           alt=""
         />
@@ -257,7 +250,9 @@ const AlternativeImageBlock: React.FC<{
         {!isReadOnly && (
           <button
             className="btn-trocar-img"
-            onClick={() => window.iniciar_captura_para_slot_alternativa?.(letra, imgIndex)}
+            data-action="edit-slot-alt" 
+            data-slot-id={imgIndex}
+            data-letter={letra}
           >
             <span className="btn-ico">🔄</span>
           </button>
@@ -268,7 +263,9 @@ const AlternativeImageBlock: React.FC<{
     return (
       <div
         className="structure-block structure-image-placeholder"
-        onClick={() => window.iniciar_captura_para_slot_alternativa?.(letra, imgIndex)}
+        data-action="select-slot-alt"
+        data-slot-id={imgIndex}
+        data-letter={letra}
       >
         <div className="icon">📷</div>
         {temConteudo && (

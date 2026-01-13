@@ -236,6 +236,13 @@ export const CropperState = {
     const group = this.groups.find((g) => g.id === this.activeGroupId);
     if (group) {
       this.saveHistory(); // Salva estado para undo
+
+      // 'slot-mode' special behavior: Only one crop allowed per group (uni-crop).
+      // If the group is in slot mode, clear any existing crops before adding the new one.
+      if (group.tags && group.tags.includes("slot-mode")) {
+        group.crops = [];
+      }
+
       // Gera um ID único para o crop caso precisemos referenciar individualmente
       cropData.id = Date.now() + Math.random();
       group.crops.push(cropData);

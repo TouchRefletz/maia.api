@@ -29,8 +29,8 @@ export async function salvarQuestaoEmLote(groupId, tabId = null) {
 
   for (let i = 0; i < group.crops.length; i++) {
     const crop = group.crops[i];
-    const blobUrl = await extractImageFromCropData(crop.anchorData);
-    if (blobUrl) images.push(blobUrl);
+    const result = await extractImageFromCropData(crop.anchorData);
+    if (result && result.blobUrl) images.push(result.blobUrl);
   }
 
   if (images.length === 0) {
@@ -197,6 +197,14 @@ export function salvarQuestao() {
     return;
   }
 
+  // MANEJO ESPECIAL: Slot Mode (React)
+  if (window.__targetSlotContext === "image-slot") {
+    // Carregamento dinâmico para evitar dependências circulares se necessário,
+    // ou apenas garantir que chamamos a função correta.
+    import("./mode.js").then((mod) => mod.confirmImageSlotMode());
+    return;
+  }
+
   // Essa função era chamada pelo botão "Confirmar recorte" flutuante.
   // Esse botão provavelmente nem deve existir mais no fluxo novo ou deve chamar 'salvarQuestaoEmLote' se for um grupo.
   // Mas para manter compatibilidade com Slots:
@@ -209,7 +217,10 @@ export function salvarQuestao() {
   if (!activeGroup || activeGroup.crops.length === 0) return;
 
   const lastCrop = activeGroup.crops[activeGroup.crops.length - 1];
-  extractImageFromCropData(lastCrop.anchorData).then((imgSrc) => {
+  extractImageFromCropData(lastCrop.anchorData).then((result) => {
+    if (!result || !result.blobUrl) return;
+    const imgSrc = result.blobUrl;
+
     // --- ROTEAMENTO DOS CENÁRIOS ---
     if (
       window.__target_alt_letra !== null &&

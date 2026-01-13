@@ -1,8 +1,6 @@
-import { cancelarRecorte } from "../cropper/cropper-core.js";
 import { fecharModalConfirmacao } from "../cropper/gallery.js";
 import { loadSelectionsFromJson } from "../cropper/json-loader.js";
 import { ativarModoRecorte } from "../cropper/mode.js";
-import { salvarQuestao } from "../cropper/save-handlers.js";
 import { confirmarEnvioIA } from "../envio/ui-estado.js";
 import { viewerState } from "../main.js";
 import { AiScanner } from "../services/ai-scanner.js";
@@ -75,8 +73,9 @@ export function configurarEventosViewer() {
   aoClicar("btnZoomInMobile", () => mudarZoom(0.1));
 
   // --- Ações Flutuantes (Durante o Recorte) ---
-  aoClicar("btnConfirmarRecorte", salvarQuestao);
-  aoClicar("btnCancelarRecorte", cancelarRecorte);
+  // Removido: Controles agora são inline no ImageSlotCard
+  // aoClicar("btnConfirmarRecorte", salvarQuestao);
+  // aoClicar("btnCancelarRecorte", cancelarRecorte);
 
   // --- Modal de Confirmação ---
   aoClicar("btnModalMaisRecorte", fecharModalConfirmacao);

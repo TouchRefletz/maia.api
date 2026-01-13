@@ -15,12 +15,16 @@ import {
   toggleGabarito,
   verificarRespostaBanco,
 } from "./banco/interacoes.js";
+import { cancelarRecorte } from "./cropper/cropper-core.js";
 import {
   ativarModoRecorte,
-  iniciarCapturaParaSlot,
+  cancelImageSlotMode,
+  confirmImageSlotMode,
   onClickImagemFinal,
   removerImagemFinal,
+  startImageSlotMode,
 } from "./cropper/mode.js";
+import { salvarQuestao } from "./cropper/save-handlers.js";
 import { enviarDadosParaFirebase } from "./firebase/envio.js";
 import { exibirModalOriginais } from "./render/final/OriginaisModal.tsx";
 import { mountApiKeyModal } from "./ui/ApiKeyModal.tsx";
@@ -43,6 +47,20 @@ export const TIPOS_ESTRUTURA_VALIDOS = new Set([
   "fonte",
   "tabela",
 ]);
+
+// Exposing functions globally as requested
+window.confirmImageSlotMode = confirmImageSlotMode;
+window.cancelImageSlotMode = cancelImageSlotMode;
+window.salvarQuestao = salvarQuestao;
+window.cancelarRecorte = cancelarRecorte;
+
+// Added for Slot Edit Mode
+import { deleteImageSlot, editImageSlotMode } from "./cropper/mode.js";
+import { highlightGroup } from "./cropper/selection-overlay.js";
+
+window.editImageSlotMode = editImageSlotMode;
+window.deleteImageSlot = deleteImageSlot;
+window.highlightCropGroup = highlightGroup;
 
 window.__ultimaQuestaoExtraida = null;
 window.__recortesAcumulados = [];
@@ -99,11 +117,69 @@ if (!window.__globalListenerRegistered) {
   window.__globalListenerRegistered = true;
   console.log(" Inicializando Global Listener (Única vez)...");
 
+  // --- Slot Mode & Image Creation Integration ---
+  window.addEventListener("image-slot-action", (e) => {
+    const { action, slotId } = e.detail;
+    console.log(`[Main] Slot Action: ${action} for ${slotId}`);
+
+    if (action === "start-capture") {
+      // Standard capture for new image
+      if (window.startImageSlotMode) {
+        window.startImageSlotMode(slotId);
+      }
+    } else if (action === "edit") {
+      // Edit existing crop
+      if (window.editImageSlotMode) {
+        window.editImageSlotMode(slotId);
+      }
+    } else if (action === "delete") {
+      // Delete the slot
+      if (window.deleteImageSlot) {
+        window.deleteImageSlot(slotId);
+      }
+    }
+  });
+
   document.addEventListener("click", function (e) {
+    // --- NOVO: Handler Genérico via data-action ---
+    // Substitui os antigos onClick do React para permitir HTML estático
+    const actionEl = e.target.closest("[data-action]");
+    if (actionEl) {
+      const { action, slotId, context, src, letter, idx } = actionEl.dataset;
+      // Compatibilidade: slotId ou idx
+      const id = slotId || idx;
+      if (action === "select-slot" || action === "edit-slot") {
+        startImageSlotMode(id);
+        return;
+      }
+      if (action === "remove-slot") {
+        removerImagemFinal(id, context);
+        return;
+      }
+      if (action === "expand-image") {
+        if (src && window.expandirImagem) window.expandirImagem(src);
+        return;
+      }
+      if (action === "select-slot-alt" || action === "edit-slot-alt") {
+        if (window.iniciar_captura_para_slot_alternativa) {
+          window.iniciar_captura_para_slot_alternativa(letter, id);
+        }
+        return;
+      }
+      // Se tiver action mas não casou com os acima, pode deixar passar ou logar
+      if (action === "confirm-crop") {
+        salvarQuestao();
+        return;
+      }
+      if (action === "cancel-crop") {
+        cancelarRecorte();
+        return;
+      }
+    }
     // --- CASO 1: BotÃµes de Captura de Slot ---
     const gatilhoSlot = e.target.closest(".js-captura-trigger");
     if (gatilhoSlot) {
-      iniciarCapturaParaSlot(gatilhoSlot.dataset.idx, gatilhoSlot.dataset.ctx);
+      startImageSlotMode(gatilhoSlot.dataset.idx);
       return;
     }
 
@@ -205,6 +281,92 @@ if (!window.__globalListenerRegistered) {
     if (gatilhoApi) {
       mountApiKeyModal();
       return;
+    }
+  });
+
+  // --- Slot Mode & Image Creation Integration ---
+  window.addEventListener("image-slot-action", (e) => {
+    const { action, slotId } = e.detail;
+    console.log(`[Main] Slot Action: ${action} for ${slotId}`);
+
+    if (action === "start-capture") {
+      // Standard capture for new image
+      if (window.startImageSlotMode) {
+        window.startImageSlotMode(slotId);
+      }
+    } else if (action === "edit") {
+      // Edit existing crop
+      if (window.editImageSlotMode) {
+        window.editImageSlotMode(slotId);
+      }
+    } else if (action === "delete") {
+      // Delete the slot
+      if (window.deleteImageSlot) {
+        window.deleteImageSlot(slotId);
+      }
+    }
+  });
+
+  // --- Slot Mode Persistence Listener (Fix) ---
+  window.addEventListener("slot-update", (e) => {
+    const { slotId, action, previewUrl } = e.detail;
+    console.log(`[Main] Slot Update: ${action} for ${slotId}`);
+
+    if (
+      !window.__ultimaQuestaoExtraida ||
+      !window.__ultimaQuestaoExtraida.estrutura
+    ) {
+      console.warn(
+        "[Main] Nenhuma questão extraída encontrada para atualizar."
+      );
+      return;
+    }
+
+    const index = Number(slotId);
+    // Find the block in structure that corresponds to this index (assuming linear mapping of 'imagem' blocks or direct index)
+    // StructureRender uses a globalImgCounter. We need to find the N-th image block.
+    // Or did we map slotId to structure index?
+    // In StructureRender.tsx, slotId is passed as `String(imgIndex)`.
+    // And `imgIndex` is `globalImgCounter++` when type is 'imagem'.
+    // So we must iterate structure and find the N-th image.
+
+    let imgCounter = 0;
+    let targetBlock = null;
+
+    for (let i = 0; i < window.__ultimaQuestaoExtraida.estrutura.length; i++) {
+      const bloco = window.__ultimaQuestaoExtraida.estrutura[i];
+      const tipo = (bloco.tipo || "imagem").toLowerCase();
+
+      if (tipo === "imagem") {
+        if (imgCounter === index) {
+          targetBlock = bloco;
+          break;
+        }
+        imgCounter++;
+      }
+    }
+
+    if (targetBlock) {
+      if (action === "filled") {
+        const { previewUrl, base64 } = e.detail;
+        targetBlock.imagem_url = previewUrl;
+        targetBlock.imagem_base64 = base64; // Persist Base64
+
+        delete targetBlock.url;
+        // Forçar typo para garantir
+        targetBlock.tipo = "imagem";
+      } else if (action === "cleared") {
+        targetBlock.imagem_url = null;
+        targetBlock.imagem_base64 = null;
+        targetBlock.url = null;
+      }
+
+      // Re-render
+      import("./render/final/render-questao.js").then(
+        ({ renderizarQuestaoFinal }) => {
+          renderizarQuestaoFinal(window.__ultimaQuestaoExtraida);
+        }
+      );
     }
   });
 }

@@ -154,6 +154,13 @@ function updateInteractivity() {
     overlayElement.classList.add("mode-editing");
     overlayElement.classList.remove("mode-viewing");
 
+    // Adiciona classe específica para estilização simplificada se necessário
+    if (activeGroup.tags && activeGroup.tags.includes("slot-mode")) {
+      overlayElement.classList.add("mode-slot");
+    } else {
+      overlayElement.classList.remove("mode-slot");
+    }
+
     // FIX: Se o grupo estiver vazio (criando nova questao), não "lockar" visualmente nem scroll
     if (activeGroup.crops.length === 0) {
       overlayElement.style.cursor = "crosshair";
@@ -360,13 +367,19 @@ function handlePointerDown(e) {
   if (!overlayElement) return;
 
   // 0. Bloqueio se não tiver grupo ativo
-  if (!CropperState.getActiveGroup()) {
+  const activeGroup = CropperState.getActiveGroup();
+
+  if (!activeGroup) {
     // Talvez piscar a sidebar?
     return;
   }
 
+  // GUARD: Slot-Mode
+  // Se for modo de slot (preenchimento de imagem), permitimos o fluxo básico
+  // ignorando qualquer verificação potencial de metadados de questão.
+  const isSlotMode = activeGroup.tags && activeGroup.tags.includes("slot-mode");
+
   const target = e.target;
-  const activeGroup = CropperState.getActiveGroup();
 
   // Coordinates relative to overlay
   const rect = overlayElement.getBoundingClientRect();
@@ -1067,7 +1080,8 @@ export async function extractImageFromCropData(anchorData) {
   return new Promise((resolve) => {
     finalCanvas.toBlob((blob) => {
       const url = URL.createObjectURL(blob);
-      resolve(url);
+      const base64 = finalCanvas.toDataURL("image/png");
+      resolve({ blobUrl: url, base64 });
     }, "image/png");
   });
 }

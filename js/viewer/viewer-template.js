@@ -94,8 +94,8 @@ export function montarTemplateViewer(args) {
         </div>
 
         <div id="floatingActionParams" class="hidden">
-            <button id="btnConfirmarRecorte" class="flyingBtn btn--success">✅ Confirmar Seleção</button>
-            <button id="btnCancelarRecorte" class="flyingBtn btn--danger">✕ Cancelar</button>
+            <button class="flyingBtn btn--success" data-action="confirm-crop">✅ Confirmar Seleção</button>
+            <button class="flyingBtn btn--danger" data-action="cancel-crop">✕ Cancelar</button>
         </div>
 
         <div id="cropConfirmModal" class="custom-modal-overlay">

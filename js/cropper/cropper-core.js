@@ -85,9 +85,29 @@ export function resetarInterfaceBotoes() {
 }
 
 export function cancelarRecorte() {
+  // Limpeza específica de modo Slot (se houver grupo temporário)
+  const activeGroup = CropperState.getActiveGroup();
+  if (
+    activeGroup &&
+    activeGroup.tags &&
+    activeGroup.tags.includes("slot-mode")
+  ) {
+    CropperState.deleteGroup(activeGroup.id);
+    console.log(
+      `[CropperCore] Grupo temporário ${activeGroup.id} limpo ao cancelar.`
+    );
+  }
+
+  // Limpa variáveis globais de slot, se existirem
+  window.__targetSlotIndex = null;
+  window.__targetSlotContext = null;
+
   // Chama a limpeza lógica
   restaurarVisualizacaoOriginal(); // Não precisa de await se não for bloquear nada depois
 
   // Chama a limpeza visual
   resetarInterfaceBotoes();
+
+  // Re-exibe o painel se necessário (pois slot mode esconde/usa painel)
+  import("../viewer/sidebar.js").then((mod) => mod.mostrarPainel());
 }

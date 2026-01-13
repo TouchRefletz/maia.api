@@ -157,6 +157,9 @@ function renderSidebarContent() {
   // para permitir que os placeholders por página sejam renderizados.
 
   groups.forEach((group) => {
+    // Skip rendering for slot-mode groups
+    if (group.tags && group.tags.includes("slot-mode")) return;
+
     // Determinar a página
     let pageNum = 1;
     if (group.crops && group.crops.length > 0) {
