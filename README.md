@@ -1,14 +1,28 @@
-# Maia.api
+<table border="0">
+  <tr>
+    <td valign="middle">
+      <img src="https://maia-api.vercel.app/logo.png" alt="Logo Maia" width="80">
+    </td>
+    <td valign="middle">
+      <h1 style="margin: 0;">Maia<span style="color: #21808D">.edu</span></h1>
+    </td>
+  </tr>
+</table>
 
-**Tornando a educação mais acessível no Brasil.**
+<br />
 
-Esta ferramenta é uma plataforma _open-source_ de alto desempenho projetada para documentar e estruturar questões reais de vestibulares brasileiros. Nosso objetivo é democratizar o acesso à educação através de tecnologia de ponta.
+**Ecossistema educacional inteligente para a democratização do ensino no Brasil.**
 
-Por meio de uma interface web otimizada (construída com **Vite** para máxima velocidade) e uma arquitetura _serverless_ distribuída, qualquer estudante pode treinar para provas ou contribuir para o banco de dados diretamente pelo celular. O processo de contribuição é simplificado e leva no máximo **5 minutos**, alimentando um ecossistema educacional livre e colaborativo.
+> [!NOTE]
+> Este é um **projeto científico** que utiliza tecnologia de ponta para pesquisar e implementar novas formas de aprendizado adaptativo e acessibilidade digital.
+
+O **Maia.edu** é uma plataforma _open-source_ de alto desempenho projetada para criar um ecossistema educacional funcional e autônomo. Mais do que apenas documentar dados, o projeto integra um **sistema automatizado de extração de questões**, um **chatbot pedagógico** avançado e um **banco de dados estruturado** de questões reais de vestibulares brasileiros.
+
+Por meio de uma arquitetura _serverless_ distribuída e uma interface web de alta fidelidade (Vite), a plataforma permite que estudantes treinem para exames e contribuam para o banco de dados em um ciclo colaborativo. O sistema de extração inteligente reduz o tempo de digitalização para menos de **5 minutos por questão**, garantindo que a informação educacional seja preservada, interoperável e acessível a todos.
 
 ## 🎯 Nossa Missão
 
-O núcleo desta ferramenta não é apenas armazenar dados, mas servir como infraestrutura crítica para alimentar outros projetos educacionais. Buscamos fornecer o primeiro grande **banco de dados público e estruturado de questões de vestibulares brasileiros** para uso pessoal e não comercial, garantindo que a informação seja acessível, interoperável e preservada digitalmente.
+O objetivo do Maia.edu é servir como infraestrutura crítica para a educação aberta brasileira. Buscamos fornecer o primeiro grande **banco de dados, alimentado por IA, público, estruturado e inteligente de questões** para uso pessoal e de pesquisa, curado pela comunidade, removendo barreiras econômicas e tecnológicas através de IA adaptativa.
 
 ## 🛠️ Como Funciona (Arquitetura e Processamento)
 
@@ -37,6 +51,33 @@ Para garantir que a experiência digital seja indistinguível da prova física:
 A plataforma implementa um sistema de **captura híbrida**:
 
 - **Manual/Verificação:** As **fotos originais** (raw images) da questão e do gabarito são armazenadas permanentemente e vinculadas ao objeto JSON da questão. Isso cria uma camada de segurança ("fallback"), permitindo que o usuário consulte a fonte primária caso haja qualquer alucinação ou erro na extração automática da IA.
+
+---
+
+## 🤖 Maia.ai (Chatbot Educacional)
+
+A Maia.ai é o assistente inteligente que consome o banco de dados para proporcionar uma experiência de aprendizado personalizada e interativa.
+
+### 1. Orquestração de Conversa (Router)
+
+- **Router de Complexidade:** Implementamos um roteador inteligente baseado em **Gemini 3 Flash Preview** que analisa cada mensagem do usuário para decidir o melhor fluxo de execução: _Rápido_ (respostas diretas), _Raciocínio_ (análise profunda via Flash Thinking) ou _Scaffolding_ (estudo guiado).
+- **Títulos Dinâmicos:** Utilizamos o modelo **Gemma 3 27b-it** para gerar títulos curtos e precisos que resumem o contexto de cada conversa no histórico.
+
+### 2. Memória Contextual Híbrida
+
+A Maia possui um sistema de memória de longo prazo que evolui conforme o estudante interage:
+
+- **Extração de Fatos:** Fluxo assíncrono que extrai fatos sobre o perfil, conhecimento e preferências do usuário.
+- **Busca Vetorial (RAG):** Recuperação semântica de memórias passadas para personalizar a resposta.
+- **Storage Híbrido:** **EntityDB** (local via IndexedDB) para velocidade e **Pinecone** (nuvem) para persistência global de usuários logados.
+
+### 3. Scaffolding (Aprendizado Adaptativo)
+
+Em vez de apenas entregar a resposta, a plataforma pode ativar o modo de estudo assistido:
+
+- **Decomposição Lógica:** A IA quebra a questão original em uma sequência de afirmações de **Verdadeiro ou Falso**.
+- **Métricas de Proficiência:** O sistema avalia não apenas o acerto, mas a **certeza do usuário** (via slider de 0-100%) e o **tempo de resposta**, ajustando a dificuldade do próximo passo em tempo real.
+- **Intervenção Didática:** O fluxo só avança ou termina quando o sistema valida que o usuário compreendeu o conceito fundamental por trás do problema.
 
 ## 🔎 Deep Search (Busca Profunda de Provas)
 
@@ -159,19 +200,38 @@ Nossos dados seguem uma estrutura JSON padronizada e rica em metadados:
 }
 ```
 
-## 🚀 Visão de Futuro
+Nosso objetivo final é **promover a democratização do acesso à educação no país** através de uma **Inteligência Artificial Adaptativa** que entenda profundamente cada estudante.
 
-Nosso objetivo final é **promover a democratização do acesso à educação no país**.
+A infraestrutura que construímos hoje (Banco de dados estruturado + Memória Híbrida + Scaffolding) é a fundação para:
 
-Acreditamos que a tecnologia deve quebrar barreiras, não criá-las. O banco de dados estruturado que construímos aqui é apenas o combustível para algo maior: um sistema de **Inteligência Artificial Adaptativa**.
+1.  **Personalização Extrema**: Identificar lacunas de conhecimento milimétricas e sugerir trilhas de estudo personalizadas.
+2.  **Educação em Larga Escala**: Permitir que milhões de estudantes tenham acesso a um tutor particular de alta qualidade através de dispositivos simples.
+3.  **Preservação do Conhecimento**: Garantir que todo o acervo de vestibulares brasileiros esteja digitalizado, estruturado e acessível para as próximas gerações.
 
-Ao transformar provas estáticas em dados vivos, permitimos que a IA:
+Estamos construindo o futuro onde o aprendizado não tem barreiras.
 
-1.  **Ensine a pensar**: Decompondo questões complexas em passos menores (_scaffolding_) de verdadeiro ou falso, guiando o aluno pelo raciocínio lógico em vez de apenas dar a resposta.
-2.  **Elimine barreiras físicas**: Possibilitando o estudo em **qualquer lugar**, apenas com um celular, sem a necessidade de cadernos, canetas ou livros didáticos caros.
-3.  **Personalize o aprendizado**: Identificando lacunas de conhecimento em tempo real e sugerindo questões que desafiem o aluno na medida certa.
+---
 
-Estamos construindo a infraestrutura para que o futuro da educação seja livre, aberto e acessível a todos.
+## 🛠️ Execução Local
+
+Para rodar a interface web em ambiente de desenvolvimento:
+
+1.  **Clone o repositório:** `git clone https://github.com/TouchRefletz/maia.edu.git`
+2.  **Instale as dependências:** `npm install`
+3.  **Configure as variáveis:** Crie um arquivo `.env` baseado no `.env.example` (Necessário Firebase e chaves de API do Worker).
+4.  **Inicie o servidor:** `npm run dev`
+
+---
+
+## 🤝 Contribua com o Projeto!
+
+Acreditamos que a educação deve ser construída por muitos. Se você é desenvolvedor, designer, educador ou entusiasta, sua ajuda é muito bem-vinda!
+
+- **Pull Requests:** Encontrou um bug ou quer implementar uma nova feature? Sinta-se à vontade para abrir um PR.
+- **Issues:** Sugestões de melhorias ou relatos de problemas nos ajudam a evoluir.
+- **Ecossistema:** Ajude-nos a curar a banca de questões e a treinar a Maia para ser uma tutora ainda melhor.
+
+Vamos juntos transformar a educação brasileira através do código! 🚀
 
 ---
 
