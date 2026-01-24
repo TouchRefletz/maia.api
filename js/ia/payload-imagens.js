@@ -1,66 +1,77 @@
-import { uploadImagemWorker } from '../api/worker.js';
-import { uploadState } from '../main.js';
-import { urlToBase64 } from '../services/image-utils.js';
+// ============================================
+// PAYLOAD DE IMAGENS - SISTEMA VIA PDF
+// Não faz mais upload para ImgBB
+// Apenas limpa blob URLs temporários e valida dados
+// ============================================
 
+import { uploadState } from "../main.js";
+
+/**
+ * @deprecated Upload para ImgBB removido. Agora usamos renderização via PDF.
+ * Mantido apenas para retrocompatibilidade.
+ */
 export const uploadToImgBB = async (base64String) => {
-  return await uploadImagemWorker(base64String);
+  console.warn(
+    "[payload-imagens] uploadToImgBB foi deprecado. Imagens são renderizadas via PDF."
+  );
+  return null;
 };
 
+/**
+ * Processa objeto recursivamente para limpar dados temporários.
+ * NÃO faz mais upload para ImgBB - agora usamos dados de PDF para renderização.
+ */
 export const processarObjetoRecursivo = async (obj, btnEnviar) => {
-  if (!obj || typeof obj !== 'object') return;
-  // (Mesma lógica de antes para arrays e objetos...)
+  if (!obj || typeof obj !== "object") return;
+
   if (Array.isArray(obj)) {
     for (let i = 0; i < obj.length; i++) {
       const val = obj[i];
-      if (typeof val === 'string' && (val.startsWith('data:image') || val.startsWith('blob:'))) {
-        if (btnEnviar)
-          btnEnviar.innerText = `⏳ Subindo img ${++uploadState.imagensConvertidas}...`;
 
-        let finalBase64 = val;
-        // Se for Blob URL, converte para Base64 sob demanda
-        if (val.startsWith('blob:')) {
-          try {
-            finalBase64 = await urlToBase64(val);
-          } catch (err) {
-            console.error("Erro ao converter blob para base64:", err);
-            continue; // Pula se falhar
-          }
-        }
-
-        const url = await uploadToImgBB(finalBase64);
-        if (url) obj[i] = url;
-      } else if (typeof val === 'object') {
+      // Limpa blob URLs (são temporários e não funcionam após sessão)
+      if (typeof val === "string" && val.startsWith("blob:")) {
+        console.log(
+          `[payload-imagens] Limpando blob URL temporário no array[${i}]`
+        );
+        obj[i] = null;
+      }
+      // Limpa base64 grandes se temos dados de PDF no mesmo objeto
+      else if (typeof val === "object" && val !== null) {
         await processarObjetoRecursivo(val, btnEnviar);
       }
     }
     return;
   }
+
   for (const key in obj) {
-    if (Object.prototype.hasOwnProperty.call(obj, key)) {
-      const val = obj[key];
-      if (typeof val === 'string' && (val.startsWith('data:image') || val.startsWith('blob:'))) {
-        if (btnEnviar)
-          btnEnviar.innerText = `⏳ Subindo img ${++uploadState.imagensConvertidas}...`;
+    if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
 
-        let finalBase64 = val;
-        if (val.startsWith('blob:')) {
-          try {
-            finalBase64 = await urlToBase64(val);
-          } catch (err) {
-            console.error("Erro ao converter blob para base64:", err);
-            continue;
-          }
-        }
+    const val = obj[key];
 
-        const url = await uploadToImgBB(finalBase64);
-        if (url) obj[key] = url;
-      } else if (typeof val === 'object') {
-        await processarObjetoRecursivo(val, btnEnviar);
-      }
+    // Limpa blob URLs
+    if (typeof val === "string" && val.startsWith("blob:")) {
+      console.log(`[payload-imagens] Limpando blob URL temporário: ${key}`);
+      obj[key] = null;
+    }
+
+    // Se temos dados de crop, podemos limpar imagem_url que é blob
+    else if (key === "imagem_url" && obj.pdf_page && val?.startsWith("blob:")) {
+      console.log(
+        `[payload-imagens] Limpando blob imagem_url (temos dados de crop)`
+      );
+      obj[key] = null;
+    }
+    // Processa objetos aninhados
+    else if (typeof val === "object" && val !== null) {
+      await processarObjetoRecursivo(val, btnEnviar);
     }
   }
 };
 
+/**
+ * Prepara o payload para envio ao Firebase.
+ * Limpa dados temporários (blob URLs) e valida estrutura.
+ */
 export async function prepararPayloadComImagens(
   btnEnviar,
   questaoFinal,
@@ -70,7 +81,7 @@ export async function prepararPayloadComImagens(
   uploadState.imagensConvertidas = 0;
 
   // 1. Feedback Visual
-  if (btnEnviar) btnEnviar.innerText = '⏳ Analisando imagens...';
+  if (btnEnviar) btnEnviar.innerText = "⏳ Preparando dados...";
 
   // 2. Monta a estrutura final
   const payloadParaSalvar = {
@@ -79,9 +90,11 @@ export async function prepararPayloadComImagens(
     dados_gabarito: gabaritoLimpo,
   };
 
-  // 3. Processamento Assíncrono (Upload Recursivo)
-  // O objeto payloadParaSalvar é modificado por referência dentro dessa função
+  // 3. Processamento: Limpa blob URLs e dados desnecessários
+  // (Não faz mais upload para ImgBB)
   await processarObjetoRecursivo(payloadParaSalvar, btnEnviar);
+
+  if (btnEnviar) btnEnviar.innerText = "✅ Dados prontos!";
 
   return payloadParaSalvar;
 }

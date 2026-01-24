@@ -1,26 +1,35 @@
-import { renderizar_estrutura_alternativa } from '../render/structure.js';
-import { gerarHtmlCorpoQuestao, renderBotaoScanGabarito, renderCreditosCompleto, renderFontesExternas, renderMatrizComplexidade, renderPassosComDetalhes, renderRelatorioPesquisa } from './card-partes.js';
-import { prepararImagensVisualizacao } from './imagens.js';
+import { renderizar_estrutura_alternativa } from "../render/structure.js";
+import { hydrateBankCard } from "./bank-hydration";
+import {
+  gerarHtmlCorpoQuestao,
+  renderBotaoScanGabarito,
+  renderCreditosCompleto,
+  renderFontesExternas,
+  renderMatrizComplexidade,
+  renderPassosComDetalhes,
+  renderRelatorioPesquisa,
+} from "./card-partes.js";
+import { prepararImagensVisualizacao } from "./imagens.js";
 
 export function prepararElementoCard(idFirebase, q, g, meta) {
   // 1. Criação do elemento DOM
-  const card = document.createElement('div');
-  card.className = 'q-card';
+  const card = document.createElement("div");
+  card.className = "q-card";
   card.id = `card_${idFirebase}`;
 
   // 2. Configuração dos Datasets (Para Filtros)
-  card.dataset.materia = (q.materias_possiveis || []).join(' ');
-  card.dataset.origem = meta.material_origem || '';
+  card.dataset.materia = (q.materias_possiveis || []).join(" ");
+  card.dataset.origem = meta.material_origem || "";
 
   // Concatena texto da estrutura ou do enunciado legado para busca
   const textoBusca = q.estrutura
-    ? q.estrutura.map((b) => b.conteudo).join(' ')
-    : q.enunciado || '';
+    ? q.estrutura.map((b) => b.conteudo).join(" ")
+    : q.enunciado || "";
 
   card.dataset.texto = (
     textoBusca +
-    ' ' +
-    (q.identificacao || '')
+    " " +
+    (q.identificacao || "")
   ).toLowerCase();
 
   // 3. Geração do HTML das Alternativas
@@ -29,7 +38,7 @@ export function prepararElementoCard(idFirebase, q, g, meta) {
   const htmlAlts = (q.alternativas || [])
     .map((alt) => {
       const letra = alt.letra.trim().toUpperCase();
-      let conteudoHtml = '';
+      let conteudoHtml = "";
 
       if (alt.estrutura) {
         // MUDANÇA: Passa 'banco' como contexto para desabilitar edição
@@ -38,10 +47,10 @@ export function prepararElementoCard(idFirebase, q, g, meta) {
           alt.estrutura,
           letra,
           [],
-          'banco'
+          "banco",
         );
       } else {
-        conteudoHtml = alt.texto || '';
+        conteudoHtml = alt.texto || "";
       }
 
       // Gera o botão interativo
@@ -56,7 +65,7 @@ export function prepararElementoCard(idFirebase, q, g, meta) {
             <div class="q-opt-content">${conteudoHtml}</div>
         </button>`;
     })
-    .join('');
+    .join("");
 
   return { card, htmlAlts, cardId };
 }
@@ -64,14 +73,97 @@ export function prepararElementoCard(idFirebase, q, g, meta) {
 /**
  * Gera o cabeçalho do card com ID e origem.
  */
-export function gerarHtmlHeader(id, meta) {
+/**
+ * Gera o cabeçalho do card com ID, origem, instituição e status.
+ */
+export function gerarHtmlHeader(id, fullData) {
+  const meta = fullData.meta || {};
+  const q = fullData.dados_questao || {};
+  const g = fullData.dados_gabarito || {};
+  const cred = g.creditos || {};
+
+  // 1. Origem (IA vs Original)
+  let origemLabel = "Material Original";
+  let origemIcon = "📄";
+  const origemRaw = (
+    cred.origemresolucao ||
+    cred.origem_resolucao ||
+    ""
+  ).toLowerCase();
+
+  if (
+    origemRaw.includes("gerado") ||
+    origemRaw.includes("artificial") ||
+    origemRaw === "ia"
+  ) {
+    origemLabel = "Gerada com IA";
+    origemIcon = "🤖";
+  }
+
+  // 2. Instituição e Prova
+  const instituicao =
+    cred.autorouinstituicao || cred.autor_ou_instituicao || "";
+  const prova = meta.material_origem || "Banco Geral";
+
+  // Monta label composto: "Instituição - Prova" ou só "Prova"
+  let tituloPrincipal = prova;
+  if (instituicao && !prova.includes(instituicao)) {
+    tituloPrincipal = `${prova} - ${instituicao}`;
+  }
+
+  // 3. Status
+  const statusRaw = (fullData.reviewStatus || "não revisada").toLowerCase();
+  const statusMap = {
+    "não revisada": { label: "Não Revisada", color: "#6c757d", icon: "⚪" },
+    revisada: { label: "Revisada", color: "#28a745", icon: "🟢" },
+    verificada: { label: "Verificada", color: "#17a2b8", icon: "🔵" },
+    sinalizada: { label: "Sinalizada", color: "#ffc107", icon: "🟡" },
+    invalidada: { label: "Invalidada", color: "#dc3545", icon: "🔴" },
+  };
+  const statusInfo = statusMap[statusRaw] || statusMap["não revisada"];
+
   return `
         <div class="q-header">
-            <div style="display:flex; align-items:center; gap:10px;">
+            <div style="display:flex; align-items:center; gap:15px; flex-wrap:wrap;">
+                
+                <!-- ID Badge -->
                 <span class="q-id-badge">${id}</span>
-                <span style="font-weight:bold; color:var(--color-text); font-size:0.9rem;">
-                    ${meta.material_origem || 'Banco'}
+                
+                <!-- Título (Inst e Prova) -->
+                <span style="font-weight:bold; color:var(--color-text); font-size:0.95rem;">
+                    ${tituloPrincipal}
                 </span>
+
+                <div style="flex:1;"></div>
+
+                <!-- Badges de Metadados -->
+                <div style="display:flex; gap:8px; align-items:center; font-size:0.8rem;">
+                    
+                    <!-- Badge Origem -->
+                    <span style="
+                        background: rgba(255,255,255,0.05); 
+                        padding: 3px 8px; 
+                        border-radius: 4px; 
+                        border: 1px solid var(--color-border);
+                        color: var(--color-text-secondary);
+                        display:flex; align-items:center; gap:5px;
+                    ">
+                        <span>${origemIcon}</span> ${origemLabel}
+                    </span>
+
+                    <!-- Badge Status -->
+                    <span style="
+                        background: ${statusInfo.color}20; 
+                        color: ${statusInfo.color};
+                        border: 1px solid ${statusInfo.color}40;
+                        padding: 3px 8px; 
+                        border-radius: 4px;
+                        display:flex; align-items:center; gap:5px; font-weight:600;
+                    ">
+                        <span>${statusInfo.icon}</span> ${statusInfo.label}
+                    </span>
+                </div>
+
             </div>
         </div>`;
 }
@@ -82,11 +174,11 @@ export function gerarHtmlHeader(id, meta) {
 export function gerarHtmlTags(questao) {
   const materias = (questao.materias_possiveis || [])
     .map((m) => `<span class="q-tag highlight">${m}</span>`)
-    .join('');
+    .join("");
 
   const keywords = (questao.palavras_chave || [])
     .map((t) => `<span class="q-tag">${t}</span>`)
-    .join('');
+    .join("");
 
   return `
         <div class="q-tags">
@@ -100,7 +192,7 @@ export function gerarHtmlTags(questao) {
  */
 export function gerarHtmlResolucao(cardId, gabarito, rawImgsG, jsonImgsG) {
   const confianca = Math.round((gabarito.confianca || 0) * 100);
-  const justificativa = gabarito.justificativa_curta || 'Sem justificativa.';
+  const justificativa = gabarito.justificativa_curta || "Sem justificativa.";
 
   return `
         <div id="${cardId}_res" class="q-resolution" style="display:none;">
@@ -112,7 +204,7 @@ export function gerarHtmlResolucao(cardId, gabarito, rawImgsG, jsonImgsG) {
                     </span>
                 </div>
             </div>
-            <div class="q-res-section">
+            <div class="q-res-section static-render-target">
                 <span class="q-res-label">Justificativa</span>
                 <p class="markdown-content" style="margin:0; line-height:1.5;">${justificativa}</p>
             </div>
@@ -130,15 +222,20 @@ export function gerarHtmlResolucao(cardId, gabarito, rawImgsG, jsonImgsG) {
 /**
  * Gera o rodapé com botões de ação (Ver Original, Ver Gabarito).
  */
-export function gerarHtmlFooter(cardId, imgsOriginalQ, jsonImgsQ) {
+export function gerarHtmlFooter(cardId, imgsOriginalQ, jsonImgsQ, sourceUrl) {
   const btnScan =
     imgsOriginalQ.length > 0
       ? `<button class="q-action-link js-ver-scan" data-imgs="${jsonImgsQ}">📄 Ver Original (Enunciado)</button>`
-      : '';
+      : "";
+
+  const btnSource = sourceUrl
+    ? `<button onclick="window.open('${sourceUrl}', '_blank')" class="q-action-link" title="Abrir Prova Original">🔗 Ver Fonte Original</button>`
+    : "";
 
   return `
         <div class="q-footer">
             ${btnScan}
+            ${btnSource}
             <button class="q-action-link js-toggle-gabarito" data-card-id="${cardId}" title="Ver/Esconder Gabarito">
                 👁️ Ver/Esconder Gabarito
             </button>
@@ -167,7 +264,7 @@ export function criarCardTecnico(idFirebase, fullData) {
   const htmlCorpoQuestao = gerarHtmlCorpoQuestao(
     q,
     imgsOriginalQ,
-    htmlImgsSuporte
+    htmlImgsSuporte,
   );
 
   // 3. Cria o elemento base do card e gera o HTML das alternativas
@@ -176,18 +273,27 @@ export function criarCardTecnico(idFirebase, fullData) {
     idFirebase,
     q,
     g,
-    meta
+    meta,
   );
 
   // 4. Monta o HTML final juntando as partes modularizadas
+  // ALTERADO: Passa fullData para gerarHtmlHeader
   card.innerHTML = [
-    gerarHtmlHeader(idFirebase, meta),
+    gerarHtmlHeader(idFirebase, fullData),
     gerarHtmlTags(q),
     `<div class="q-body">${htmlCorpoQuestao}</div>`,
     `<div class="q-options" id="${cardId}_opts">${htmlAlts}</div>`,
     gerarHtmlResolucao(cardId, g, rawImgsG, jsonImgsG),
-    gerarHtmlFooter(cardId, imgsOriginalQ, jsonImgsQ),
-  ].join('');
+    gerarHtmlFooter(cardId, imgsOriginalQ, jsonImgsQ, meta.source_url),
+  ].join("");
+
+  // 5. Hidratação dos componentes React (Questão e Passos)
+  hydrateBankCard(card, {
+    q,
+    g,
+    imgsOriginalQ,
+    jsonImgsG,
+  });
 
   return card;
 }

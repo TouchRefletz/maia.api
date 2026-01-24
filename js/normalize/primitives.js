@@ -66,19 +66,56 @@ export const decodeEntities = (s) =>
  * Renderiza texto como markdown seguro, decodificando entities primeiro
  * Usa marked para converter markdown para HTML
  */
+// Helper para processar LaTeX inline ($...$ -> \(...\))
+export const processLatex = (s) => {
+  if (!s) return "";
+  // Substitui $...$ por \(...\) garantindo que não pegue \$ escapado
+  return s.replace(/([^\\]|^)\$([^$]+)\$/g, (match, prefix, content) => {
+    // Se for apenas números, pontos, vírgulas ou espaços (ex: datas, valores), remove o LaTeX
+    // para evitar fontes de matemática estranhas e o problema dos parênteses.
+    if (/^[0-9.,\s]+$/.test(content)) {
+      return prefix + content;
+    }
+    // Caso contrário, converte para sintaxe MathJax \(...\)
+    // Precisamos de 4 barras invertidas na string literal para resultar em 2 no output (\),
+    // que o markdown consome para virar 1 na renderização final.
+    // ESCAPA backslashes no conteúdo para sobreviverem ao markdown (ex: \text -> \\text)
+    return `${prefix}\\\\(${content.replace(/\\/g, "\\\\")}\\\\)`;
+  });
+};
+
+/**
+ * Renderiza texto como markdown seguro, decodificando entities primeiro
+ * Usa marked para converter markdown para HTML
+ */
 export const safeMarkdown = (s) => {
   // Primeiro decodifica entities
-  const decoded = decodeEntities(s);
+  let decoded = decodeEntities(s);
 
-  // Se não tiver markdown (sem * nem _ nem `), retorna escapado simples
+  // Processa LaTeX inline antes do markdown para evitar crash com caracteres especiais
+  decoded = processLatex(decoded);
+
+  // Se não tiver markdown (sem * nem _ nem ` nem # nem [), retorna safe (mas mantendo o latex processado)
   if (!/[*_`#\[\]()]/.test(decoded)) {
-    return safe(decoded);
+    // Se só tiver latex (\(...\)), não precisa de markdown, mas precisamos garantir que o HTML escape funcione para o resto
+    // Mas wait, safe() escapa < e >. Se o latex tiver < ou >, pode quebrar?
+    // MathJax costuma lidar, mas idealmente não escapamos o conteúdo do LaTeX.
+    // Porem, como estamos fazendo replace simples, vamos assumir que o usuário confia no input ou usar marked.
+    // Vamos deixar passar pelo marked se tiver latex também?
+
+    // Melhora: se tiver \( ou \[, considera que tem formatação rica e joga pro marked ou retorna direto
+    if (decoded.includes("\\(") || decoded.includes("\\[")) {
+      // Deixa cair no bloco do marked abaixo ou fallback
+    } else {
+      return safe(decoded).replace(/\n/g, "<br>");
+    }
   }
 
   // Se tiver marked disponível globalmente, usa
   if (typeof window !== "undefined" && window.marked) {
     try {
-      return window.marked.parse(decoded);
+      // breaks: true garante que \n vire <br> (GFM style)
+      return window.marked.parse(decoded, { breaks: true });
     } catch (e) {
       console.warn("Erro ao parsear markdown:", e);
     }

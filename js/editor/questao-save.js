@@ -76,6 +76,10 @@ export const processarSalvamentoQuestao = (container) => {
     window.__ultimaQuestaoExtraida.palavras_chave = palavrasChave;
     window.__ultimaQuestaoExtraida.alternativas = alternativas;
 
+    // IMPORTANTE: Após edição manual, a questão deixa de ser "Recitation" (modo rascunho)
+    // Isso garante que o componente QuestaoTabs inicie no modo de visualização
+    window.__ultimaQuestaoExtraida.isRecitation = false;
+
     // 3. Feedback e Renderização
     if (typeof customAlert === "function")
       customAlert("✅ Conteúdo estruturado salvo!", 2000);

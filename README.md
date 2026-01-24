@@ -143,8 +143,7 @@ Nossos dados seguem uma estrutura JSON padronizada e rica em metadados:
             { "conteudo": "Fonte/Créditos do texto-base...", "tipo": "fonte" },
             {
               "tipo": "imagem",
-              "conteudo": "Legenda (opcional)",
-              "imagem_base64": "BASE64_OU_URL (se aplicável)"
+              "conteudo": "Legenda (opcional)"
             }
           ],
           "fotos_originais": ["https://..."],

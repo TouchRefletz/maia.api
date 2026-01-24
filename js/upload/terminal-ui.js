@@ -32,7 +32,7 @@ export class TerminalUI {
         mode: "full", // 'full' | 'simple'
         initialDuration: 480,
       },
-      options
+      options,
     );
 
     // Sound Config
@@ -360,11 +360,11 @@ export class TerminalUI {
     this.el.status = this.container.querySelector(".term-status");
     // this.el.stepText is deprecated/removed in new layout
     this.el.objectivesHeader = this.container.querySelector(
-      ".term-objectives-header"
+      ".term-objectives-header",
     );
     this.el.tasksBody = this.container.querySelector(".term-tasks-body");
     this.el.floatingHeader = this.container.querySelector(
-      "#term-floating-header"
+      "#term-floating-header",
     );
     this.el.chainStream = this.container.querySelector("#term-chain-stream");
 
@@ -577,7 +577,7 @@ export class TerminalUI {
     this.estimatedRemainingTime += change;
     this.estimatedRemainingTime = Math.max(
       0,
-      Math.min(9999, this.estimatedRemainingTime)
+      Math.min(9999, this.estimatedRemainingTime),
     );
 
     this.updateETADisplay();
@@ -617,7 +617,7 @@ export class TerminalUI {
 
       // Strategy: Find the active card DOM element
       const activeCard = this.el.tasksBody.querySelector(
-        ".term-task-card.active"
+        ".term-task-card.active",
       );
       if (activeCard) {
         const noteEl = activeCard.querySelector(".term-task-notes");
@@ -641,7 +641,7 @@ export class TerminalUI {
       this.updatePlan(tasks);
       this.queueLog(
         `[SYSTEM] Lista de tarefas sincronizada (${tasks.length} itens)`,
-        "success"
+        "success",
       );
     }
   }
@@ -723,7 +723,7 @@ export class TerminalUI {
 
     // Regex A: [x] Title | Notes: ...
     const matchA = cleanLine.match(
-      /^\[([ xX/])\]\s+([^|]+)(?:\|\s*Notes:\s*(.*))?/i
+      /^\[([ xX/])\]\s+([^|]+)(?:\|\s*Notes:\s*(.*))?/i,
     );
     // Regex B: 1. ⏳ Title
     const matchB = cleanLine.match(/^\d+\.\s+(?:([^\w\s]+)\s+)?(.*)/);
@@ -940,7 +940,7 @@ export class TerminalUI {
 
     // Calculate completed count
     const completedCount = this.tasks.filter(
-      (t) => t.status === "done" || t.status === "completed"
+      (t) => t.status === "done" || t.status === "completed",
     ).length;
 
     // Did we finish a task?
@@ -956,7 +956,7 @@ export class TerminalUI {
 
       this.queueLog(
         `[SISTEMA] Sincronizando progresso: ${newCalculatedBaseline.toFixed(1)}%`,
-        "success"
+        "success",
       );
     }
 
@@ -1134,7 +1134,9 @@ export class TerminalUI {
 
   toggleNotification() {
     if (!("Notification" in window)) {
-      alert("Este navegador não suporta notificações de área de trabalho.");
+      customAlert(
+        "Este navegador não suporta notificações de área de trabalho.",
+      );
       return;
     }
 
@@ -1236,7 +1238,7 @@ export class TerminalUI {
 
       if (this.el.eta) this.el.eta.style.display = "none";
       this.updateStepText(
-        "Todos os processos do agente finalizados com sucesso."
+        "Todos os processos do agente finalizados com sucesso.",
       );
 
       if (this.config.sounds.success) {
@@ -1315,7 +1317,7 @@ export class TerminalUI {
     this.triggerNotification(
       "Falha na Tarefa",
       `O processo falhou: ${reason}`,
-      true
+      true,
     );
 
     if (this.el.cancelBtn) {
@@ -1374,7 +1376,7 @@ export class TerminalUI {
 
     this.queueLog(
       "[SISTEMA] Iniciando preservação de dados. Cancelamento desativado.",
-      "system" // Using 'system' or 'info' depending on CSS. Let's stick to info or just standard queueLog default.
+      "system", // Using 'system' or 'info' depending on CSS. Let's stick to info or just standard queueLog default.
     );
 
     // Create 'system' class if not exists, or just use info.
@@ -1401,7 +1403,7 @@ export class TerminalUI {
 
     this.queueLog(
       "[SISTEMA] Agente finalizou. Iniciando validação e processamento de arquivos...",
-      "system"
+      "system",
     );
   }
 
@@ -1522,7 +1524,7 @@ export class TerminalUI {
       if (result.success) {
         this.queueLog(
           "Cancelamento enviado com sucesso. Aguardando finalização...",
-          "success"
+          "success",
         );
         if (this.el.status)
           this.el.status.innerText = "CANCELAMENTO_SOLICITADO";

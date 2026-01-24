@@ -13,12 +13,39 @@ const tabsState = {
 // Callbacks para renderização externa
 let hubRenderCallback = null;
 
+// Mapa de AbortControllers para cancelar requests por aba
+const abortControllers = new Map();
+
+/**
+ * Registra um AbortController para uma aba (usado pelo ui-estado.js)
+ * @param {string} tabId - ID da aba
+ * @param {AbortController} controller - O controller para cancelar requests
+ */
+export function registerAbortController(tabId, controller) {
+  abortControllers.set(tabId, controller);
+}
+
+/**
+ * Cancela os requests pendentes de uma aba
+ * @param {string} tabId - ID da aba
+ */
+export function cancelTabRequests(tabId) {
+  const controller = abortControllers.get(tabId);
+  if (controller) {
+    controller.abort();
+    abortControllers.delete(tabId);
+    console.log(`[Tabs] Requests cancelados para aba ${tabId}`);
+  }
+}
+
 // Import helpers for rich cards
+import { CropperState } from "../cropper/cropper-state.js";
 import {
   construirSkeletonLoader,
   criarElementoCardPensamento,
   splitThought,
 } from "../sidebar/thoughts-base.js";
+import { showConfirmModal } from "./modal-confirm.js";
 
 /**
  * Inicializa o sistema de abas na sidebar
@@ -66,9 +93,13 @@ export function setHubRenderCallback(callback) {
  * Cria uma nova aba para uma questão em processamento
  * @param {string} groupId - ID do grupo da questão
  * @param {string} label - Label da questão (ex: "Questão 01")
+ * @param {Object} options - Opções adicionais
+ * @param {boolean} options.autoActivate - Se true (padrão), ativa a aba automaticamente. Se false, cria em background.
  * @returns {string} ID da nova aba
  */
-export function createQuestionTab(groupId, label) {
+export function createQuestionTab(groupId, label, options = {}) {
+  const { autoActivate = true } = options;
+
   tabsState.tabIdCounter++;
   const tabId = `question-${tabsState.tabIdCounter}`;
 
@@ -83,7 +114,14 @@ export function createQuestionTab(groupId, label) {
   };
 
   tabsState.tabs.push(newTab);
-  setActiveTab(tabId);
+
+  // [BATCH FIX] Permite criar abas sem ativá-las (para processamento em background)
+  if (autoActivate) {
+    setActiveTab(tabId);
+  } else {
+    // Apenas re-renderiza a barra de abas para mostrar a nova aba
+    renderTabs();
+  }
 
   return tabId;
 }
@@ -172,25 +210,19 @@ export function updateTabStatus(tabId, updates, options = {}) {
   if (updates.progress !== undefined) tab.progress = updates.progress;
   if (updates.label !== undefined) tab.label = updates.label;
   if (updates.response !== undefined) tab.response = updates.response;
+  if (updates.gabaritoResponse !== undefined)
+    tab.gabaritoResponse = updates.gabaritoResponse; // [BATCH FIX] Armazena gabarito por aba
+  if (updates.aiThoughtsHtml !== undefined)
+    tab.aiThoughtsHtml = updates.aiThoughtsHtml; // [NOVO] Armazena HTML dos pensamentos
 
   renderTabs();
 
   if (options.suppressRender) return;
 
-  // Se for a aba ativa e houve update de response, e o container JÁ existe
-  // Podemos querer atualizar o conteúdo.
-  // Mas cuidado: se atualizarmos innerHTML perdemos scroll.
-  // Idealmente, a atualização deve ser pontual.
-  // Para 'response' (finalização), geralmente substitui tudo, então OK.
-
-  if (tab.id === tabsState.activeTabId && updates.response) {
-    // Força reload do container para mostrar a resposta final
+  // Se houve update de response, força reload do container para mostrar a resposta final
+  // SEMPRE faz reload, mesmo se a aba estiver em background
+  if (updates.response) {
     reloadTab(tabId);
-  } else {
-    // Para updates parciais (logs, progress), o renderQuestionTabContent
-    // sabe lidar com append se o container já existir?
-    // Nesse refactor, logs são adicionados via addLogToQuestionTab diretamente no DOM.
-    // Então aqui só precisamos mudar o status visual do header.
   }
 }
 
@@ -237,9 +269,40 @@ function renderTabs() {
       const closeBtn = document.createElement("span");
       closeBtn.className = "sidebar-tab-close";
       closeBtn.innerHTML = "×";
-      closeBtn.onclick = (e) => {
+      closeBtn.onclick = async (e) => {
         e.stopPropagation();
+
+        // Modal de confirmação (negativo - ação destrutiva)
+        const confirmed = await showConfirmModal(
+          "Fechar Questão?",
+          "Tem certeza que deseja fechar esta questão? O processamento será cancelado e a questão NÃO será salva no banco de dados. Você poderá enviá-la novamente depois.",
+          "Fechar e Descartar",
+          "Continuar Processando",
+          false, // isPositiveAction = false (cor de erro/warning)
+        );
+
+        if (!confirmed) return;
+
+        // Cancela os requests da IA pendentes para esta aba
+        cancelTabRequests(tab.id);
+
+        // Reseta flags globais de processamento
+        window.__isProcessing = false;
+
+        // Reseta o status do grupo para permitir novo envio
+        if (tab.groupId) {
+          const group = CropperState.groups.find((g) => g.id === tab.groupId);
+          if (group) {
+            delete group.status; // Remove o status de processamento
+          }
+        }
+
+        // FIX: Remove a aba PRIMEIRO para que não seja encontrada no re-render
         removeTab(tab.id);
+
+        // Agora troca para o Hub e notifica para re-renderizar com botões normais
+        switchToHub();
+        CropperState.notify();
       };
       tabBtn.appendChild(closeBtn);
     }
@@ -325,25 +388,38 @@ function renderTabInnerContent(container, tab) {
     if (hubRenderCallback) {
       hubRenderCallback(container);
     } else {
-      // Fallback - criar containers esperados pelo sistema existente
-      const pagesContainer = document.createElement("div");
-      pagesContainer.id = "sidebar-pages-container";
-      pagesContainer.className = "sidebar-pages-container";
-      container.appendChild(pagesContainer);
-
       // O footer de ações também precisa existir
       const actionsFooter = document.createElement("div");
       actionsFooter.id = "sidebar-actions-footer";
       actionsFooter.style.padding = "10px";
       actionsFooter.style.borderTop = "1px solid var(--border-color)";
       container.appendChild(actionsFooter);
+
+      // Fallback - criar containers esperados pelo sistema existente
+      const pagesContainer = document.createElement("div");
+      pagesContainer.id = "sidebar-pages-container";
+      pagesContainer.className = "sidebar-pages-container";
+      container.appendChild(pagesContainer);
     }
   } else if (tab.type === "question") {
     // Se já tiver uma resposta final processada, renderiza o formulário final
     if (tab.response) {
+      // [BATCH FIX] Sincroniza variáveis globais com os dados DESTA aba
+      // Isso é necessário porque componentes legados ainda lêem de window.globals
+      window.__ultimaQuestaoExtraida = tab.response;
+      window.questaoAtual = tab.response;
+      if (tab.gabaritoResponse) {
+        window.__ultimoGabaritoExtraido = tab.gabaritoResponse;
+      }
+
       import("../render/final/render-questao.js")
         .then((mod) => {
-          mod.renderizarQuestaoFinal(tab.response, container);
+          // [FIX] Passa o 3º argumento (aiThoughtsHtml) que a renderizarQuestaoFinal espera
+          mod.renderizarQuestaoFinal(
+            tab.response,
+            container,
+            tab.aiThoughtsHtml,
+          );
         })
         .catch((err) => {
           console.error("Erro ao carregar renderizador final:", err);
@@ -406,7 +482,7 @@ function renderQuestionTabContent(container, tab) {
 
       // Insere ANTES do skeleton final (se existir) para manter o efeito de "pensando..."
       const skeletonCard = thoughtListEl.querySelector(
-        ".maia-thought-card--skeleton"
+        ".maia-thought-card--skeleton",
       );
       if (skeletonCard) {
         thoughtListEl.insertBefore(card, skeletonCard);
@@ -446,7 +522,7 @@ export function addLogToQuestionTab(tabId, message) {
 
   // Insere ANTES do skeleton (efeito "pensando..." continua no final)
   const skeletonCard = thoughtListEl.querySelector(
-    ".maia-thought-card--skeleton"
+    ".maia-thought-card--skeleton",
   );
   if (skeletonCard) {
     thoughtListEl.insertBefore(card, skeletonCard);
@@ -469,6 +545,14 @@ export function addLogToQuestionTab(tabId, message) {
  */
 export function isHubActive() {
   return tabsState.activeTabId === "hub";
+}
+
+/**
+ * Troca a aba ativa para o Hub
+ * Útil para mostrar o status de "Salvo!" após envio ao Firebase
+ */
+export function switchToHub() {
+  setActiveTab("hub");
 }
 
 /**

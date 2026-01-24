@@ -1,7 +1,7 @@
-import { montarHtmlPainelGabarito, montarHtmlPainelQuestao, prepararDadosGerais } from './render-components.js';
+import { prepararDadosGerais } from "./render-components.js";
 // Importamos a função de montagem do React (assumindo que seu build system permite isso)
-import { customAlert } from '../../ui/GlobalAlertsLogic.tsx';
-import { mountJsonReviewModal } from './JsonReviewModal.tsx';
+import { customAlert } from "../../ui/GlobalAlertsLogic.tsx";
+import { mountJsonReviewModal } from "./JsonReviewModal.tsx";
 
 // --- MANTER EXPORTS DE LÓGICA AUXILIAR ---
 // Algumas partes do sistema podem importar isso diretamente, então mantemos wrappers
@@ -15,7 +15,7 @@ export function resolverImagensPrioritarias(backupGlobal, originalLimpas) {
     : originalLimpas || [];
 }
 
-// Estas funções de preparação agora existem dentro do TSX, 
+// Estas funções de preparação agora existem dentro do TSX,
 // mas se outros arquivos as chamam, precisamos mantê-las aqui.
 // Se ninguém chama de fora, podem ser deletadas. Por segurança, mantive a lógica original.
 export function prepararObjetoGabarito(g) {
@@ -26,10 +26,17 @@ export function prepararObjetoGabarito(g) {
     delete gabaritoLimpo.creditos.precisa_credito_generico;
     delete gabaritoLimpo.creditos.texto_credito_sugerido;
   }
-  const imgsReais = resolverImagensPrioritarias(
-    window.__BACKUP_IMGS_G,
-    window.__imagensLimpas?.gabarito_original
-  );
+  // [FIX] Prioriza imagens que já vieram no objeto
+  let imgsReais = [];
+  if (Array.isArray(g.fotos_originais) && g.fotos_originais.length > 0) {
+    imgsReais = g.fotos_originais;
+  } else {
+    imgsReais = resolverImagensPrioritarias(
+      window.__BACKUP_IMGS_G,
+      window.__imagensLimpas?.gabarito_original
+    );
+  }
+
   if (imgsReais.length > 0) {
     gabaritoLimpo.fotos_originais = imgsReais;
     delete gabaritoLimpo.foto_original;
@@ -39,10 +46,18 @@ export function prepararObjetoGabarito(g) {
 
 export function prepararObjetoQuestao(q) {
   const questaoFinal = JSON.parse(JSON.stringify(q));
-  const imgsReais = resolverImagensPrioritarias(
-    window.__BACKUP_IMGS_Q,
-    window.__imagensLimpas?.questao_original
-  );
+
+  // [FIX] Prioriza imagens que já vieram no objeto (ex: com coordenadas PDF)
+  let imgsReais = [];
+  if (Array.isArray(q.fotos_originais) && q.fotos_originais.length > 0) {
+    imgsReais = q.fotos_originais;
+  } else {
+    imgsReais = resolverImagensPrioritarias(
+      window.__BACKUP_IMGS_Q,
+      window.__imagensLimpas?.questao_original
+    );
+  }
+
   if (imgsReais.length > 0) {
     questaoFinal.fotos_originais = imgsReais;
     delete questaoFinal.foto_original;
@@ -54,9 +69,9 @@ export function prepararObjetoQuestao(q) {
 export function gerarJsonFinal(q, g, tituloMaterial) {
   const gabaritoLimpo = prepararObjetoGabarito(g);
   const questaoFinal = prepararObjetoQuestao(q);
-  const chaveProva = tituloMaterial || 'MATERIAL_SEM_TITULO';
-  const chaveQuestao = q.identificacao || 'QUESTAO_SEM_ID';
-  
+  const chaveProva = tituloMaterial || "MATERIAL_SEM_TITULO";
+  const chaveQuestao = q.identificacao || "QUESTAO_SEM_ID";
+
   const payloadFinal = {
     [chaveProva]: {
       [chaveQuestao]: {
@@ -71,10 +86,18 @@ export function gerarJsonFinal(q, g, tituloMaterial) {
 
 // Funções de HTML string não são mais necessárias para o funcionamento interno,
 // mas mantemos export vazios ou deprecated caso alguém importe.
-export function gerarHtmlHeaderModal(tituloMaterial) { return ''; }
-export function gerarHtmlJsonDebug(jsonString) { return ''; }
-export function montarHtmlModalCompleto() { return ''; }
-export function exibirModalRevisaoFinal() { console.warn('Função depreciada. O React controla o modal.'); }
+export function gerarHtmlHeaderModal(tituloMaterial) {
+  return "";
+}
+export function gerarHtmlJsonDebug(jsonString) {
+  return "";
+}
+export function montarHtmlModalCompleto() {
+  return "";
+}
+export function exibirModalRevisaoFinal() {
+  console.warn("Função depreciada. O React controla o modal.");
+}
 
 // --- FUNÇÃO PRINCIPAL ---
 
@@ -84,16 +107,17 @@ export function renderizarTelaFinal() {
 
   const { q, g, tituloMaterial, explicacaoArray, imagensFinais } = dados;
 
-  // Geramos o HTML interno dos painéis usando os componentes legados
-  const htmlQuestaoSide = montarHtmlPainelQuestao(q, tituloMaterial, imagensFinais);
-  const htmlGabaritoSide = montarHtmlPainelGabarito(g, imagensFinais, explicacaoArray);
+  // Geramos o HTML interno dos painéis usando os componentes legados (Deprecated, mas podemos manter null/empty se o componente não usa mais)
+  // const htmlQuestaoSide = montarHtmlPainelQuestao(q, tituloMaterial, imagensFinais);
+  // const htmlGabaritoSide = montarHtmlPainelGabarito(g, imagensFinais, explicacaoArray);
+  // [REFACTOR] Passamos objetos diretos agora
 
   // Criar container para o React
-  const existingModal = document.getElementById('finalModalReactRoot');
+  const existingModal = document.getElementById("finalModalReactRoot");
   if (existingModal) existingModal.remove();
 
-  const container = document.createElement('div');
-  container.id = 'finalModalReactContainer'; // Container temporário
+  const container = document.createElement("div");
+  container.id = "finalModalReactContainer"; // Container temporário
   document.body.appendChild(container);
 
   // Montar o componente React
@@ -101,32 +125,34 @@ export function renderizarTelaFinal() {
     q,
     g,
     tituloMaterial,
-    htmlQuestaoSide,
-    htmlGabaritoSide,
+    imagensFinais,
+    explicacaoArray,
+    // htmlQuestaoSide, // Não mais necessário
+    // htmlGabaritoSide, // Não mais necessário
     onConfirmCallback: () => {
-        // Callback opcional: Lógica que deve rodar quando o usuário clica em Enviar
-        // Caso existam event listeners globais atrelados à classe .js-confirmar-envio
-        // O React já lida com a UI de loading.
-        console.log("Evento de confirmação disparado pelo React");
-    }
+      // Callback opcional: Lógica que deve rodar quando o usuário clica em Enviar
+      // Caso existam event listeners globais atrelados à classe .js-confirmar-envio
+      // O React já lida com a UI de loading.
+      console.log("Evento de confirmação disparado pelo React");
+    },
   });
 }
 
 // Função auxiliar para envio, mantida para compatibilidade
 export function iniciarPreparacaoEnvio() {
-  const btnEnviar = document.getElementById('btnConfirmarEnvioFinal');
+  const btnEnviar = document.getElementById("btnConfirmarEnvioFinal");
   const q = window.__ultimaQuestaoExtraida;
   const g = window.__ultimoGabaritoExtraido;
 
   if (!q || !g) {
-    customAlert('❌ Erro: Dados incompletos. Processe a questão e o gabarito.');
+    customAlert("❌ Erro: Dados incompletos. Processe a questão e o gabarito.");
     return null;
   }
-  
+
   // O React já gerencia o estado disabled/loading, mas se algo externo chamar isso:
   if (btnEnviar) {
     btnEnviar.disabled = true;
-    btnEnviar.innerText = '⏳ Preparando JSON...';
+    btnEnviar.innerText = "⏳ Preparando JSON...";
   }
 
   return { btnEnviar, q, g };

@@ -28,9 +28,7 @@ export async function testarChaveReal(key: string): Promise<{ valido: boolean; m
 }
 
 function triggerSystemUpdate() {
-  if (typeof window.generatePDFUploadInterface === 'function') {
-    window.generatePDFUploadInterface();
-  }
+  // Deprecated
 }
 
 function mostrarToastSucesso(mensagem: string) {

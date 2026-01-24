@@ -97,8 +97,8 @@ export const SidebarPageManager = {
             "Este processo analisará apenas esta página e não poderá ser cancelado. Deseja continuar?",
             "Analisar",
             "Voltar",
-            true // isPositiveAction = true (cor primária)
-          )
+            true, // isPositiveAction = true (cor primária)
+          ),
         );
 
         if (confirmed) {
@@ -118,6 +118,13 @@ export const SidebarPageManager = {
 
       // Inserir na ordem correta (pageNum crescente)
       // Simples append funciona se criarmos em ordem, mas garantindo:
+      // [FIX] Guard against null container
+      if (!container) {
+        console.warn(
+          `[SidebarPageManager] Container not found for page ${pageNum}, cannot insert.`,
+        );
+        return details;
+      }
       const existingPages = Array.from(container.children);
       const nextSibling = existingPages.find((el) => {
         const p = parseInt(el.id.replace("page-details-", ""));
@@ -324,8 +331,9 @@ export const SidebarPageManager = {
       bodyContainer.scrollTop = bodyContainer.scrollHeight;
     }
 
-    // Se o details estava fechado e chegou coisa nova, abrir?
-    // User Request: Centralizar e focar
+    // Se o details estava fechado e chegou coisa nova, abrir
+    // [FIX] NÃO fazer scroll automático aqui - o scroll deve ser controlado
+    // pelo BatchProcessor para centralizar no CARD da questão, não nos pensamentos
     if (details) {
       details.open = true;
       // Scroll suave para o thought recém adicionado ou atualizado
@@ -341,6 +349,8 @@ export const SidebarPageManager = {
 
   getQuestionsContainer(pageNum) {
     const details = this.getPageElement(pageNum);
+    // [FIX] Return null if details doesn't exist (e.g., Hub not active)
+    if (!details) return null;
     return details.querySelector(".page-questions-list");
   },
 
@@ -354,17 +364,17 @@ export const SidebarPageManager = {
 
     // Identificar se existem cartões de questão REAIS (ignorando placeholders/botoes antigos)
     const hasQuestions = Array.from(questionsContainer.children).some((child) =>
-      child.classList.contains("cropper-group-item")
+      child.classList.contains("cropper-group-item"),
     );
 
     // Limpar rodapés antigos (placeholders ou botões soltos)
     const oldPlaceholder = questionsContainer.querySelector(
-      ".empty-page-placeholder"
+      ".empty-page-placeholder",
     );
     if (oldPlaceholder) oldPlaceholder.remove();
 
     const oldBtn = questionsContainer.querySelector(
-      ".btn-add-manual-page-footer"
+      ".btn-add-manual-page-footer",
     );
     if (oldBtn) oldBtn.remove();
 
@@ -451,7 +461,7 @@ export const SidebarPageManager = {
       irParaPagina(pageNum);
       setTimeout(() => {
         import("../cropper/cropper-state.js").then(({ CropperState }) => {
-          CropperState.createGroup({ tags: ["manual"] });
+          CropperState.createGroup({ tags: ["manual", "NOVO"] });
         });
       }, 100);
     });

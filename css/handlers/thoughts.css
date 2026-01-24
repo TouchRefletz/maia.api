@@ -403,6 +403,78 @@ body.ai-scanning-active #ai-floating-controls {
     }
 }
 
+
+/* --- Chat Specifc Thoughts --- */
+.chat-thoughts-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+    width: 100%;
+}
+
+.chat-thought-details {
+    background: rgba(20, 20, 25, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.chat-thought-details[open] {
+    background: rgba(20, 20, 25, 0.6);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.chat-thought-summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 10px 12px;
+    font-family: var(--font-family-mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: color 0.2s;
+    user-select: none;
+}
+
+.chat-thought-summary:hover {
+    color: var(--color-primary);
+}
+
+.chat-thought-summary::-webkit-details-marker {
+    display: none;
+}
+
+/* Seta animada customizada */
+.chat-thought-summary::before {
+    content: '▶';
+    font-size: 10px;
+    display: inline-block;
+    transition: transform 0.2s ease;
+    margin-right: 4px;
+    opacity: 0.7;
+}
+
+.chat-thought-details[open] .chat-thought-summary::before {
+    transform: rotate(90deg);
+}
+
+.chat-thought-wrapper {
+    padding: 0 12px 12px 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    margin-top: 0; 
+}
+
+/* Ajustes no card quando dentro do chat */
+.chat-thought-wrapper .maia-thought-card {
+    margin: 12px 0 0 0;
+    padding: 0;
+}
+
 .animate-appear {
     animation: floatUpFadeIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }

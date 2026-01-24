@@ -285,7 +285,6 @@
 /* Títulos Fixos no Topo ao Scrollar */
 .img-title {
   margin-bottom: 10px;
-  position: sticky;
   top: 0;
   background: var(--color-background);
   padding: 5px;

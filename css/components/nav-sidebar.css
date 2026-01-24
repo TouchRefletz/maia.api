@@ -1,0 +1,381 @@
+/* =========================================
+   NAV SIDEBAR - Menu Lateral Retrátil
+   ========================================= */
+
+/* Botão Hamburger */
+.hamburger-btn {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 1000;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  width: 36px;
+  height: 36px;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--duration-fast) var(--ease-standard);
+  color: var(--color-text);
+  box-shadow: var(--shadow-md);
+}
+
+.hamburger-btn:hover {
+  background: var(--color-primary);
+  color: var(--color-btn-primary-text);
+  border-color: var(--color-primary);
+  transform: scale(1.05);
+}
+
+/* Overlay escuro */
+.nav-sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1001;
+  opacity: 0;
+  visibility: hidden;
+  transition: all var(--duration-normal) var(--ease-standard);
+  backdrop-filter: blur(4px);
+}
+
+.nav-sidebar-overlay.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Sidebar Container */
+.nav-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  width: 280px;
+  background: var(--color-background);
+  border-right: 1px solid var(--color-border);
+  z-index: 1002;
+  transform: translateX(-100%);
+  transition: transform var(--duration-normal) var(--ease-standard);
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-lg);
+}
+
+.nav-sidebar.open {
+  transform: translateX(0);
+}
+
+/* Header do Sidebar */
+/* Header do Sidebar */
+.nav-sidebar-header {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 16px;
+  /* Increased gap for better separation */
+  padding: 24px 20px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.nav-brand-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.nav-sidebar-logo {
+  width: 32px;
+  /* Slightly smaller logo for balance */
+  height: auto;
+}
+
+.nav-sidebar-title {
+  font-size: 1.4rem;
+  /* Adjusted size */
+  font-weight: 800;
+  font-style: italic;
+  color: var(--color-text);
+}
+
+.nav-sidebar-title strong {
+  color: var(--color-primary);
+}
+
+/* Botão de Chave no Header */
+.nav-header-key-btn {
+  background: rgba(255, 255, 255, 0.05);
+  /* Slight background */
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  /* Rounded square matches aesthetic better */
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 18px;
+  color: var(--color-text-secondary);
+  transition: all var(--duration-fast) var(--ease-standard);
+  flex-shrink: 0;
+}
+
+.nav-header-key-btn:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+  transform: translateY(-2px);
+}
+
+/* Container dos Items */
+.nav-sidebar-items {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 12px;
+  gap: 8px;
+  overflow-y: auto;
+}
+
+/* Item do Menu */
+.nav-sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 18px;
+  border-radius: var(--radius-md);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-standard);
+  text-align: left;
+  width: 100%;
+  font-size: var(--font-size-base);
+  color: var(--color-text);
+}
+
+.nav-sidebar-item:hover {
+  background: var(--color-secondary);
+  border-color: var(--color-border);
+}
+
+.nav-sidebar-item .nav-icon {
+  font-size: 22px;
+  /* Adjusted icon size */
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+  /* Muted icons by default */
+  transition: color 0.2s;
+}
+
+.nav-sidebar-item:hover .nav-icon {
+  color: var(--color-text);
+}
+
+.nav-sidebar-item .nav-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0px;
+}
+
+.nav-sidebar-item .nav-title {
+  font-weight: 600;
+  color: var(--color-text);
+  font-size: 0.95rem;
+}
+
+/* Descrição "Escondida" */
+.nav-sidebar-item .nav-desc {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transition: all 0.3s var(--ease-standard);
+  margin-top: 0;
+}
+
+.nav-sidebar-item:hover .nav-desc {
+  max-height: 20px;
+  opacity: 1;
+  margin-top: 2px;
+}
+
+/* Estados específicos por tipo */
+.nav-sidebar-item.nav-item--banco:hover .nav-title {
+  color: var(--color-primary);
+}
+
+.nav-sidebar-item.nav-item--extracao:hover .nav-title {
+  color: var(--color-warning);
+}
+
+.nav-sidebar-item.nav-item--revisao:hover .nav-title {
+  color: var(--color-success);
+}
+
+
+/* Config no rodapé */
+.nav-sidebar-config {
+  margin-top: auto;
+  border-top: 1px solid var(--color-border);
+  border-radius: 0;
+  padding: 16px 20px;
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+}
+
+.nav-sidebar-config:hover {
+  background: var(--color-secondary);
+  color: var(--color-text);
+}
+
+/* Responsividade */
+@media (max-width: 480px) {
+  .nav-sidebar {
+    width: 100%;
+  }
+
+  .hamburger-btn {
+    top: 12px;
+    left: 12px;
+    width: 40px;
+    height: 40px;
+    font-size: 20px;
+  }
+}
+
+/* =========================================
+   USER SECTION & LOGIN
+   ========================================= */
+
+.nav-user-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  /* Full width */
+}
+
+/* Login Button */
+.nav-login-btn {
+  flex: 1;
+  /* Expand to fill space */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Center content */
+  gap: 8px;
+  padding: 10px 16px;
+  /* Taller button */
+  background: var(--login-bg);
+  border: none;
+  border-radius: 12px;
+  /* Matches Key btn radius */
+  color: var(--color-text);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.login-text {
+  font-weight: 800;
+  font-style: italic;
+  font-size: 1rem;
+}
+
+.nav-login-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px var(--color-primary);
+}
+
+.login-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.nav-user-avatar {
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* Dropdown Menu */
+.user-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 10px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  min-width: 200px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  padding: 8px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  transition: all 0.2s cubic-bezier(0.165, 0.84, 0.44, 1);
+  z-index: 1005;
+  pointer-events: none;
+}
+
+.user-dropdown-menu.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.dropdown-header {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+}
+
+.dropdown-name {
+  font-weight: 700;
+  color: var(--color-text);
+  font-size: 0.95rem;
+}
+
+.dropdown-email {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  margin-top: 2px;
+}
+
+.dropdown-divider {
+  height: 1px;
+  background: var(--color-border);
+  margin: 4px 0;
+}
+
+.dropdown-item {
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  color: var(--color-error);
+  /* Logout usually red */
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.2s;
+}
+
+.dropdown-item:hover {
+  background: rgba(239, 68, 68, 0.1);
+  /* Red tint for logout */
+}

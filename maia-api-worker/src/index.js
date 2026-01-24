@@ -3,12 +3,9 @@ import { GoogleGenAI } from '@google/genai';
 const DEFAULT_MODELS = [
 	'models/gemini-3-flash-preview',
 	'models/gemini-2.5-flash',
-	'models/gemini-2.5-pro',
+	'models/gemini-2.5-flash-lite',
 	'models/gemini-flash-latest',
 	'models/gemini-flash-lite-latest',
-	'models/gemini-2.5-flash-lite',
-	'models/gemini-2.0-flash',
-	'models/gemini-2.0-flash-lite',
 ];
 
 const safetySettings = [
@@ -60,6 +57,9 @@ export default {
 				case '/pinecone-upsert':
 					return handlePineconeUpsert(request, env);
 
+				case '/pinecone-query':
+					return handlePineconeQuery(request, env);
+
 				case '/search':
 					return handleGeminiSearch(request, env);
 
@@ -105,26 +105,93 @@ export default {
 /**
  * SERVICE: TRIGGER DEEP SEARCH (GITHUB ACTIONS)
  */
-/**
- * SERVICE: TRIGGER DEEP SEARCH (GITHUB ACTIONS)
- */
 async function handleTriggerDeepSearch(request, env) {
 	const body = await request.json();
-	const { query, ntfy_topic, force, cleanup, confirm, mode } = body; // confirm & mode added
+	const { query, ntfy_topic, force, cleanup, confirm, mode } = body;
 
 	// 1. Validate Input
 	if (!query) {
 		return new Response(JSON.stringify({ error: 'Query is required' }), { status: 400, headers: corsHeaders });
 	}
 
-	// 2. Canonical Slug Generation (Pre-flight Phase)
-	let canonicalSlug = body.slug; // Helper or frontend provided fallback
+	let canonicalSlug = body.slug; // Manual override
 	let reasoning = 'Manual override';
+	let exactMatch = null;
+	let similarCandidates = [];
+	let searchMethod = 'manual';
 
-	// If no forced slug provided, generate one via Gemini (Centralized Service)
+	// ============================================
+	// FASE 1: BUSCA DIRETA NO PINECONE (Query do usuário)
+	// Tenta encontrar match sem usar IA
+	// ============================================
+	if (!canonicalSlug && !force) {
+		try {
+			console.log(`[Deep Search] Fase 1: Buscando query direta no Pinecone: "${query}"`);
+
+			const directEmbedding = await generateEmbedding(query, env.GOOGLE_GENAI_API_KEY);
+
+			if (directEmbedding) {
+				const directResult = await executePineconeQuery(directEmbedding, env, 10, {
+					type: { $in: ['deep-search-result', 'manual-upload-result'] },
+				});
+
+				if (directResult?.matches?.length > 0) {
+					const bestMatch = directResult.matches[0];
+
+					// Se match razoável (> 75%), usa o slug do match (User request: "afrouxar pinecone")
+					if (bestMatch.score > 0.75 && bestMatch.metadata?.slug) {
+						canonicalSlug = bestMatch.metadata.slug;
+						reasoning = `Pinecone direct match (score: ${(bestMatch.score * 100).toFixed(1)}%)`;
+						searchMethod = 'pinecone-direct';
+
+						console.log(`[Deep Search] Match forte encontrado: ${canonicalSlug} (${bestMatch.score})`);
+
+						// Já define o exactMatch
+						exactMatch = bestMatch;
+
+						// Pega candidatos similares
+						similarCandidates = directResult.matches
+							.slice(1)
+							.filter((m) => m.metadata && m.score > 0.75)
+							.map((m) => ({
+								slug: m.metadata.slug,
+								score: m.score,
+								query: m.metadata.query,
+								institution: m.metadata.institution,
+								year: m.metadata.year,
+								file_count: m.metadata.file_count,
+								timestamp: m.metadata.updated_at,
+							}));
+					} else {
+						// Match fraco - guarda como candidatos
+						console.log(`[Deep Search] Match fraco (${bestMatch.score}), continuando para IA...`);
+						similarCandidates = directResult.matches
+							.filter((m) => m.metadata && m.score > 0.6)
+							.map((m) => ({
+								slug: m.metadata.slug,
+								score: m.score,
+								query: m.metadata.query,
+								institution: m.metadata.institution,
+								year: m.metadata.year,
+								file_count: m.metadata.file_count,
+								timestamp: m.metadata.updated_at,
+							}));
+					}
+				}
+			}
+		} catch (e) {
+			console.warn('[Deep Search] Fase 1 (Pinecone direto) error:', e);
+		}
+	}
+
+	// ============================================
+	// FASE 2: GERAÇÃO DE SLUG VIA IA (Fallback)
+	// Só executa se não encontrou match forte na Fase 1
+	// ============================================
 	if (!canonicalSlug) {
 		try {
-			// Call internal Canonical Slug Service
+			console.log(`[Deep Search] Fase 2: Gerando slug via IA para: "${query}"`);
+
 			const slugReq = new Request('http://internal/canonical-slug', {
 				method: 'POST',
 				body: JSON.stringify({ query }),
@@ -135,64 +202,69 @@ async function handleTriggerDeepSearch(request, env) {
 				const slugData = await slugRes.json();
 				canonicalSlug = slugData.slug;
 				reasoning = slugData.reasoning;
-				console.log(`[Deep Search] Slug Refined: ${canonicalSlug} (${reasoning})`);
+				searchMethod = 'ai-generated';
+				console.log(`[Deep Search] Slug gerado pela IA: ${canonicalSlug} (${reasoning})`);
 			} else {
-				console.warn('[Deep Search] Slug Service failed, falling back to simple sanitization.');
+				console.warn('[Deep Search] IA falhou, usando sanitização simples.');
 				canonicalSlug = query
 					.toLowerCase()
 					.replace(/[^a-z0-9]+/g, '-')
 					.replace(/^-+|-+$/g, '');
+				searchMethod = 'sanitized-fallback';
 			}
 		} catch (e) {
-			console.error('[Deep Search] Error in slug generation:', e);
+			console.error('[Deep Search] Fase 2 (IA) error:', e);
 			canonicalSlug = query
 				.toLowerCase()
 				.replace(/[^a-z0-9]+/g, '-')
 				.replace(/^-+|-+$/g, '');
+			searchMethod = 'sanitized-fallback';
 		}
 	}
 
-	// 3. Check Pinecone for Duplicates
-	let exactMatch = null;
-	let similarCandidates = [];
-
-	if (!force) {
+	// ============================================
+	// FASE 3: BUSCA PINECONE COM SLUG DA IA
+	// Verifica se o slug gerado pela IA já existe
+	// ============================================
+	if (searchMethod === 'ai-generated' && !force && !exactMatch) {
 		try {
-			// A. Exact Match Check & Similar Candidates
-			// Modified: Use the CANONICAL SLUG for the embedding, effectively "searching by translation"
-			// This ensures "exame nacional 2019" -> "enem-2019" -> embedding("enem 2019")
-			const searchParam = canonicalSlug.replace(/-/g, ' ');
+			console.log(`[Deep Search] Fase 3: Verificando slug da IA no Pinecone: "${canonicalSlug}"`);
 
-			console.log(`[Pre-flight] Searching cache using translated term: "${searchParam}" (from "${query}")`);
+			const slugSearchParam = canonicalSlug.replace(/-/g, ' ');
+			const slugEmbedding = await generateEmbedding(slugSearchParam, env.GOOGLE_GENAI_API_KEY);
 
-			// We need an embedding for the query anyway for similarity check
-			const embedding = await generateEmbedding(searchParam, env.GOOGLE_GENAI_API_KEY);
-
-			if (embedding) {
-				const cacheResult = await executePineconeQuery(embedding, env, 10, {
+			if (slugEmbedding) {
+				const slugResult = await executePineconeQuery(slugEmbedding, env, 10, {
 					type: { $in: ['deep-search-result', 'manual-upload-result'] },
-				}); // Get top 10
+				});
 
-				if (cacheResult && cacheResult.matches) {
-					// 1. Exact Match Check
-					exactMatch = cacheResult.matches.find((m) => m.metadata && m.metadata.slug === canonicalSlug);
+				if (slugResult?.matches) {
+					// Procura match exato com o slug
+					exactMatch = slugResult.matches.find((m) => m.metadata?.slug === canonicalSlug);
 
-					// 2. Similar Candidates (high score but different slug)
-					similarCandidates = cacheResult.matches
-						.filter((m) => m.metadata && m.metadata.slug !== canonicalSlug && m.score > 0.75) // High threshold
-						.map((m) => ({
-							slug: m.metadata.slug,
-							score: m.score,
-							query: m.metadata.query,
-							institution: m.metadata.institution,
-							year: m.metadata.year,
-							file_count: m.metadata.file_count,
-							timestamp: m.metadata.updated_at,
-						}));
+					// Atualiza candidatos similares
+					if (!exactMatch && slugResult.matches.length > 0) {
+						const topMatch = slugResult.matches[0];
+						if (topMatch.score > 0.85 && topMatch.metadata?.slug) {
+							console.log(`[Deep Search] Pinecone sugeriu slug diferente: ${topMatch.metadata.slug}`);
+							similarCandidates = [
+								{
+									slug: topMatch.metadata.slug,
+									score: topMatch.score,
+									query: topMatch.metadata.query,
+									institution: topMatch.metadata.institution,
+									year: topMatch.metadata.year,
+									file_count: topMatch.metadata.file_count,
+									timestamp: topMatch.metadata.updated_at,
+								},
+								...similarCandidates.filter((c) => c.slug !== topMatch.metadata.slug),
+							];
+						}
+					}
 				}
 			}
 		} catch (e) {
-			console.warn('[Pre-flight] Cache check error:', e);
+			console.warn('[Deep Search] Fase 3 (Verificação slug IA) error:', e);
 		}
 	}
 
@@ -548,27 +620,55 @@ async function generateEmbedding(text, apiKey, model = 'models/gemini-embedding-
 /**
  * HELPER: Shared Pinecone Query
  */
-async function executePineconeQuery(vector, env, topK = 1, filter = {}) {
-	// Strict check for Deep Search Host to avoid polluting the main index
-	// If the user intends to use the main index, they must explicitly set PINECONE_HOST_DEEP_SEARCH to the same value.
-	const pineconeHost = env.PINECONE_HOST_DEEP_SEARCH;
-	const apiKey = env.PINECONE_API_KEY;
+/**
+ * HELPER: Shared Pinecone Query
+ */
+async function executePineconeQuery(vector, env, topK = 1, filter = {}, target = 'default', namespace = '') {
+	// 1. Determine Host based on Target
+	let pineconeHost = env.PINECONE_HOST;
 
-	// Check if filter targets deep-search (either specific type or list including it)
-	const isDeepSearchQuery =
-		filter.type === 'deep-search-result' || (filter.type && filter.type['$in'] && filter.type['$in'].includes('deep-search-result'));
+	if (target === 'filter') {
+		if (!env.PINECONE_HOST_FILTER) {
+			console.error('[Pinecone Query] PINECONE_HOST_FILTER required for target=filter');
+			return null;
+		}
+		pineconeHost = env.PINECONE_HOST_FILTER;
+	} else if (target === 'deep-search') {
+		// Strict check for Deep Search Host
+		pineconeHost = env.PINECONE_HOST_DEEP_SEARCH;
+	} else if (target === 'maia-memory') {
+		pineconeHost = env.PINECONE_HOST_MEMORY;
+	} else {
+		// Default fallback logic (existing)
+		const isDeepSearchQuery =
+			filter.type === 'deep-search-result' || (filter.type && filter.type['$in'] && filter.type['$in'].includes('deep-search-result'));
 
-	if (isDeepSearchQuery && !pineconeHost) {
-		console.error('[Pinecone Query] PINECONE_HOST_DEEP_SEARCH is required for deep-search queries but not set.');
-		return null; // Or throw, but for query we can just return null/empty
+		if (isDeepSearchQuery) {
+			pineconeHost = env.PINECONE_HOST_DEEP_SEARCH;
+		} else {
+			pineconeHost = env.PINECONE_HOST || env.PINECONE_HOST_DEEP_SEARCH;
+		}
 	}
 
-	// Fallback only if NOT deep search (though this helper is shared, so be careful)
-	const effectiveHost = pineconeHost || env.PINECONE_HOST;
+	const apiKey = env.PINECONE_API_KEY;
 
-	if (!effectiveHost || !apiKey) return null;
+	if (!pineconeHost || !apiKey) {
+		console.error('[Pinecone Query] Host or API Key missing', { pineconeHost });
+		return null;
+	}
 
-	const endpoint = `${effectiveHost}/query`;
+	const endpoint = `${pineconeHost}/query`;
+
+	const body = {
+		vector,
+		topK,
+		filter,
+		includeMetadata: true,
+	};
+
+	if (namespace) {
+		body.namespace = namespace;
+	}
 
 	const response = await fetch(endpoint, {
 		method: 'POST',
@@ -577,12 +677,7 @@ async function executePineconeQuery(vector, env, topK = 1, filter = {}) {
 			'Content-Type': 'application/json',
 			'X-Pinecone-API-Version': '2024-07',
 		},
-		body: JSON.stringify({
-			vector,
-			topK,
-			filter,
-			includeMetadata: true,
-		}),
+		body: JSON.stringify(body),
 	});
 
 	if (!response.ok) {
@@ -596,23 +691,35 @@ async function executePineconeQuery(vector, env, topK = 1, filter = {}) {
 /**
  * HELPER: Shared Pinecone Upsert
  */
-async function executePineconeUpsert(vectors, env, namespace = '') {
-	// Checks if any vector is a deep search or manual upload result
-	const isDeepSearch = vectors.some(
-		(v) => v.metadata && (v.metadata.type === 'deep-search-result' || v.metadata.type === 'manual-upload-result'),
-	);
-
+async function executePineconeUpsert(vectors, env, namespace = '', target = 'default') {
 	let pineconeHost = env.PINECONE_HOST;
 
-	if (isDeepSearch) {
-		if (!env.PINECONE_HOST_DEEP_SEARCH) {
-			throw new Error('PINECONE_HOST_DEEP_SEARCH is not configured! Cannot save deep search results to default index.');
+	// 1. Determine Host based on Target
+	if (target === 'filter') {
+		if (!env.PINECONE_HOST_FILTER) {
+			throw new Error('PINECONE_HOST_FILTER is not configured! Cannot save to filter index.');
 		}
-		pineconeHost = env.PINECONE_HOST_DEEP_SEARCH;
-		console.log(`[Pinecone Upsert] Using DEEP_SEARCH host: ${pineconeHost}`);
+		pineconeHost = env.PINECONE_HOST_FILTER;
+		console.log(`[Pinecone Upsert] Using FILTER host: ${pineconeHost}`);
+	} else if (target === 'maia-memory') {
+		pineconeHost = env.PINECONE_HOST_MEMORY;
+		console.log(`[Pinecone Upsert] Using MEMORY host: ${pineconeHost}`);
 	} else {
-		// Optional: Warn if main host is used?
-		pineconeHost = env.PINECONE_HOST || env.PINECONE_HOST_DEEP_SEARCH;
+		// Checks if any vector is a deep search or manual upload result
+		const isDeepSearch = vectors.some(
+			(v) => v.metadata && (v.metadata.type === 'deep-search-result' || v.metadata.type === 'manual-upload-result'),
+		);
+
+		if (isDeepSearch) {
+			if (!env.PINECONE_HOST_DEEP_SEARCH) {
+				throw new Error('PINECONE_HOST_DEEP_SEARCH is not configured! Cannot save deep search results to default index.');
+			}
+			pineconeHost = env.PINECONE_HOST_DEEP_SEARCH;
+			console.log(`[Pinecone Upsert] Using DEEP_SEARCH host: ${pineconeHost}`);
+		} else {
+			// Optional: Warn if main host is used?
+			pineconeHost = env.PINECONE_HOST || env.PINECONE_HOST_DEEP_SEARCH;
+		}
 	}
 
 	const apiKey = env.PINECONE_API_KEY;
@@ -647,15 +754,27 @@ async function executePineconeUpsert(vectors, env, namespace = '') {
  */
 async function handleGeminiGenerate(request, env) {
 	const body = await request.json();
-	const { texto, schema, listaImagensBase64 = [], mimeType = 'image/jpeg', model, apiKey: userApiKey } = body;
+	const {
+		texto,
+		schema,
+		listaImagensBase64 = [],
+		mimeType = 'image/jpeg',
+		model,
+		apiKey: userApiKey,
+		jsonMode = true,
+		thinking = true,
+		chatMode = false,
+		history = [],
+		systemInstruction,
+	} = body;
 
 	const finalApiKey = userApiKey || env.GOOGLE_GENAI_API_KEY;
 	if (!finalApiKey) throw new Error('GOOGLE_GENAI_API_KEY not configured');
 
 	const client = new GoogleGenAI({ apiKey: finalApiKey });
 
-	// Modelos iniciais (se vier "model", tenta só ele; senão usa DEFAULT_MODELS)
-	const initialModels = model ? [model] : DEFAULT_MODELS;
+	// Modelos iniciais: Se vier "model", coloca ele primeiro, depois o resto (deduplicado)
+	const initialModels = model ? [model, ...DEFAULT_MODELS.filter((m) => m !== model)] : DEFAULT_MODELS;
 
 	// Fallbacks específicos pra RECITATION
 	const RECITATION_FALLBACKS = ['models/gemini-flash-latest', 'models/gemini-flash-lite-latest'];
@@ -663,7 +782,10 @@ async function handleGeminiGenerate(request, env) {
 	const encoder = new TextEncoder();
 
 	// Prepare parts
-	const parts = [{ text: texto }];
+	const parts = [];
+	if (texto) {
+		parts.push({ text: texto });
+	}
 
 	// Helper to process files/images
 	const processAttachments = (items, defaultMime) => {
@@ -732,16 +854,37 @@ async function handleGeminiGenerate(request, env) {
 			await writeNdjson({ type: 'meta', event: 'attempt_start', attempt, model: modelo });
 
 			try {
-				const stream = await client.models.generateContentStream({
-					model: modelo,
-					contents: [{ role: 'user', parts }],
-					config: {
-						thinkingConfig: { includeThoughts: true },
-						responseMimeType: 'application/json',
-						responseJsonSchema: schema || undefined,
-						safetySettings,
-					},
-				});
+				let stream;
+				const config = {
+					...(thinking ? { thinkingConfig: { includeThoughts: true } } : {}),
+					responseMimeType: jsonMode ? 'application/json' : undefined,
+					responseJsonSchema: jsonMode ? schema || undefined : undefined,
+					safetySettings,
+				};
+
+				if (chatMode) {
+					// NOTE: create() config usually takes systemInstruction, tools, etc.
+					const chat = client.chats.create({
+						model: modelo,
+						history: history,
+						config: {
+							systemInstruction: systemInstruction,
+						},
+					});
+					stream = await chat.sendMessageStream({
+						message: { role: 'user', parts },
+						config,
+					});
+				} else {
+					stream = await client.models.generateContentStream({
+						model: modelo,
+						contents: [{ role: 'user', parts }],
+						config: {
+							...config,
+							systemInstruction: systemInstruction,
+						},
+					});
+				}
 
 				let wroteSomethingThisAttempt = false;
 
@@ -923,13 +1066,30 @@ async function handleImgBBUpload(request, env) {
  */
 async function handlePineconeUpsert(request, env) {
 	const body = await request.json();
-	const { vectors, namespace = '' } = body; // Default namespace empty
+	const { vectors, namespace = '', target = 'default' } = body; // Default namespace empty
 
 	if (!vectors || !Array.isArray(vectors)) throw new Error('Vectors array is required');
 
-	const result = await executePineconeUpsert(vectors, env, namespace);
+	const result = await executePineconeUpsert(vectors, env, namespace, target);
 
 	return new Response(JSON.stringify(result), {
+		headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+	});
+}
+
+/**
+ * 4.1 SERVICE: PINECONE QUERY
+ * Recebe: { vector: [], topK: 1, filter: {}, target: 'default'|'filter', namespace: '' }
+ */
+async function handlePineconeQuery(request, env) {
+	const body = await request.json();
+	const { vector, topK = 1, filter = {}, target = 'default', namespace = '' } = body;
+
+	if (!vector || !Array.isArray(vector)) throw new Error('Vector array is required');
+
+	const result = await executePineconeQuery(vector, env, topK, filter, target, namespace);
+
+	return new Response(JSON.stringify(result || { matches: [] }), {
 		headers: { ...corsHeaders, 'Content-Type': 'application/json' },
 	});
 }
@@ -1256,11 +1416,9 @@ async function handleManualUpload(request, env) {
 		const sourceUrlGabarito = formData.get('source_url_gabarito');
 
 		const fileProva = formData.get('fileProva');
-		const fileGabarito = formData.get('fileGabarito');
 
 		const confirmOverride = formData.get('confirm_override') === 'true';
 		const inputVisualHash = formData.get('visual_hash');
-		const inputVisualHashGab = formData.get('visual_hash_gabarito');
 
 		if ((!fileProva && !confirmOverride) || !title) {
 			return new Response(JSON.stringify({ error: 'Prova and Title are required' }), {
@@ -1469,22 +1627,17 @@ async function handleManualUpload(request, env) {
 		// We want SAFE filenames for the filesystem (no spaces/weird chars logic handled by user input or assumed safe from source)
 		const sanitize = (n) => (n ? n.replace(/[^a-zA-Z0-9.-]/g, '_') : n);
 		const pdfPhysicalName = sanitize(pdfCustomName || (fileProva && fileProva.name ? fileProva.name : 'FALLBACK_ERROR_PDF.pdf'));
-		const gabPhysicalName = sanitize(gabCustomName || (fileGabarito && fileGabarito.name ? fileGabarito.name : null));
 
 		// 2. DISPLAY NAME (Presentation) - Priority: AI > Custom > Original
 		const pdfDisplayName = aiData.formatted_title_prova || pdfPhysicalName.replace(/\.pdf$/i, '');
-		const gabDisplayName = aiData.formatted_title_gabarito || (gabPhysicalName ? gabPhysicalName.replace(/\.pdf$/i, '') : null);
 
 		// 3. DUPLICATE CHECK (Unless Override)
 		let pdfUrlToDispatch = formData.get('pdf_url_override') || pdfUrl;
-		let gabUrlToDispatch = formData.get('gabarito_url_override') || gabUrl;
 
 		// The "Final Name" for metadata starts as our physical target, but may be overwritten if dedup finds a hosted file.
 		let pdfFinalPhysicalName = pdfPhysicalName;
-		let gabFinalPhysicalName = gabPhysicalName;
 
 		let foundProva = false;
-		let foundGab = false;
 
 		if (!confirmOverride) {
 			try {
@@ -1532,9 +1685,8 @@ async function handleManualUpload(request, env) {
 					// LOGIC: If all required files (Prova and/or Gabarito) are already found in the manifest,
 					// we return success immediately.
 					const provaSatisfied = !fileProva || foundProva;
-					const gabSatisfied = !fileGabarito || foundGab;
 
-					if (provaSatisfied && gabSatisfied) {
+					if (provaSatisfied) {
 						return new Response(
 							JSON.stringify({
 								success: true,
@@ -1709,7 +1861,15 @@ async function handleCanonicalSlug(request, env) {
 
 Rules:
 1. Format: \`exam-name-year\` (e.g., \`enem-2024\`, \`ita-2025\`, \`fuvest-2024\`).
-2. IMPORTANT: Do NOT include phase, stage, or specific numbers in the slug unless it is the year. 'Fuvest 2024 1ª Fase' -> 'fuvest-2024'.
+2. CRITICAL: You MUST STRIP all specific details such as:
+   - Phase/Stage ("1ª Fase", "Segunda Etapa")
+   - Day ("Dia 1", "Segundo Dia")
+   - Booklet/Caderno ("Caderno 3", "Prova Azul", "Amarela")
+   - Subject ("Matemática", "Humanas")
+   
+   Example: "ENEM 2025 Caderno 3 Dia 1" -> "enem-2025"
+   Example: "Fuvest 2024 1ª Fase" -> "fuvest-2024"
+
 3. Year Inference: If the user DOES NOT specify a year, you MUST infer the most recent *occurred* or *upcoming* edition based on the current date provided.
     - Current Date: ${currentDate}
     - Logic: If today is Dec 2025, 'Enem' implies 'enem-2025'. If user asks for 'Enem' in Jan 2025, it implies 'enem-2024' (last one) or 'enem-2025' (next one) based on typical exam schedule. Default to the *latest edition that likely has files available*.

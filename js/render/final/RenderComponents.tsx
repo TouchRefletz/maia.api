@@ -2,7 +2,8 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { decodeEntities, safe, safeMarkdown } from '../../normalize/primitives.js';
-import { renderizarEstruturaHTML, renderizar_estrutura_alternativa } from '../structure.js';
+import { renderizar_estrutura_alternativa } from '../structure.js';
+import { MainStructure } from '../StructureRender';
 
 // --- Interfaces para Tipagem ---
 interface ImgProps {
@@ -270,14 +271,21 @@ export const PassosGabarito: React.FC<{ explicacaoArray: PassoExplicacao[] }> = 
         <ol className="steps-list">
           {explicacaoArray.map((p, idx) => {
             const imgsPasso = (window as any).__imagensLimpas?.gabarito_passos?.[idx] || [];
-            const htmlPasso = renderizarEstruturaHTML(p.estrutura, imgsPasso, `final_view_gab_${idx}`);
+            // [REFACTOR] Using MainStructure directly instead of html string
             const isExtraido = String(p.origem || '').includes('extraido');
 
             return (
               <li key={idx} className="step-card">
                 <div className="step-index">{idx + 1}</div>
                 <div className="step-body">
-                  <div className="step-content" dangerouslySetInnerHTML={{ __html: htmlPasso }} />
+                  <div className="step-content">
+                    <MainStructure 
+                        estrutura={p.estrutura} 
+                        imagensExternas={imgsPasso} 
+                        contexto={`final_view_gab_${idx}`}
+                        // Default isReadOnly=false matches legacy behavior
+                    />
+                  </div>
                   <div className="step-meta" style={{ marginTop: '8px', paddingTop: '6px', borderTop: '1px dashed var(--color-border)' }}>
                     {isExtraido ? (
                       <span className="step-chip" style={{ borderColor: 'var(--color-success)', color: 'var(--color-success)' }}>📄 Extraído</span>
@@ -297,11 +305,7 @@ export const PassosGabarito: React.FC<{ explicacaoArray: PassoExplicacao[] }> = 
 };
 
 export const PainelQuestao: React.FC<QuestaoProps> = ({ q, tituloMaterial, imagensFinais }) => {
-  const htmlEstruturaQuestao = renderizarEstruturaHTML(
-    q.estrutura,
-    imagensFinais.q_original,
-    'final_view_q'
-  );
+  // [REFACTOR] Removed renderizarEstruturaHTML string generation
 
   return (
     <div className="extraction-result" style={{ border: 'none', padding: 0, background: 'transparent' }}>
@@ -322,8 +326,14 @@ export const PainelQuestao: React.FC<QuestaoProps> = ({ q, tituloMaterial, image
         <div
           className="data-box scrollable"
           style={{ background: 'var(--color-background)', borderColor: 'var(--color-border)', padding: '15px' }}
-          dangerouslySetInnerHTML={{ __html: htmlEstruturaQuestao }}
-        />
+        >
+            <MainStructure 
+                estrutura={q.estrutura} 
+                imagensExternas={imagensFinais.q_original} 
+                contexto="final_view_q" 
+                isReadOnly={true} 
+            />
+        </div>
       </div>
 
       <div style={{ gap: '10px', marginTop: '10px' }}>

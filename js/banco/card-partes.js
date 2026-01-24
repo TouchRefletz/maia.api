@@ -1,26 +1,25 @@
-import { renderizarEstruturaHTML } from '../render/structure.js';
-
 export function gerarHtmlCorpoQuestao(q, imgsOriginalQ, htmlImgsSuporte) {
-  let htmlFinal = '';
+  let htmlFinal = "";
 
-  // 1. Gera o corpo principal (Estruturado vs Legado)
+  // 1. Gera o corpo principal (React Hydration Target para Estrutura)
   if (q.estrutura && Array.isArray(q.estrutura)) {
-    htmlFinal = renderizarEstruturaHTML(q.estrutura, imgsOriginalQ, 'banco');
+    // Retornamos apenas o container para hidratação React
+    htmlFinal = `<div class="js-react-q-body" style="min-height: 50px;"></div>`;
   } else {
-    // Lógica de Fallback Legado
+    // Lógica de Fallback Legado (Texto Simples / Imagens à moda antiga)
     const imgsHtml =
       imgsOriginalQ.length > 0
         ? imgsOriginalQ
-          .map(
-            (url) =>
-              `<img src="${url}" class="structure-img" style="margin-bottom:10px;">`
-          )
-          .join('')
-        : '';
+            .map(
+              (url) =>
+                `<img src="${url}" class="structure-img" style="margin-bottom:10px;">`,
+            )
+            .join("")
+        : "";
 
     htmlFinal =
       imgsHtml +
-      `<div class="structure-text">${(q.enunciado || '').replace(/\n/g, '<br>')}</div>`;
+      `<div class="structure-text">${(q.enunciado || "").replace(/\n/g, "<br>")}</div>`;
   }
 
   // 2. Adiciona Imagens de Suporte (se houver)
@@ -32,23 +31,23 @@ export function gerarHtmlCorpoQuestao(q, imgsOriginalQ, htmlImgsSuporte) {
 }
 
 export function renderMatrizComplexidade(g) {
-  if (!g.analise_complexidade?.fatores) return '';
+  if (!g.analise_complexidade?.fatores) return "";
 
   const labels = {
-    texto_extenso: 'Texto Extenso',
-    vocabulario_complexo: 'Vocabulário Denso',
-    multiplas_fontes_leitura: 'Múltiplas Fontes',
-    interpretacao_visual: 'Interp. Visual',
-    dependencia_conteudo_externo: 'Conteúdo Prévio',
-    interdisciplinaridade: 'Interdisciplinar',
-    contexto_abstrato: 'Abstrato',
-    raciocinio_contra_intuitivo: 'Contra-Intuitivo',
-    abstracao_teorica: 'Teoria Pura',
-    deducao_logica: 'Dedução Lógica',
-    resolucao_multiplas_etapas: 'Multi-etapas',
-    transformacao_informacao: 'Transformação Info',
-    distratores_semanticos: 'Distratores Fortes',
-    analise_nuance_julgamento: 'Julgamento Sutil',
+    texto_extenso: "Texto Extenso",
+    vocabulario_complexo: "Vocabulário Denso",
+    multiplas_fontes_leitura: "Múltiplas Fontes",
+    interpretacao_visual: "Interp. Visual",
+    dependencia_conteudo_externo: "Conteúdo Prévio",
+    interdisciplinaridade: "Interdisciplinar",
+    contexto_abstrato: "Abstrato",
+    raciocinio_contra_intuitivo: "Contra-Intuitivo",
+    abstracao_teorica: "Teoria Pura",
+    deducao_logica: "Dedução Lógica",
+    resolucao_multiplas_etapas: "Multi-etapas",
+    transformacao_informacao: "Transformação Info",
+    distratores_semanticos: "Distratores Fortes",
+    analise_nuance_julgamento: "Julgamento Sutil",
   };
 
   const fatores = g.analise_complexidade.fatores;
@@ -60,44 +59,45 @@ export function renderMatrizComplexidade(g) {
       fatores[key] ||
       fatores[key.replace(/_([a-z])/g, (_, x) => x.toUpperCase())]
     );
-    htmlGrid += `<div class="comp-factor ${isActive ? 'active' : ''}"><div class="comp-dot"></div><span>${label}</span></div>`;
+    htmlGrid += `<div class="comp-factor ${isActive ? "active" : ""}"><div class="comp-dot"></div><span>${label}</span></div>`;
   }
-  htmlGrid += '</div>';
+  htmlGrid += "</div>";
 
   if (g.analise_complexidade.justificativa_dificuldade) {
     const safeJust = String(
-      g.analise_complexidade.justificativa_dificuldade
-    ).replace(/"/g, '&quot;');
+      g.analise_complexidade.justificativa_dificuldade,
+    ).replace(/"/g, "&quot;");
     htmlGrid += `<div class="markdown-content" data-raw="${safeJust}" style="margin-top:10px; font-style:italic; font-size:0.85rem; color:var(--color-text-secondary);">${g.analise_complexidade.justificativa_dificuldade}</div>`;
   }
 
-  return `<div class="q-res-section"><span class="q-res-label">Matriz de Dificuldade</span>${htmlGrid}</div>`;
+  return `<div class="q-res-section static-render-target"><span class="q-res-label">Matriz de Dificuldade</span>${htmlGrid}</div>`;
 }
 
 export function renderBotaoScanGabarito(imgsOriginalG, jsonImgsG) {
-  if (!imgsOriginalG || imgsOriginalG.length === 0) return '';
+  if (!imgsOriginalG || imgsOriginalG.length === 0) return "";
   return `<button class="btn-view-scan js-ver-scan" data-imgs="${jsonImgsG}">
                 📸 Ver Scan Original do Gabarito
             </button>`;
 }
 
 export function renderPassosComDetalhes(g) {
-  if (!g.explicacao || g.explicacao.length === 0) return '';
+  if (!g.explicacao || g.explicacao.length === 0) return "";
 
   const htmlPassos = g.explicacao
     .map((p, i) => {
-      const origemLabel = (p.origem || '').includes('extraido')
-        ? '📄 Material Original'
-        : '🤖 Gerado por IA';
-      const origemCor = (p.origem || '').includes('extraido')
-        ? 'var(--color-success)'
-        : 'var(--color-primary)';
+      const origemLabel = (p.origem || "").includes("extraido")
+        ? "📄 Material Original"
+        : "🤖 Gerado por IA";
+      const origemCor = (p.origem || "").includes("extraido")
+        ? "var(--color-success)"
+        : "var(--color-primary)";
       const estrutura = Array.isArray(p.estrutura)
         ? p.estrutura
-        : [{ tipo: 'texto', conteudo: p.passo || '' }];
+        : [{ tipo: "texto", conteudo: p.passo || "" }];
 
       // Contexto 'banco' para renderização limpa
-      const htmlConteudo = renderizarEstruturaHTML(estrutura, [], 'banco');
+      // Mudança: Container para React Hydration
+      const htmlConteudo = `<div class="js-react-step-${i}" style="min-height:20px;"></div>`;
 
       return `
             <div class="q-step-wrapper">
@@ -109,12 +109,12 @@ export function renderPassosComDetalhes(g) {
                     <summary>Metadados</summary>
                     <div class="q-step-meta-box">
                         <div class="q-step-row"><span class="q-step-key">Origem:</span><span style="color:${origemCor}; font-weight:bold;">${origemLabel}</span></div>
-                        ${p.fontematerial ? `<div class="q-step-row"><span class="q-step-key">Fonte:</span><span>${p.fontematerial}</span></div>` : ''}
+                        ${p.fontematerial ? `<div class="q-step-row"><span class="q-step-key">Fonte:</span><span>${p.fontematerial}</span></div>` : ""}
                     </div>
                 </details>
             </div>`;
     })
-    .join('');
+    .join("");
 
   return `
     <div class="q-res-section">
@@ -126,18 +126,18 @@ export function renderPassosComDetalhes(g) {
 }
 
 export function renderCreditosCompleto(g) {
-  if (!g.creditos) return '';
+  if (!g.creditos) return "";
   const c = g.creditos;
 
   const inst =
     c.autorouinstituicao ||
     c.autor_ou_instituicao ||
     c.autorOuInstituicao ||
-    '—';
-  const mat = c.material || c.nomeMaterial || c.nome_material || '—';
+    "—";
+  const mat = c.material || c.nomeMaterial || c.nome_material || "—";
   const confianca = c.confiancaidentificacao
-    ? Math.round(c.confiancaidentificacao * 100) + '%'
-    : '—';
+    ? Math.round(c.confiancaidentificacao * 100) + "%"
+    : "—";
 
   return `
         <div class="q-res-section">
@@ -145,7 +145,7 @@ export function renderCreditosCompleto(g) {
             <table class="credits-table">
                 <tr><td>Instituição</td><td>${inst}</td></tr>
                 <tr><td>Material</td><td>${mat}</td></tr>
-                <tr><td>Ano</td><td>${c.ano || '—'}</td></tr>
+                <tr><td>Ano</td><td>${c.ano || "—"}</td></tr>
                 <tr><td>Confiança</td><td>${confianca}</td></tr>
             </table>
         </div>`;
@@ -154,13 +154,13 @@ export function renderCreditosCompleto(g) {
 // --- NOVAS FUNÇÕES PARA O USER_REQUEST ---
 
 export function renderRelatorioPesquisa(g) {
-  if (!g.texto_referencia) return '';
+  if (!g.texto_referencia) return "";
 
   // Escapa aspas para não quebrar o atributo data-raw
-  const safeText = String(g.texto_referencia).replace(/"/g, '&quot;');
+  const safeText = String(g.texto_referencia).replace(/"/g, "&quot;");
 
   return `
-  <div class="q-res-section" style="border:1px solid var(--color-border); border-radius:6px; overflow:hidden; margin-bottom:10px;">
+  <div class="q-res-section static-render-target" style="border:1px solid var(--color-border); border-radius:6px; overflow:hidden; margin-bottom:10px;">
     <details>
       <summary style="padding:10px; background:var(--color-bg-2); cursor:pointer; font-weight:600; font-size:0.9rem;">
         📄 Relatório Técnico da Pesquisa
@@ -176,15 +176,19 @@ export function renderRelatorioPesquisa(g) {
 }
 
 export function renderFontesExternas(g) {
-  if (!g.fontes_externas || g.fontes_externas.length === 0) return '';
+  if (!g.fontes_externas || g.fontes_externas.length === 0) return "";
 
-  const lis = g.fontes_externas.map(f => `
+  const lis = g.fontes_externas
+    .map(
+      (f) => `
     <li>
       <a href="${f.uri}" target="_blank" rel="noopener noreferrer" style="color:var(--color-primary); text-decoration:none; font-size:0.85rem;">
         ${f.title || f.uri} ↗
       </a>
     </li>
-  `).join('');
+  `,
+    )
+    .join("");
 
   return `
   <div class="q-res-section">

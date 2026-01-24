@@ -9,6 +9,7 @@ import { extractImageFromCropData } from "./selection-overlay.js";
 
 // Imports para processamento de IA
 import { confirmarEnvioIA } from "../envio/ui-estado.js";
+import { calculateCropContext } from "./mode.js";
 
 // --- BATCH SAVING (NOVO) ---
 
@@ -26,11 +27,64 @@ export async function salvarQuestaoEmLote(groupId, tabId = null) {
 
   // Processar todas as imagens
   const images = [];
+  const fotosOriginais = [];
 
   for (let i = 0; i < group.crops.length; i++) {
     const crop = group.crops[i];
+
+    // 1. Extração da Imagem Visual (Blob) - Mantém todos para garantir compatibilidade
     const result = await extractImageFromCropData(crop.anchorData);
     if (result && result.blobUrl) images.push(result.blobUrl);
+
+    // 2. Cálculo dos Metadados (fotos_originais)
+    // FILTRAGEM: Ignorar crops que estão contidos em outros (ex: imagem dentro da questão)
+    // fotos_originais deve ser apenas o CONTEXTO (Questão Inteira)
+    let isContained = false;
+    const a = crop.anchorData;
+
+    // Convert relative coordinates to a stable comparison unit if needed,
+    // but anchorData uses relativeTop/Left and unscaledW/H which are compatible for comparison on same page.
+    // Tolerância para erros de ponto flutuante/precisão
+    const TOLERANCE = 5;
+
+    for (let j = 0; j < group.crops.length; j++) {
+      if (i === j) continue;
+      const parent = group.crops[j].anchorData;
+
+      if (parent.anchorPageNum !== a.anchorPageNum) continue;
+
+      // Check containment: Parent fully encloses 'a'
+      const isInsideX =
+        a.relativeLeft >= parent.relativeLeft - TOLERANCE &&
+        a.relativeLeft + a.unscaledW <=
+          parent.relativeLeft + parent.unscaledW + TOLERANCE;
+      const isInsideY =
+        a.relativeTop >= parent.relativeTop - TOLERANCE &&
+        a.relativeTop + a.unscaledH <=
+          parent.relativeTop + parent.unscaledH + TOLERANCE;
+
+      // Also ensure parent is strictly larger to avoid banning duplicates/clones (though clones shouldn't be here)
+      // Or simply logic: if A is inside B, A is child.
+      if (isInsideX && isInsideY) {
+        // Is parent actually bigger?
+        if (parent.unscaledW * parent.unscaledH > a.unscaledW * a.unscaledH) {
+          isContained = true;
+          console.log(
+            `[BatchSave] Ignorando crop filho (contido) em fotos_originais:`,
+            i,
+          );
+          break;
+        }
+      }
+    }
+
+    if (!isContained) {
+      const cropContext = await calculateCropContext(crop.anchorData);
+      if (cropContext) {
+        cropContext.id = i;
+        fotosOriginais.push(cropContext);
+      }
+    }
   }
 
   if (images.length === 0) {
@@ -39,6 +93,9 @@ export async function salvarQuestaoEmLote(groupId, tabId = null) {
 
   // Adiciona ao acumulado global (compatibilidade com modal antigo)
   window.__recortesAcumulados = images;
+
+  // NOVO: Salva os metadados dos originais para serem anexados ao JSON final
+  window.__tempFotosOriginais = fotosOriginais;
 
   if (tabId) {
     // Iniciar o processo de envio real (Usa a função oficial do sistema)
@@ -213,10 +270,33 @@ export function salvarQuestao() {
   // Mas precisamos obter o imgSrc. Como? O overlay não tem mais "activeSelectionBox" publico fácil.
   // Precisamos pegar o ultimo crop do active group?
 
+  // Se tiver dados de slot alvo, PROCESSA SINGLE SHOT.
   const activeGroup = CropperState.getActiveGroup();
   if (!activeGroup || activeGroup.crops.length === 0) return;
 
   const lastCrop = activeGroup.crops[activeGroup.crops.length - 1];
+
+  // Caso especial: Capturando imagem final com Embed Support
+  if (window.__capturandoImagemFinal === true) {
+    // Tenta calcular o crop completo (async)
+    calculateCropContext(lastCrop.anchorData).then((cropContext) => {
+      // Se falhar o calculo (ex: pagina sumiu), fallback para blob via extractImage
+      if (cropContext) {
+        tratarSalvarSuporte(cropContext);
+        CropperState.deleteGroup(activeGroup.id);
+      } else {
+        extractImageFromCropData(lastCrop.anchorData).then((result) => {
+          if (result && result.blobUrl) {
+            tratarSalvarSuporte(result.blobUrl);
+          }
+          CropperState.deleteGroup(activeGroup.id);
+        });
+      }
+    });
+    return;
+  }
+
+  // Fallback padrão para outros casos (imgSrc string)
   extractImageFromCropData(lastCrop.anchorData).then((result) => {
     if (!result || !result.blobUrl) return;
     const imgSrc = result.blobUrl;
@@ -231,7 +311,6 @@ export function salvarQuestao() {
       return;
     }
 
-    // ... outros ifs ...
     if (
       window.__targetSlotIndex !== null &&
       window.__targetSlotContext !== null
@@ -241,6 +320,7 @@ export function salvarQuestao() {
       return;
     }
 
+    // Fallback para suporte se cair aqui por algum motivo
     if (window.__capturandoImagemFinal === true) {
       tratarSalvarSuporte(imgSrc);
       CropperState.deleteGroup(activeGroup.id);

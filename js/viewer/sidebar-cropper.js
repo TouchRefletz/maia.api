@@ -45,7 +45,7 @@ export function initSidebarCropper() {
 
     // Inserir após o container de páginas
     const pagesContainer = document.getElementById(
-      SidebarPageManager.containerId
+      SidebarPageManager.containerId,
     );
     if (pagesContainer) {
       pagesContainer.insertAdjacentElement("afterend", btnContainer);
@@ -188,6 +188,14 @@ function renderSidebarContent() {
     const details = SidebarPageManager.getPageElement(pageNum);
     const listContainer = SidebarPageManager.getQuestionsContainer(pageNum);
 
+    // [FIX] Guard against null when Hub is not active or container doesn't exist
+    if (!details || !listContainer) {
+      console.warn(
+        `[sidebar-cropper] Cannot render group ${group.id} - details or listContainer is null for page ${pageNum}`,
+      );
+      return;
+    }
+
     // Se o grupo está sendo editado, talvez abrir a página automaticamente?
     // User request: "quando a ia tiver analisando aquela página a sidebar sozinha vai abrir o details"
     // Para edição manual, também faz sentido.
@@ -255,7 +263,7 @@ function renderAddButton(container) {
     // Se não tivermos acesso fácil, o padrão será 1 e quando o usuário desenhar o crop,
     // o grupo será atualizado com a página correta e moverá de lugar.
 
-    CropperState.createGroup({ tags: ["manual"] });
+    CropperState.createGroup({ tags: ["manual", "NOVO"] });
 
     // Scroll?
   };
@@ -278,7 +286,7 @@ function renderEmptyStateGlobal(container) {
   btnAdd.className = "btn btn--primary btn--full-width btn-add-question";
   btnAdd.style.marginTop = "1rem";
   btnAdd.innerHTML = `<span class="icon">＋</span> Adicionar Nova Questão`;
-  btnAdd.onclick = () => CropperState.createGroup({ tags: ["manual"] });
+  btnAdd.onclick = () => CropperState.createGroup({ tags: ["manual", "NOVO"] });
 
   emptyMsg.appendChild(btnAdd);
   container.appendChild(emptyMsg);
@@ -509,6 +517,9 @@ function createGroupCard(group, isEditing) {
     btnCancel.onclick = async (e) => {
       e.stopPropagation();
 
+      const isCreatingNew =
+        Array.isArray(group.tags) && group.tags.includes("NOVO");
+
       if (window.__isManualPageAdd) {
         try {
           const { restaurarVisualizacaoOriginal, resetarInterfaceBotoes } =
@@ -520,7 +531,10 @@ function createGroupCard(group, isEditing) {
         }
       }
 
-      if (group.crops.length === 0) {
+      // Se estamos CRIANDO uma nova (mesmo com crops), o Cancelar deve destruir tudo.
+      // Se estamos EDITANDO uma existente, o Cancelar deve apenas parar de editar.
+      // Se o grupo estiver vazio, sempre deleta (lixo).
+      if (group.crops.length === 0 || isCreatingNew) {
         CropperState.deleteGroup(group.id);
       } else {
         CropperState.setActiveGroup(null);
@@ -543,10 +557,15 @@ function createGroupCard(group, isEditing) {
 
       if (group.crops.length === 0) return;
 
-      // Logic: If tag is 'ia', switch to 'revisada'
-      if (Array.isArray(group.tags) && group.tags.includes("ia")) {
-        group.tags = group.tags.filter((t) => t !== "ia");
-        group.tags.push("revisada");
+      // Logic: If tag is 'ia', switch to 'revisada', also remove 'NOVO'
+      if (Array.isArray(group.tags)) {
+        // Remove NOVO marker on done
+        group.tags = group.tags.filter((t) => t !== "NOVO");
+
+        if (group.tags.includes("ia")) {
+          group.tags = group.tags.filter((t) => t !== "ia");
+          group.tags.push("revisada");
+        }
       } else if (!group.tags) {
         group.tags = [];
       }
@@ -584,7 +603,50 @@ function createGroupCard(group, isEditing) {
     const tabs = getTabsState().tabs;
     const relatedTab = tabs.find((t) => t.groupId === group.id);
 
-    if (relatedTab) {
+    if (group.status === "sent") {
+      // [NOVO] Estado Salvo/Concluído (Solicitado pelo User)
+      // Prioridade ALTA: Se já foi enviado, mostra sucesso mesmo se a aba ainda estiver fechando
+      actionsDiv.innerHTML = `
+        <div style="
+            width: 100%;
+            padding: 8px;
+            text-align: center;
+            background: rgba(76, 175, 80, 0.1); /* Green tint */
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            color: #4CAF50;
+            font-size: 0.9em;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        ">
+            ✅ Salvo no banco de dados!
+        </div>
+      `;
+    } else if (group.status === "ready") {
+      // [BATCH] Questão processada pela IA, aguardando envio manual
+      actionsDiv.innerHTML = `
+        <div style="
+            width: 100%;
+            padding: 8px;
+            text-align: center;
+            background: rgba(34, 197, 94, 0.15);
+            border: 1px solid rgba(34, 197, 94, 0.5);
+            border-radius: 4px;
+            color: #22c55e;
+            font-size: 0.9em;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        ">
+            ✅ Pronto para envio!
+        </div>
+      `;
+    } else if (relatedTab) {
       // User request: "coloca só em processamento pra sempre"
       // Independente do status real (complete/error), aqui mostramos que está rolando/foi enviado.
       actionsDiv.innerHTML = `
@@ -621,7 +683,7 @@ function createGroupCard(group, isEditing) {
           "Você está prestes a enviar esta questão para processamento. Este processo envolve chamadas à IA e não pode ser cancelado após iniciado.",
           "Enviar",
           "Cancelar",
-          true // isPositiveAction - cor primária
+          true, // isPositiveAction - cor primária
         );
 
         if (!confirmed) return;
@@ -638,7 +700,20 @@ function createGroupCard(group, isEditing) {
         // para feedback instantâneo.
         // FIX: Substituir botões por aviso de processamento (Visual Imediato)
         actionsDiv.innerHTML = `
-                <div style="... (style igual acima) ...">
+                <div style="
+                  width: 100%;
+                  padding: 8px;
+                  text-align: center;
+                  background: rgba(var(--color-primary-rgb), 0.1);
+                  border: 1px dashed var(--color-primary);
+                  border-radius: 4px;
+                  color: var(--color-primary);
+                  font-size: 0.9em;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  gap: 8px;
+              ">
                     <span class="spinner-sm" style="width: 14px; height: 14px; border-width: 2px;"></span>
                     Em processamento...
                 </div>
@@ -670,7 +745,7 @@ function createGroupCard(group, isEditing) {
           "Excluir Questão",
           `Tem certeza que deseja excluir "${group.label}"?`,
           "Excluir",
-          "Cancelar"
+          "Cancelar",
         );
         if (confirmed) {
           CropperState.deleteGroup(group.id);

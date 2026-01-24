@@ -68,6 +68,7 @@
   --color-primary-rgb: var(--color-teal-500-rgb);
   --color-primary-hover: var(--color-teal-600);
   --color-primary-active: var(--color-teal-700);
+  --color-primary-background: var(--color-bg-1);
   --color-secondary: rgba(var(--color-brown-600-rgb), 0.12);
   --color-secondary-hover: rgba(var(--color-brown-600-rgb), 0.2);
   --color-secondary-active: rgba(var(--color-brown-600-rgb), 0.25);

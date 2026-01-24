@@ -85,17 +85,31 @@ export function resetarInterfaceBotoes() {
 }
 
 export function cancelarRecorte() {
-  // Limpeza específica de modo Slot (se houver grupo temporário)
+  // 0. Delegate Slot Mode safely (Preserves existing data on edit-cancel)
+  if (window.__targetSlotContext === "image-slot") {
+    import("./mode.js").then((mod) => mod.cancelImageSlotMode());
+    return;
+  }
+
   const activeGroup = CropperState.getActiveGroup();
-  if (
-    activeGroup &&
-    activeGroup.tags &&
-    activeGroup.tags.includes("slot-mode")
-  ) {
-    CropperState.deleteGroup(activeGroup.id);
-    console.log(
-      `[CropperCore] Grupo temporário ${activeGroup.id} limpo ao cancelar.`
-    );
+
+  // 1. Check for legacy slot-mode tag cleanup (Fallback) OR 'NOVO' tag
+  if (activeGroup && activeGroup.tags) {
+    if (
+      activeGroup.tags.includes("NOVO") ||
+      activeGroup.tags.includes("manual") ||
+      activeGroup.tags.includes("slot-mode") // Ensure slot-mode is also deleted if not saved
+    ) {
+      CropperState.deleteGroup(activeGroup.id);
+      console.log(
+        `[CropperCore] Grupo temporário (${activeGroup.tags.join(
+          ","
+        )}) ${activeGroup.id} limpo ao cancelar.`
+      );
+    } else if (activeGroup.crops.length === 0) {
+      // EDGE CASE: Created but Empty (Generic) - Delete it to prevent ghost groups
+      CropperState.deleteGroup(activeGroup.id);
+    }
   }
 
   // Limpa variáveis globais de slot, se existirem

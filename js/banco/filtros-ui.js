@@ -1,4 +1,4 @@
-import { bancoState } from '../main.js';
+import { bancoState } from "../main.js";
 
 export function gerarHtmlPainelFiltros() {
   return `
@@ -13,103 +13,208 @@ export function gerarHtmlPainelFiltros() {
             </div>
         </div>
         
-        <div class="filters-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+        <div class="filters-grid">
             <div class="filter-group">
                 <label class="filter-label">Disciplina</label>
-                <select id="filtroMateria" class="filter-control"><option value="">Todas</option></select>
+                <div id="filtroMateria" class="multi-select-container" data-placeholder="Todas">
+                    <div class="filter-loading"><div class="spinner"></div><span>Carregando...</span></div>
+                </div>
             </div>
             <div class="filter-group">
                 <label class="filter-label">Instituição / Banca</label>
-                <select id="filtroInstituicao" class="filter-control"><option value="">Todas</option></select>
+                <div id="filtroInstituicao" class="multi-select-container" data-placeholder="Todas">
+                    <div class="filter-loading"><div class="spinner"></div><span>Carregando...</span></div>
+                </div>
             </div>
             <div class="filter-group">
                 <label class="filter-label">Material / Prova</label>
-                <select id="filtroMaterial" class="filter-control"><option value="">Todos</option></select>
+                <div id="filtroMaterial" class="multi-select-container" data-placeholder="Todos">
+                    <div class="filter-loading"><div class="spinner"></div><span>Carregando...</span></div>
+                </div>
             </div>
             <div class="filter-group">
                 <label class="filter-label">Ano</label>
-                <select id="filtroAno" class="filter-control"><option value="">Todos</option></select>
+                <div id="filtroAno" class="multi-select-container" data-placeholder="Todos">
+                    <div class="filter-loading"><div class="spinner"></div><span>Carregando...</span></div>
+                </div>
             </div>
             <div class="filter-group">
                 <label class="filter-label">Características</label>
-                <select id="filtroFator" class="filter-control"><option value="">Qualquer</option></select>
+                <div id="filtroFator" class="multi-select-container" data-placeholder="Qualquer">
+                    <div class="filter-loading"><div class="spinner"></div><span>Carregando...</span></div>
+                </div>
+            </div>
+
+            <div class="filter-group">
+                <label class="filter-label">Status da Questão</label>
+                <div id="filtroStatus" class="multi-select-container" data-placeholder="Qualquer">
+                    <div class="filter-loading"><div class="spinner"></div><span>Carregando...</span></div>
+                </div>
+            </div>
+
+            <div class="filter-group">
+                <label class="filter-label">Estrutura (Enunciado)</label>
+                <div id="filtroEstQuestao" class="multi-select-container" data-placeholder="Qualquer">
+                    <div class="filter-loading"><div class="spinner"></div><span>Carregando...</span></div>
+                </div>
             </div>
             <div class="filter-group">
-                <label class="filter-label">Imagens</label>
-                <select id="filtroImagemPresence" class="filter-control">
-                    <option value="">Indiferente</option>
-                    <option value="com_imagem_enunciado">Com Imagem (Enunciado)</option>
-                    <option value="sem_imagem_enunciado">Apenas Texto</option>
-                    <option value="com_imagem_gabarito">Com Imagem (Resolução)</option>
-                </select>
+                <label class="filter-label">Estrutura (Alternativas)</label>
+                <div id="filtroEstAlternativas" class="multi-select-container" data-placeholder="Qualquer">
+                    <div class="filter-loading"><div class="spinner"></div><span>Carregando...</span></div>
+                </div>
+            </div>
+            <!-- Linha Customizada: 3 Colunas Iguais -->
+            <div class="filter-group">
+                <label class="filter-label">Estrutura (Gabarito)</label>
+                <div id="filtroEstGabarito" class="multi-select-container" data-placeholder="Qualquer">
+                    <div class="filter-loading"><div class="spinner"></div><span>Carregando...</span></div>
+                </div>
             </div>
             <div class="filter-group">
                 <label class="filter-label">Origem da Resolução</label>
-                <select id="filtroOrigemRes" class="filter-control">
-                    <option value="">Todas</option>
-                    <option value="extraido_do_material">Oficial / Extraído</option>
-                    <option value="gerado_pela_ia">Gerado por IA</option>
-                </select>
+                <div id="filtroOrigemRes" class="multi-select-container" data-placeholder="Todas">
+                    <div class="filter-loading"><div class="spinner"></div><span>Carregando...</span></div>
+                </div>
             </div>
             <div class="filter-group">
                 <label class="filter-label">Palavra-chave / Assunto</label>
-                <select id="filtroAssunto" class="filter-control"><option value="">Todos</option></select>
+                <div id="filtroAssunto" class="multi-select-container" data-placeholder="Todos">
+                    <div class="filter-loading"><div class="spinner"></div><span>Carregando...</span></div>
+                </div>
             </div>
-            <div class="filter-group" style="grid-column: 1 / -1;">
+            <div class="filter-group filter-full-width">
                 <label class="filter-label">Busca no Texto (Enunciado ou ID)</label>
                 <input type="text" id="filtroTexto" class="filter-control" placeholder="Digite termos, ID ou trechos do enunciado...">
             </div>
-            <button class="filter-search-btn js-aplicar-filtros" style="grid-column: 1 / -1;">
+            <button class="filter-search-btn js-aplicar-filtros filter-full-width">
                 🔎 Filtrar Questões
             </button>
         </div>
     </div>`;
 }
 
+// Global Event Listener para Dropdowns (Delegation)
+if (!window.__multiSelectListener) {
+  document.addEventListener("click", (e) => {
+    // Toggle Dropdown
+    const trigger = e.target.closest(".multi-select-trigger");
+    if (trigger) {
+      const container = trigger.closest(".multi-select-container");
+      const dropdown = container.querySelector(".multi-select-dropdown");
+
+      // Fecha outros
+      document.querySelectorAll(".multi-select-dropdown.open").forEach((d) => {
+        if (d !== dropdown) d.classList.remove("open");
+        if (d !== dropdown) d.previousElementSibling.classList.remove("active");
+      });
+
+      dropdown.classList.toggle("open");
+      trigger.classList.toggle("active");
+      return;
+    }
+
+    // Clicou fora -> Fecha todos
+    if (!e.target.closest(".multi-select-container")) {
+      document.querySelectorAll(".multi-select-dropdown.open").forEach((d) => {
+        d.classList.remove("open");
+        d.previousElementSibling.classList.remove("active");
+      });
+    }
+  });
+
+  // Evento de Change nos checkboxes para atualizar label
+  document.addEventListener("change", (e) => {
+    if (e.target.matches(".multi-select-option input[type='checkbox']")) {
+      const container = e.target.closest(".multi-select-container");
+      atualizarLabelTrigger(container);
+    }
+  });
+
+  window.__multiSelectListener = true;
+}
+
+export function atualizarLabelTrigger(container) {
+  const trigger = container.querySelector(".multi-select-trigger");
+  const placeholder = container.dataset.placeholder || "Selecione";
+  const checked = container.querySelectorAll("input[type='checkbox']:checked");
+
+  if (checked.length === 0) {
+    trigger.innerHTML = `<span>${placeholder}</span>`;
+  } else {
+    // Coleta os textos das labels assosciadas
+    const labels = Array.from(checked).map((cb) => {
+      // O label é o texto dentro do .multi-select-option vizinho ao input
+      // Estrutura: <label> <input> <span>Texto</span> ... </label>
+      // Vamos pegar o textContent do span ou do parent ignorando o badge
+      const labelEl = cb.parentNode;
+      // Pega o primeiro nó de texto ou span que não seja o badge
+      // No meu render novo (filtro-dinamicos), fiz: checkbox, span(Texto), span(badge)
+      // No filtroStatus (fixo no ui.js), fiz: checkbox, TextNode
+
+      // Tenta achar span de texto
+      const textSpan = labelEl.querySelector("span:not(.filter-item-count)");
+      if (textSpan) return textSpan.textContent.trim();
+
+      // Fallback: Pega todo o texto e remove o texto do badge se existir
+      let fullText = labelEl.textContent;
+      const badge = labelEl.querySelector(".filter-item-count");
+      if (badge) {
+        fullText = fullText.replace(badge.textContent, "");
+      }
+      return fullText.trim();
+    });
+
+    const finalText = labels.join(", ");
+    trigger.innerHTML = `<span title="${finalText}">${finalText}</span>`;
+  }
+}
+
 export function limparFiltros() {
-  document.querySelectorAll('.filter-control').forEach((el) => (el.value = ''));
+  // Limpa inputs textuais
+  document.querySelectorAll(".filter-control").forEach((el) => (el.value = ""));
+
+  // Limpa checkboxes
+  document
+    .querySelectorAll(".multi-select-container input[type='checkbox']")
+    .forEach((cb) => (cb.checked = false));
+
+  // Reseta labels
+  document
+    .querySelectorAll(".multi-select-container")
+    .forEach((c) => atualizarLabelTrigger(c));
+
   aplicarFiltrosBanco();
 }
 
 export function capturarValoresFiltros() {
-  return {
-    materia: document.getElementById('filtroMateria').value.toLowerCase(),
-    inst: document.getElementById('filtroInstituicao').value.toLowerCase(),
-    material: document.getElementById('filtroMaterial').value.toLowerCase(),
-    ano: document.getElementById('filtroAno').value.toLowerCase(),
-    fator: document.getElementById('filtroFator').value, // Case sensitive para chaves
-    imagem: document.getElementById('filtroImagemPresence').value,
-    origem: document.getElementById('filtroOrigemRes').value,
-    assunto: document.getElementById('filtroAssunto').value.toLowerCase(),
-    texto: document.getElementById('filtroTexto').value.toLowerCase(),
+  const getValues = (id) => {
+    const container = document.getElementById(id);
+    if (!container) return [];
+    // Se for select normal (legado ou específico)
+    if (container.tagName === "SELECT")
+      return container.value ? [container.value] : [];
+
+    // Se for Multi-Select
+    const checked = container.querySelectorAll("input:checked");
+    return Array.from(checked).map((cb) => cb.value.toLowerCase());
   };
-}
 
-export function verificarRegraImagem(q, g, filtroImagem) {
-  // Se não tem filtro de imagem selecionado, passa sempre
-  if (!filtroImagem) return true;
-
-  // Verifica presença na questão
-  const temImgEnunciado =
-    !!q.possui_imagem ||
-    (q.estrutura && q.estrutura.some((b) => b.tipo === 'imagem')) ||
-    (q.imagens_urls && q.imagens_urls.length > 0);
-
-  // Verifica presença no gabarito
-  const temImgGabarito =
-    (g.imagens_suporte && g.imagens_suporte.length > 0) ||
-    (g.imagens_gabarito_original && g.imagens_gabarito_original.length > 0) ||
-    (g.explicacao &&
-      g.explicacao.some(
-        (p) => p.estrutura && p.estrutura.some((b) => b.tipo === 'imagem')
-      ));
-
-  // Aplica a lógica exata do seu código original
-  if (filtroImagem === 'com_imagem_enunciado' && !temImgEnunciado) return false;
-  if (filtroImagem === 'sem_imagem_enunciado' && temImgEnunciado) return false;
-  if (filtroImagem === 'com_imagem_gabarito' && !temImgGabarito) return false;
-
-  return true;
+  return {
+    materia: getValues("filtroMateria"),
+    inst: getValues("filtroInstituicao"),
+    material: getValues("filtroMaterial"),
+    ano: getValues("filtroAno"),
+    year: getValues("filtroAno"),
+    fator: getValues("filtroFator"),
+    estQuestao: getValues("filtroEstQuestao"),
+    estAlternativas: getValues("filtroEstAlternativas"),
+    estGabarito: getValues("filtroEstGabarito"),
+    origem: getValues("filtroOrigemRes"),
+    assunto: getValues("filtroAssunto"),
+    status: getValues("filtroStatus"),
+    texto: document.getElementById("filtroTexto").value.toLowerCase(),
+  };
 }
 
 export function itemAtendeFiltros(item, f) {
@@ -120,87 +225,171 @@ export function itemAtendeFiltros(item, f) {
 
   // 1. Texto (Enunciado ou ID)
   if (f.texto) {
-    const blob = (q.enunciado + ' ' + q.identificacao).toLowerCase();
+    const blob = (q.enunciado + " " + q.identificacao).toLowerCase();
     if (!blob.includes(f.texto)) return false;
   }
 
+  // Helper para match OR (se item tiver qualquer uma das selecionadas)
+  const matchMulti = (selectedValues, itemValues) => {
+    // Se filtro vazio, passa tudo
+    if (!selectedValues || selectedValues.length === 0) return true;
+    // Se item não tem valores, falha (pois filtro exige algo)
+    if (!itemValues || itemValues.length === 0) return false;
+
+    // Verifica intersecção
+    return selectedValues.some((sv) =>
+      itemValues.some((iv) => iv.includes(sv)),
+    );
+  };
+
+  // Helper para valores simples (string vs array filter)
+  const matchSimple = (selectedValues, itemValueStr) => {
+    if (!selectedValues || selectedValues.length === 0) return true;
+    if (!itemValueStr) return false;
+    // Verifica se itemValueStr contém ALGUM dos valores selecionados
+    return selectedValues.some((sv) => itemValueStr.includes(sv));
+  };
+
   // 2. Matéria
-  if (f.materia) {
-    const mats = (q.materias_possiveis || []).map((m) => m.toLowerCase());
-    if (!mats.some((m) => m.includes(f.materia))) return false;
-  }
+  if (
+    !matchMulti(
+      f.materia,
+      (q.materias_possiveis || []).map((m) => m.toLowerCase()),
+    )
+  )
+    return false;
 
   // 3. Instituição
-  if (f.inst) {
-    const inst = (
-      cred.autorouinstituicao ||
-      cred.autor_ou_instituicao ||
-      ''
-    ).toLowerCase();
-    if (!inst.includes(f.inst)) return false;
-  }
+  const instItem = (
+    cred.autorouinstituicao ||
+    cred.autor_ou_instituicao ||
+    ""
+  ).toLowerCase();
+  if (!matchSimple(f.inst, instItem)) return false;
 
   // 4. Material Específico
-  if (f.material) {
-    const mat = (cred.material || meta.material_origem || '').toLowerCase();
-    if (!mat.includes(f.material)) return false;
-  }
+  const matItem = (cred.material || meta.material_origem || "").toLowerCase();
+  if (!matchSimple(f.material, matItem)) return false;
 
   // 5. Ano
-  if (f.ano) {
-    const ano = (cred.ano || cred.year || '').toString().toLowerCase();
-    if (!ano.includes(f.ano)) return false;
-  }
+  // f.ano é array de strings "2023", "2024"...
+  const anoItem = (cred.ano || cred.year || "").toString().toLowerCase();
+  if (!matchSimple(f.ano, anoItem)) return false;
 
   // 6. Fator de Complexidade
-  if (f.fator) {
+  if (f.fator && f.fator.length > 0) {
     const fatores = g.analise_complexidade?.fatores || {};
-    // Verifica camelCase ou snake_case (preservando sua lógica)
-    const val =
-      fatores[f.fator] ||
-      fatores[f.fator.replace(/_([a-z])/g, (_, x) => x.toUpperCase())];
-    if (val !== true) return false;
+    // Para passar, o item deve ter Pelo Menos Um dos fatores selecionados?
+    // "Quero questões da Idade Média E Biodiversidade" -> Geralmente é OR em filtros de tags.
+    // "Quero questões com Texto Extenso OU Dedução Lógica"
+    const hasAny = f.fator.some((selKey) => {
+      // Tenta casar a chave convertendo se preciso
+      // Ex: selKey "texto_extenso". fatores = { texto_extenso: true } ou { textoExtenso: true }
+      let val = fatores[selKey];
+      if (val === undefined) {
+        const camel = selKey.replace(/_([a-z])/g, (_, x) => x.toUpperCase());
+        val = fatores[camel];
+      }
+      return val === true;
+    });
+
+    if (!hasAny) return false;
   }
 
   // 7. Origem da Resolução
-  if (f.origem) {
-    let origem = (cred.origemresolucao || cred.origem_resolucao || '')
-      .toLowerCase()
-      .replace(/_/g, '');
-    let filtro = f.origem.toLowerCase().replace(/_/g, '');
-    if (!origem.includes(filtro)) return false;
+  // Normaliza o valor do ITEM para bater com as keys do filtro (gerado_pela_ia, extraido_do_material)
+  let origemItemRaw = (
+    cred.origemresolucao ||
+    cred.origem_resolucao ||
+    ""
+  ).toLowerCase();
+  let origemItemNorm = "";
+
+  if (
+    origemItemRaw.includes("gerado") ||
+    origemItemRaw.includes("artificial") ||
+    origemItemRaw === "ia"
+  ) {
+    origemItemNorm = "gerado_pela_ia";
+  } else if (
+    origemItemRaw.includes("material") ||
+    origemItemRaw.includes("oficial")
+  ) {
+    origemItemNorm = "extraido_do_material";
+  } else {
+    // Se não mapeou (ex: vazio), usamos o raw (embora o filtro não vá pegar se for key especifíca)
+    origemItemNorm = origemItemRaw;
+  }
+
+  if (f.origem && f.origem.length > 0) {
+    // f.origem tem as keys ["gerado_pela_ia", "extraido_do_material"]
+    // Verifica se o normalizado está na lista
+    if (!f.origem.includes(origemItemNorm)) return false;
   }
 
   // 8. Assunto / Tags
-  if (f.assunto) {
-    const tags = (q.palavras_chave || []).map((t) => t.toLowerCase());
-    if (!tags.some((t) => t.includes(f.assunto))) return false;
+  if (
+    !matchMulti(
+      f.assunto,
+      (q.palavras_chave || []).map((t) => t.toLowerCase()),
+    )
+  )
+    return false;
+
+  // 10. Estrutura do Enunciado
+  if (f.estQuestao && f.estQuestao.length > 0) {
+    const tiposEnunciado = (q.estrutura || []).map((b) =>
+      (b.tipo || "imagem").toLowerCase(),
+    );
+    if (!matchMulti(f.estQuestao, tiposEnunciado)) return false;
   }
 
-  // 9. Imagens (Chama a função auxiliar)
-  return verificarRegraImagem(q, g, f.imagem);
+  // 11. Estrutura das Alternativas
+  if (f.estAlternativas && f.estAlternativas.length > 0) {
+    // Coleta todos os tipos presentes em TODAS as alternativas
+    const tiposAlts = (q.alternativas || []).flatMap((alt) =>
+      (alt.estrutura || []).map((b) => (b.tipo || "imagem").toLowerCase()),
+    );
+    // Basta que a lista combinada tenha o tipo procurado?
+    // "Quero questões onde (qualquer) alternativa tenha Imagem" -> SIM.
+    if (!matchMulti(f.estAlternativas, tiposAlts)) return false;
+  }
+
+  // 12. Estrutura do Gabarito/Explicação
+  if (f.estGabarito && f.estGabarito.length > 0) {
+    // Verifica explicacao (array de passos)
+    const tiposExpl = (g.explicacao || []).flatMap((passo) =>
+      (passo.estrutura || []).map((b) => (b.tipo || "imagem").toLowerCase()),
+    );
+    if (!matchMulti(f.estGabarito, tiposExpl)) return false;
+  }
+
+  // 13. Status da Questão
+  if (f.status && f.status.length > 0) {
+    // Se a questão não tem campo status, assume "não revisada"
+    const statusItem = (item.reviewStatus || "não revisada").toLowerCase();
+
+    // Verifica se o status do item está na lista de status selecionados
+    if (!f.status.includes(statusItem)) return false;
+  }
+
+  return true;
 }
 
 export function aplicarFiltrosBanco() {
-  // 1. Captura valores (Objeto com todas as configurações)
   const filtros = capturarValoresFiltros();
   let visiveis = 0;
 
-  // 2. Itera sobre o cache de dados
   bancoState.todasQuestoesCache.forEach((item) => {
-    // Decide se mostra ou esconde usando a função "Juiz"
     const show = itemAtendeFiltros(item, filtros);
-
-    // Atualiza DOM do Card
     const cardEl = document.getElementById(`card_${item.key}`);
     if (cardEl) {
-      cardEl.style.display = show ? 'block' : 'none';
+      cardEl.style.display = show ? "block" : "none";
       if (show) visiveis++;
     }
   });
 
-  // 3. Atualiza Feedback Visual (Sentinela)
-  const s = document.getElementById('sentinelaScroll');
+  const s = document.getElementById("sentinelaScroll");
   if (s) {
     if (visiveis === 0) {
       s.innerHTML = `<p style="color:var(--color-warning);">Nenhuma questão encontrada com esses filtros.</p>`;

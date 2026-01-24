@@ -457,8 +457,123 @@ function handlePointerDown(e) {
       }
     }
 
+    // --- SLOT MODE CONSTRAINT (Strict Parent Logic) ---
+    // User Requirement: "sem crop da questão na página bloqueia hein"
+    // "não possa selecionar fora de algum crop da questão"
+    let imposedConstraint = null;
+
+    if (
+      activeGroup &&
+      activeGroup.tags &&
+      activeGroup.tags.includes("slot-mode")
+    ) {
+      const clickedPageNum = parseInt(pageEl.dataset.pageNum);
+
+      // Get all potential parent crops on this page
+      let parentCrops = CropperState.getQuestaoContextCrops(clickedPageNum);
+
+      // --- STRICT MODE: Filter by Parent Group ID if available ---
+      const activeGroupId = activeGroup.id;
+      // Note: activeGroup is the temp slot group. We need its metadata.
+      if (activeGroup.metadata && activeGroup.metadata.parentGroupId) {
+        const requiredParentId = parseInt(activeGroup.metadata.parentGroupId);
+        // Filter crops that belong to the required parent group
+        parentCrops = parentCrops.filter((c) => c.groupId === requiredParentId);
+      }
+      // -----------------------------------------------------------
+
+      if (parentCrops.length === 0) {
+        // Bloqueia se não houver questão "pai" na página (ou se não for a questão pai correta)
+        // customAlert("Selecione primeiro a áera da questão nesta página."); // (Opcional)
+        return;
+      }
+
+      // Verifica se o clique está dentro de algum crop "pai"
+      const currentScale = viewerState.pdfScale;
+      const foundParent = parentCrops.find((crop) => {
+        const anchorData = crop.anchorData;
+        const pageWrapper = document.getElementById(
+          `page-wrapper-${anchorData.anchorPageNum}`
+        );
+        if (!pageWrapper) return false;
+
+        const pLeft =
+          pageWrapper.offsetLeft + anchorData.relativeLeft * currentScale;
+        const pTop =
+          pageWrapper.offsetTop + anchorData.relativeTop * currentScale;
+        const pWidth = anchorData.unscaledW * currentScale;
+        const pHeight = anchorData.unscaledH * currentScale;
+
+        // Overlay coords equivalent imply checking clientX/Y against screen rects.
+        // Or calculating overlay relative.
+        // Vamos usar client coords para "point check" rápido.
+        // O `overlayElement` pode estar scrollado? "ElementsFromPoint" usa viewport coords.
+        // `pageWrapper.getBoundingClientRect()` é mais seguro para comparar com `e.clientX`.
+
+        const rect = pageWrapper.getBoundingClientRect();
+        // Recalcular offsets visuais relativos ao viewport
+        const visLeft = rect.left + anchorData.relativeLeft * currentScale;
+        const visTop = rect.top + anchorData.relativeTop * currentScale;
+        const visRight = visLeft + pWidth;
+        const visBottom = visTop + pHeight;
+
+        return (
+          e.clientX >= visLeft &&
+          e.clientX <= visRight &&
+          e.clientY >= visTop &&
+          e.clientY <= visBottom
+        );
+      });
+
+      if (!foundParent) {
+        // Clicou fora da área da questão
+        return;
+      }
+
+      // Se achou, definimos o constraint box para esse crop específico
+      // Precisamos converter para coordenadas relativas ao OVERLAY,
+      // pois é isso que `updateSelectionBox` e o resto da lógica usam.
+      const oRect = overlayElement.getBoundingClientRect();
+      const pageWrapper = document.getElementById(
+        `page-wrapper-${foundParent.anchorData.anchorPageNum}`
+      );
+      // Pega rect da pagina relativo ao overlay
+      const pRect = pageWrapper.getBoundingClientRect();
+
+      // Coords relativas ao overlay
+      const cropLeft =
+        pRect.left -
+        oRect.left +
+        foundParent.anchorData.relativeLeft * currentScale;
+      const cropTop =
+        pRect.top -
+        oRect.top +
+        foundParent.anchorData.relativeTop * currentScale;
+      const cropW = foundParent.anchorData.unscaledW * currentScale;
+      const cropH = foundParent.anchorData.unscaledH * currentScale;
+
+      imposedConstraint = {
+        left: cropLeft,
+        top: cropTop,
+        right: cropLeft + cropW,
+        bottom: cropTop + cropH,
+        width: cropW,
+        height: cropH,
+      };
+    }
+    // ----------------------------------------------------
+
     currentDragType = DragType.CREATE;
     e.preventDefault();
+
+    // Fix: In slot-mode (single crop), clear previous crops immediately upon starting new drag
+    if (
+      activeGroup &&
+      activeGroup.tags &&
+      activeGroup.tags.includes("slot-mode")
+    ) {
+      CropperState.clearActiveGroupCrops();
+    }
 
     creationStartX = x;
     creationStartY = y;
@@ -483,16 +598,20 @@ function handlePointerDown(e) {
     overlayElement.appendChild(newBox);
     draggingBox = newBox;
 
-    const pRect = pageEl.getBoundingClientRect();
-    const oRect = overlayElement.getBoundingClientRect();
-    newBox.__constraint = {
-      left: pRect.left - oRect.left,
-      top: pRect.top - oRect.top,
-      right: pRect.right - oRect.left,
-      bottom: pRect.bottom - oRect.top,
-      width: pRect.width,
-      height: pRect.height,
-    };
+    if (imposedConstraint) {
+      newBox.__constraint = imposedConstraint;
+    } else {
+      const pRect = pageEl.getBoundingClientRect();
+      const oRect = overlayElement.getBoundingClientRect();
+      newBox.__constraint = {
+        left: pRect.left - oRect.left,
+        top: pRect.top - oRect.top,
+        right: pRect.right - oRect.left,
+        bottom: pRect.bottom - oRect.top,
+        width: pRect.width,
+        height: pRect.height,
+      };
+    }
 
     updateSelectionBox(newBox, creationStartX, creationStartY, 0, 0);
   }
@@ -513,9 +632,10 @@ function refreshBoxConstraint(box) {
   const pageEl = elements.find((el) => el.classList.contains("pdf-page"));
 
   if (pageEl && overlayElement) {
+    // --- DEFAULT CONSTRAINT: PAGE BOUNDS ---
     const pRect = pageEl.getBoundingClientRect();
     const oRect = overlayElement.getBoundingClientRect();
-    box.__constraint = {
+    let constraint = {
       left: pRect.left - oRect.left,
       top: pRect.top - oRect.top,
       right: pRect.right - oRect.left,
@@ -523,6 +643,84 @@ function refreshBoxConstraint(box) {
       width: pRect.width,
       height: pRect.height,
     };
+
+    // --- SLOT MODE CONSTRAINT (Strict Parent Logic) ---
+    // Aplica a mesma restrição do handlePointerDown durante a edição/move
+    const activeGroup = CropperState.getActiveGroup();
+    if (
+      activeGroup &&
+      activeGroup.tags &&
+      activeGroup.tags.includes("slot-mode")
+    ) {
+      const clickedPageNum = parseInt(pageEl.dataset.pageNum);
+      let parentCrops = CropperState.getQuestaoContextCrops(clickedPageNum);
+
+      // Filter by Parent Group ID if available
+      if (activeGroup.metadata && activeGroup.metadata.parentGroupId) {
+        const requiredParentId = parseInt(activeGroup.metadata.parentGroupId);
+        parentCrops = parentCrops.filter((c) => c.groupId === requiredParentId);
+      }
+
+      // Se achou crop pai, restringe a ele
+      if (parentCrops.length > 0) {
+        // Encontra o crop que contam a box atual (ou o primeiro válido)
+        // Como já estamos editando um crop EXISTENTE, ele supostamente já está dentro.
+        // Vamos pegar o primeiro que servir (ou o que contém o centro).
+        const currentScale = viewerState.pdfScale;
+
+        // Tenta achar o crop pai que contem o centro da box atual
+        const foundParent = parentCrops.find((crop) => {
+          const anchorData = crop.anchorData;
+          const pageWrapper = document.getElementById(
+            `page-wrapper-${anchorData.anchorPageNum}`
+          );
+          if (!pageWrapper) return false;
+
+          const rect = pageWrapper.getBoundingClientRect();
+          const visLeft = rect.left + anchorData.relativeLeft * currentScale;
+          const visTop = rect.top + anchorData.relativeTop * currentScale;
+          const visRight = visLeft + anchorData.unscaledW * currentScale;
+          const visBottom = visTop + anchorData.unscaledH * currentScale;
+
+          return (
+            centerX >= visLeft &&
+            centerX <= visRight &&
+            centerY >= visTop &&
+            centerY <= visBottom
+          );
+        });
+
+        // Se achou um pai valido onde o centro está
+        if (foundParent) {
+          const wrapper = document.getElementById(
+            `page-wrapper-${foundParent.anchorData.anchorPageNum}`
+          );
+          const wRect = wrapper.getBoundingClientRect();
+
+          const cropLeft =
+            wRect.left -
+            oRect.left +
+            foundParent.anchorData.relativeLeft * currentScale;
+          const cropTop =
+            wRect.top -
+            oRect.top +
+            foundParent.anchorData.relativeTop * currentScale;
+          const cropW = foundParent.anchorData.unscaledW * currentScale;
+          const cropH = foundParent.anchorData.unscaledH * currentScale;
+
+          constraint = {
+            left: cropLeft,
+            top: cropTop,
+            right: cropLeft + cropW,
+            bottom: cropTop + cropH,
+            width: cropW,
+            height: cropH,
+          };
+        }
+      }
+    }
+
+    box.__constraint = constraint;
   }
 }
 
@@ -597,9 +795,36 @@ function handlePointerMove(e) {
       // --- CONSTRAINT APPLICATION ---
       if (draggingBox && draggingBox.__constraint) {
         const c = draggingBox.__constraint;
-        if (newLeft < c.left) newLeft = c.left;
-        if (newTop < c.top) newTop = c.top;
 
+        // Calculate anchors from initial state for resize clamping
+        const initialBottom = initialBoxState.top + initialBoxState.height;
+        const initialRight = initialBoxState.left + initialBoxState.width;
+
+        // 1. Clamp LEFT
+        if (newLeft < c.left) {
+          newLeft = c.left;
+          // If resizing West (Left), we must Recalculate Width to preserve Right Anchor
+          if (
+            currentDragType !== DragType.BOX &&
+            currentDragType.includes("w")
+          ) {
+            newWidth = initialRight - newLeft;
+          }
+        }
+
+        // 2. Clamp TOP
+        if (newTop < c.top) {
+          newTop = c.top;
+          // If resizing North (Top), we must Recalculate Height to preserve Bottom Anchor
+          if (
+            currentDragType !== DragType.BOX &&
+            currentDragType.includes("n")
+          ) {
+            newHeight = initialBottom - newTop;
+          }
+        }
+
+        // 3. Clamp RIGHT (Width)
         if (newLeft + newWidth > c.right) {
           if (currentDragType === DragType.BOX) {
             newLeft = c.right - newWidth;
@@ -608,10 +833,13 @@ function handlePointerMove(e) {
               newWidth = c.right - c.left;
             }
           } else {
+            // Resize East/West
+            // If dragging East, ensure width doesn't exceed boundary
             newWidth = c.right - newLeft;
           }
         }
 
+        // 4. Clamp BOTTOM (Height)
         if (newTop + newHeight > c.bottom) {
           if (currentDragType === DragType.BOX) {
             newTop = c.bottom - newHeight;
@@ -620,6 +848,7 @@ function handlePointerMove(e) {
               newHeight = c.bottom - c.top;
             }
           } else {
+            // Resize North/South
             newHeight = c.bottom - newTop;
           }
         }
@@ -894,7 +1123,7 @@ function updateHighlightClasses() {
         const color =
           getComputedStyle(box).getPropertyValue("--color-primary").trim() ||
           "#3b82f6";
-        box.style.boxShadow = `0 0 20px 5px ${color}80, 0 0 40px 10px ${color}40`;
+        // box.style.boxShadow = `0 0 20px 5px ${color}80, 0 0 40px 10px ${color}40`;
       } else {
         box.classList.add("is-dimmed");
       }

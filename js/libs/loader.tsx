@@ -96,7 +96,12 @@ export async function renderLatexIn(rootEl: HTMLElement | null): Promise<void> {
   // Renderiza Markdown nos elementos que pedem (classe .markdown-content)
   // Verifica se o marked foi carregado no window
   if (window.marked) {
-    const markdownElements = rootEl.querySelectorAll('.markdown-content');
+    const markdownElements = Array.from(rootEl.querySelectorAll('.markdown-content'));
+    
+    // Inclui a própria raiz se ela for um container de markdown
+    if (rootEl.classList.contains('markdown-content')) {
+        markdownElements.push(rootEl);
+    }
     
     markdownElements.forEach((el) => {
       // Cast para HTMLElement para acessar propriedades específicas se necessário

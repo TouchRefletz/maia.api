@@ -1,3 +1,4 @@
+import { customAlert } from "../ui/GlobalAlertsLogic";
 import { gerarVisualizadorPDF } from "../viewer/events.js";
 
 /**
@@ -79,10 +80,14 @@ export function setupFormLogic(elements, initialData) {
   // C. Submit do Formulário
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    const userTitle = document.getElementById("pdfTitleInput")?.value.trim();
     const fileProva = pdfInput.files[0];
+    const fileGabarito = null; // Fix ReferenceError
 
     if (!fileProva) {
-      alert("Selecione a prova.");
+      customAlert(
+        "O arquivo da prova é obrigatório. Por favor, selecione um PDF.",
+      );
       return;
     }
 
@@ -236,7 +241,7 @@ export function setupFormLogic(elements, initialData) {
         "Calculando identidade visual do arquivo...",
         () => {
           const confirmModal = document.getElementById(
-            "cancelUploadConfirmModal"
+            "cancelUploadConfirmModal",
           );
           const btnKeep = document.getElementById("btnKeepUploading");
           const btnConfirm = document.getElementById("btnConfirmCancel");
@@ -254,8 +259,29 @@ export function setupFormLogic(elements, initialData) {
             btnConfirm.onclick = () => {
               close();
               abortController.abort();
-              progress.addLog("Cancelando operações...", true);
-              setTimeout(() => progress.close(), 1000);
+              progress.addLog(
+                "Cancelando nuvem... Abrindo visualização local.",
+                true,
+              );
+
+              // Define o arquivo local globalmente para o PdfEmbedRenderer usar se precisar (fallback de qualidade)
+              window.__pdfLocalFile = fileProva;
+              // [FIX] Dispara evento para notificar componentes React
+              window.dispatchEvent(new CustomEvent("pdfLocalFileLoaded"));
+
+              setTimeout(() => {
+                progress.close();
+
+                // Inicia visualizador em modo local
+                gerarVisualizadorPDF({
+                  title: userTitle || fileProva.name,
+                  rawTitle: userTitle || fileProva.name,
+                  fileProva: fileProva,
+                  gabaritoNaProva: false,
+                  isManualLocal: true,
+                  slug: "local-" + Date.now(),
+                });
+              }, 800);
             };
           } else {
             // Fallback if modal is missing for some reason
@@ -264,7 +290,7 @@ export function setupFormLogic(elements, initialData) {
               progress.close();
             }
           }
-        }
+        },
       );
 
       // Helper to Open Viewer (Reusable)
@@ -283,8 +309,9 @@ export function setupFormLogic(elements, initialData) {
             aiData?.formatted_title_general ||
             (aiData?.institution
               ? `${aiData.institution} ${aiData.year || ""}`
-              : "Processando..."),
-          rawTitle: aiData?.formatted_title_general || "Documento",
+              : userTitle || fileProva.name),
+          rawTitle:
+            aiData?.formatted_title_general || userTitle || fileProva.name,
           fileProva: proxyUrl,
           fileGabarito: proxyGabUrl || aiData?.gabarito_url || null,
           gabaritoNaProva: false,
@@ -299,7 +326,7 @@ export function setupFormLogic(elements, initialData) {
         hfUrl,
         slug,
         aiData,
-        hfUrlGabarito
+        hfUrlGabarito,
       ) => {
         progress.addLog("Iniciando conexão com o servidor de logs...", true);
         console.log(`[Manual] Subscribing to Pusher channel: ${slug}`);
@@ -313,7 +340,9 @@ export function setupFormLogic(elements, initialData) {
           } catch (e) {
             console.warn("Failed to load Pusher, falling back to polling?", e);
             // Fallback or Alert? For now just alert.
-            alert("Erro ao carregar sistema de notificação em tempo real.");
+            customAlert(
+              "Erro ao carregar sistema de notificação em tempo real.",
+            );
             return;
           }
         }
@@ -333,7 +362,7 @@ export function setupFormLogic(elements, initialData) {
           if (!eventReceived) {
             progress.addLog(
               "⚠️ O processo está demorando mais que o normal ou não iniciou.",
-              true
+              true,
             );
             console.warn("[Manual] No Pusher events received in 20s.");
             // We don't close yet, just warn.
@@ -355,7 +384,7 @@ export function setupFormLogic(elements, initialData) {
           if (msg && msg.includes("Cloud sync complete")) {
             progress.addLog(
               "Sincronização concluída! Abrindo visualizador...",
-              true
+              true,
             );
 
             // Unsubscribe & Disconnect
@@ -365,7 +394,7 @@ export function setupFormLogic(elements, initialData) {
             setTimeout(() => {
               try {
                 const modalEl = document.getElementById(
-                  "upload-progress-modal"
+                  "upload-progress-modal",
                 );
                 if (modalEl) modalEl.remove();
               } catch (e) {}
@@ -416,25 +445,25 @@ export function setupFormLogic(elements, initialData) {
           const blob = await downloadPdfFromUrl(linkProva, signal);
           if (blob) {
             progress.addLog(
-              "Download via link com sucesso! Enviando para TmpFiles..."
+              "Download via link com sucesso! Enviando para TmpFiles...",
             );
             try {
               tmpUrlProvaLink = await uploadToTmpFiles(
                 blob,
                 "prova_link_temp.pdf",
-                signal
+                signal,
               );
               console.log("[Manual] TmpUrl Prova (Link):", tmpUrlProvaLink);
               progress.addLog("✅ Link da prova processado.");
             } catch (err) {
               console.warn(
                 "[Manual] Upload TmpFiles (Link Prova) Failed:",
-                err
+                err,
               );
             }
           } else {
             progress.addLog(
-              "⚠️ Não foi possível baixar (CORS/Erro). O fluxo segue."
+              "⚠️ Não foi possível baixar (CORS/Erro). O fluxo segue.",
             );
           }
         }
@@ -445,20 +474,20 @@ export function setupFormLogic(elements, initialData) {
           const blob = await downloadPdfFromUrl(linkGab, signal);
           if (blob) {
             progress.addLog(
-              "Download via link com sucesso! Enviando para TmpFiles..."
+              "Download via link com sucesso! Enviando para TmpFiles...",
             );
             try {
               tmpUrlGabLink = await uploadToTmpFiles(
                 blob,
                 "gabarito_link_temp.pdf",
-                signal
+                signal,
               );
               console.log("[Manual] TmpUrl Gabarito (Link):", tmpUrlGabLink);
               progress.addLog("✅ Link do gabarito processado.");
             } catch (err) {
               console.warn(
                 "[Manual] Upload TmpFiles (Link Gabarito) Failed:",
-                err
+                err,
               );
             }
           }
@@ -501,7 +530,7 @@ export function setupFormLogic(elements, initialData) {
               if (errorJson.error) errorMessage = errorJson.error;
             } catch (e) {}
             throw new Error(
-              `Worker Error (${response.status}): ${errorMessage}`
+              `Worker Error (${response.status}): ${errorMessage}`,
             );
           }
 
@@ -582,16 +611,20 @@ export function setupFormLogic(elements, initialData) {
         if (hashTasks.length > 0) {
           progress.setTarget(25);
           progress.addLog(
-            `Iniciando cálculo de hash para ${hashTasks.length} itens...`
+            `Iniciando cálculo de hash para ${hashTasks.length} itens...`,
           );
 
           const promises = hashTasks.map((task) =>
             getRemoteHash(task.url, timestampSlug + task.suffix, task.label)
               .then((result) => ({ status: "fulfilled", result, task }))
-              .catch((reason) => ({ status: "rejected", reason, task }))
+              .catch((reason) => ({ status: "rejected", reason, task })),
           );
 
           const results = await Promise.all(promises);
+
+          if (signal.aborted) {
+            throw new Error("Cancelado pelo usuário");
+          }
 
           for (const outcome of results) {
             const { task } = outcome;
@@ -622,31 +655,41 @@ export function setupFormLogic(elements, initialData) {
 
           // --- ETAPA PRIMORDIAL: VERIFICAÇÃO DE EXISTÊNCIA NA NUVEM ---
           progress.setTarget(30, "Verificando Nuvem");
-          progress.addLog("Verificando existência prévia na nuvem...");
+          progress.addLog("Buscando no banco de dados...");
 
           try {
-            // 1. Obter Slug Previsto (Preflight)
             const WORKER_URL =
               "https://maia-api-worker.willian-campos-ismart.workers.dev";
 
-            // Usar nome do arquivo ou título para gerar slug
-            const queryForSlug = fileProva
-              ? fileProva.name.replace(".pdf", "")
-              : AUTO_TITLE;
+            // Usar nome fornecido pelo usuário (Prioridade) ou nome do arquivo
+            const queryForSlug = userTitle
+              ? userTitle
+              : fileProva
+                ? fileProva.name.replace(".pdf", "")
+                : AUTO_TITLE;
 
-            // [FIX] Usar endpoint dedicado sugerido pelo user
-            const slugRes = await fetch(`${WORKER_URL}/canonical-slug`, {
-              method: "POST",
-              body: JSON.stringify({ query: queryForSlug }),
-              signal,
-            });
+            // NOVO: Usa /trigger-deep-search em modo PREFLIGHT
+            // Isso faz busca Pinecone direta e só usa IA se não encontrar match forte
+            const preflightRes = await fetch(
+              `${WORKER_URL}/trigger-deep-search`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  query: queryForSlug,
+                  confirm: false, // Modo preflight - só busca, não dispara action
+                }),
+                signal,
+              },
+            );
 
-            const slugData = await slugRes.json();
-            const predictedSlug = slugData.slug;
+            const preflightData = await preflightRes.json();
+            const predictedSlug = preflightData.canonical_slug;
+
+            console.log("[Manual] Preflight result:", preflightData);
 
             if (predictedSlug) {
               targetSlug = predictedSlug;
-              console.log(`[Manual] Slug Previsto: ${predictedSlug}`);
 
               // 2. Verificar Manifesto Existente
               const manifestUrl = `https://huggingface.co/datasets/toquereflexo/maia-deep-search/resolve/main/output/${predictedSlug}/manifest.json`;
@@ -660,10 +703,10 @@ export function setupFormLogic(elements, initialData) {
 
                 console.log(
                   "[Manual] Manifesto encontrado. Comparando hashes...",
-                  manifestItems
+                  manifestItems,
                 );
                 progress.addLog(
-                  `Pasta '${predictedSlug}' encontrada. Comparando arquivos...`
+                  `Pasta '${predictedSlug}' encontrada. Comparando arquivos...`,
                 );
 
                 // Helper de busca no manifesto
@@ -693,18 +736,21 @@ export function setupFormLogic(elements, initialData) {
                 // NÃO              | SIM                 | Upload SÓ Prova
                 // NÃO              | NÃO                 | Upload Tudo (Padrão)
 
-                const gabaritoEnviadoPeloUser = !!fileGabarito;
+                const gabaritoEnviadoPeloUser = !!tmpUrlGab; // Usa tmpUrlGab como indicador
 
                 if (matchProva) {
                   console.log(
                     "[Manual] SKIPPING PROVA UPLOAD: Hash checked and found in cloud.",
-                    matchProva
+                    matchProva,
                   );
                   progress.addLog(
-                    "✅ Prova já existe na nuvem (Hash idêntico)."
+                    "✅ Prova já existe na nuvem (Hash idêntico).",
                   );
                   uploadProva = false;
-                  remoteUrlProva = matchProva.url; // Só para referência, não usado no viewer
+                  // [FIX] Priorizar link_origem (URL oficial) sobre url (HuggingFace)
+                  remoteUrlProva = matchProva.link_origem || matchProva.url;
+                  // [NEW] Persistir link para envio ao Firebase
+                  window.__pdfOriginalUrl = remoteUrlProva;
                 } else {
                   progress.addLog("⚠️ Prova é nova e será enviada.");
                 }
@@ -713,7 +759,7 @@ export function setupFormLogic(elements, initialData) {
                   if (matchGab) {
                     console.log(
                       "[Manual] SKIPPING GABARITO UPLOAD: Hash checked and found in cloud.",
-                      matchGab
+                      matchGab,
                     );
                     progress.addLog("✅ Gabarito já existe na nuvem.");
                     uploadGabarito = false;
@@ -733,12 +779,20 @@ export function setupFormLogic(elements, initialData) {
                     institution: firstItem.instituicao || firstItem.institution,
                     year: firstItem.ano || firstItem.year,
                     formatted_title_general:
-                      firstItem.friendly_name || firstItem.name,
+                      firstItem.nome ||
+                      firstItem.friendly_name ||
+                      firstItem.name,
+                    // Captura source_url_prova para sistema de imagens via PDF
+                    source_url_prova:
+                      firstItem.source_url_prova ||
+                      manifestItems.find((i) => i.source_url_prova)
+                        ?.source_url_prova ||
+                      null,
                   };
                 }
               } else {
                 console.log(
-                  "[Manual] Manifesto não encontrado (404). Upload completo necessário."
+                  "[Manual] Manifesto não encontrado (404). Upload completo necessário.",
                 );
               }
             }
@@ -747,36 +801,44 @@ export function setupFormLogic(elements, initialData) {
             // Em caso de erro cheque, prossegue com upload completo por segurança
           }
 
+          // [NEW] Garantir que o link fornecido manualmente seja salvo se não houver match na nuvem
+          if (!window.__pdfOriginalUrl && linkProva) {
+            window.__pdfOriginalUrl = linkProva;
+          }
+
           // --- REORDERED: INTEGRITY CHECK AFTER CLOUD CHECK ---
           if (uploadProva || uploadGabarito) {
             progress.addLog("Verificando consistência de origem (Links)...");
 
             // PROVA
+            // PROVA
             if (uploadProva) {
               if (!tmpUrlProvaLink) {
                 progress.addLog(
-                  "⚠️ Upload nuvem cancelado para Prova: Link obrigatório ausente.",
-                  true
+                  "ℹ️ Modo Manual (Sem Link): Hash de integridade não verificado.",
+                  false,
                 );
-                uploadProva = false;
+                // Permite upload sem link
               } else if (remoteHashProva && remoteHashProvaLink) {
                 if (remoteHashProva !== remoteHashProvaLink) {
                   progress.addLog(
                     "❌ BLOQUEIO (Prova): Hash do arquivo difere do Link.",
-                    true
+                    true,
                   );
                   uploadProva = false;
                 } else {
                   progress.addLog(
-                    "✅ Prova validada (Hash Link == Hash Arquivo)."
+                    "✅ Prova validada (Hash Link == Hash Arquivo).",
                   );
                 }
               } else {
                 if (!remoteHashProvaLink) {
+                  // Se tem link mas não processou, avisa mas não bloqueia necessariamente se for falha de download
+                  // Mas aqui assumimos que se o user botou link, ele quer validar.
+                  // Mantendo log de aviso.
                   progress.addLog(
-                    "⚠️ Link da prova não processado corretamente. Cancelando upload."
+                    "⚠️ Link da prova não processado. Prosseguindo com upload manual.",
                   );
-                  uploadProva = false;
                 }
               }
             }
@@ -786,25 +848,25 @@ export function setupFormLogic(elements, initialData) {
               if (!tmpUrlGabLink) {
                 progress.addLog(
                   "⚠️ Upload nuvem cancelado para Gabarito: Link obrigatório ausente.",
-                  true
+                  true,
                 );
                 uploadGabarito = false;
               } else if (remoteHashGab && remoteHashGabLink) {
                 if (remoteHashGab !== remoteHashGabLink) {
                   progress.addLog(
                     "❌ BLOQUEIO (Gabarito): Hash do arquivo difere do Link.",
-                    true
+                    true,
                   );
                   uploadGabarito = false;
                 } else {
                   progress.addLog(
-                    "✅ Gabarito validado (Hash Link == Hash Arquivo)."
+                    "✅ Gabarito validado (Hash Link == Hash Arquivo).",
                   );
                 }
               } else {
                 if (!remoteHashGabLink) {
                   progress.addLog(
-                    "⚠️ Link do gabarito não processado. Cancelando upload."
+                    "⚠️ Link do gabarito não processado. Cancelando upload.",
                   );
                   uploadGabarito = false;
                 }
@@ -895,7 +957,7 @@ export function setupFormLogic(elements, initialData) {
                   if (json.protected) {
                     progress.addLog(
                       `❌ BLOQUEIO COPYRIGHT (${typeLabel}): ${json.reason}`,
-                      true
+                      true,
                     );
                     return false; // BLOCKED
                   }
@@ -910,7 +972,7 @@ export function setupFormLogic(elements, initialData) {
             } catch (e) {
               console.error("Copyright Check Error:", e);
               progress.addLog(
-                `⚠️ Erro ao verificar copyright: ${e.message}. Permitindo...`
+                `⚠️ Erro ao verificar copyright: ${e.message}. Permitindo...`,
               );
               return true; // Fail open
             }
@@ -932,30 +994,41 @@ export function setupFormLogic(elements, initialData) {
 
           if (skipUpload) {
             console.log(
-              "[Manual] ALL FILES EXIST IN CLOUD. Skipping upload flow completely."
+              "[Manual] ALL FILES EXIST IN CLOUD. Skipping upload flow completely.",
             );
             progress.setTarget(100, "Concluído");
             progress.addLog(
-              "Todos os arquivos já existem. Abrindo visualizador local..."
+              "Todos os arquivos já existem. Abrindo visualizador local...",
             );
 
             setTimeout(() => {
               progress.close();
-              // ABRIR VIEWER LOCAL
+
+              // Capturar source_url_prova do manifesto existente se disponível
+              const manifestProvaUrl =
+                aiDataFromManifest?.source_url_prova || linkProva || null;
+              if (manifestProvaUrl) {
+                window.__pdfOriginalUrl = manifestProvaUrl;
+                window.__pdfDownloadUrl = manifestProvaUrl;
+              }
+
+              // ABRIR VIEWER LOCAL (gabarito não é mais suportado)
               gerarVisualizadorPDF({
                 title:
                   aiDataFromManifest?.formatted_title_general ||
-                  "Documento Local",
+                  userTitle ||
+                  fileProva.name,
                 rawTitle:
                   aiDataFromManifest?.formatted_title_general ||
-                  "Documento Local",
-                fileProva: URL.createObjectURL(fileProva),
-                fileGabarito: fileGabarito
-                  ? URL.createObjectURL(fileGabarito)
-                  : null,
+                  userTitle ||
+                  fileProva.name,
+                fileProva: remoteUrlProva || URL.createObjectURL(fileProva),
+                fileGabarito: null, // Gabarito não é mais suportado
                 gabaritoNaProva: false,
                 isManualLocal: true, // Força modo local
                 slug: targetSlug || "local-preview",
+                originalPdfUrl:
+                  remoteUrlProva || aiDataFromManifest?.source_url_prova,
               });
             }, 1000);
             return; // FIM DO PROCESSO
@@ -1034,7 +1107,7 @@ export function setupFormLogic(elements, initialData) {
           if (hashP) {
             formData.append("visual_hash", hashP);
             progress.addLog(
-              `Anexando visual_hash (Prova): ${hashP.substring(0, 10)}...`
+              `Anexando visual_hash (Prova): ${hashP.substring(0, 10)}...`,
             );
           } else {
             progress.addLog(`⚠️ visual_hash (Prova) está vazio!`);
@@ -1055,7 +1128,7 @@ export function setupFormLogic(elements, initialData) {
           if (hashG) {
             formData.append("visual_hash_gabarito", hashG);
             progress.addLog(
-              `Anexando visual_hash (Gabarito): ${hashG.substring(0, 10)}...`
+              `Anexando visual_hash (Gabarito): ${hashG.substring(0, 10)}...`,
             );
           }
         } else if (!uploadGabarito && fileGabarito) {
@@ -1095,7 +1168,7 @@ export function setupFormLogic(elements, initialData) {
 
         if (data.status === "conflict") {
           progress.addLog(
-            "⚠️ Aviso: Arquivos similares detectados no servidor."
+            "⚠️ Aviso: Arquivos similares detectados no servidor.",
           );
           // Não incomodamos o usuário com modal de conflito aqui, pois a regra é:
           // "Só cancela, não usa mais o arquivo da nuvem nem nada, porque agora vai abrir SOMENTE com os arquivos locais"
@@ -1114,7 +1187,7 @@ export function setupFormLogic(elements, initialData) {
         if (uploadProva || uploadGabarito) {
           progress.addLog(
             "Aguardando confirmação de processamento (Sync)...",
-            true
+            true,
           );
 
           // Usar a mesma lógica de polling/pusher mas APENAS para saber quando terminar,
@@ -1149,7 +1222,7 @@ export function setupFormLogic(elements, initialData) {
                 } catch (e) {}
               }
               reject(
-                new DOMException("Upload Cancelled by User", "AbortError")
+                new DOMException("Upload Cancelled by User", "AbortError"),
               );
             };
             signal.addEventListener("abort", onAbort);
@@ -1169,7 +1242,7 @@ export function setupFormLogic(elements, initialData) {
             setTimeout(() => {
               if (signal.aborted) return;
               progress.addLog(
-                "⚠️ Tempo limite de sync atingido. Abrindo assim mesmo..."
+                "⚠️ Tempo limite de sync atingido. Abrindo assim mesmo...",
               );
               safeResolve();
             }, 15000); // 15s max wait
@@ -1196,8 +1269,13 @@ export function setupFormLogic(elements, initialData) {
             title:
               data.ai_data?.formatted_title_general ||
               aiDataFromManifest?.formatted_title_general ||
-              AUTO_TITLE,
-            rawTitle: "Documento Local",
+              userTitle ||
+              fileProva.name,
+            rawTitle:
+              data.ai_data?.formatted_title_general ||
+              aiDataFromManifest?.formatted_title_general ||
+              userTitle ||
+              fileProva.name,
             fileProva: URL.createObjectURL(fileProva), // SEMPRE LOCAL
             fileGabarito: fileGabarito
               ? URL.createObjectURL(fileGabarito)
@@ -1205,6 +1283,8 @@ export function setupFormLogic(elements, initialData) {
             gabaritoNaProva: false,
             isManualLocal: true,
             slug: finalSlug,
+            originalPdfUrl:
+              remoteUrlProva || aiDataFromManifest?.source_url_prova, // Garante que o contexto receba a URL oficial
           });
         }, 800);
 
@@ -1215,32 +1295,32 @@ export function setupFormLogic(elements, initialData) {
         // Check if it's a user cancellation
         const isAbort =
           e.name === "AbortError" ||
-          (e.message && e.message.includes("AbortError"));
+          (e.message &&
+            (e.message.includes("AbortError") ||
+              e.message.includes("Cancelado"))) ||
+          signal.aborted;
 
         if (isAbort) {
-          console.log(
-            "[Manual] Upload cancelled by user. Opening local viewer..."
-          );
+          console.log("[Manual] Upload cancelled by user. Stopping sequence.");
+          return; // STOP HERE
         } else {
           console.error("[Manual] Error triggering upload:", e);
-          alert(
+          customAlert(
             "Erro na sincronização: " +
               e.message +
-              "\nAbrindo modo visualização local."
+              "\nAbrindo modo visualização local.",
           );
         }
 
-        // Ensure viewer opens even on error or cancel
+        // Ensure viewer opens ONLY on error (fallback), NOT on cancel
         setTimeout(() => {
           gerarVisualizadorPDF({
-            title: AUTO_TITLE || "Documento Local (Offline)",
-            rawTitle: "Documento Local",
+            title: userTitle || fileProva.name || AUTO_TITLE,
+            rawTitle: userTitle || fileProva.name,
             fileProva: fileProva ? URL.createObjectURL(fileProva) : null,
-            fileGabarito: null,
             gabaritoNaProva: false,
             isManualLocal: true,
-            slug:
-              "local-" + (isAbort ? "cancelled" : "error") + "-" + Date.now(),
+            slug: "local-" + "error" + "-" + Date.now(),
           });
         }, 500);
       }
@@ -1256,7 +1336,7 @@ export function setupFormLogic(elements, initialData) {
     const showProcessingConfirmation = () => {
       const modal = document.getElementById("processingConfirmModal");
       const checkboxContainer = document.getElementById(
-        "copyrightCheckContainer"
+        "copyrightCheckContainer",
       );
       const checkbox = document.getElementById("checkCopyrightPublic");
       const btnStart = document.getElementById("btnStartProcessing");

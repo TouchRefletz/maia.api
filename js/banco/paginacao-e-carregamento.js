@@ -5,11 +5,11 @@ import {
   orderByKey,
   query,
   ref,
-} from 'https://www.gstatic.com/firebasejs/12.6.0/firebase-database.js';
-import { ensureLibsLoaded, renderLatexIn } from '../libs/loader.tsx';
-import { TAMANHO_PAGINA, bancoState, db } from '../main.js';
-import { criarCardTecnico } from './card-template.js';
-import { popularFiltrosDinamicos } from './filtros-dinamicos.js';
+} from "https://www.gstatic.com/firebasejs/12.6.0/firebase-database.js";
+import { ensureLibsLoaded, renderLatexIn } from "../libs/loader.tsx";
+import { TAMANHO_PAGINA, bancoState, db } from "../main.js";
+import { criarCardTecnico } from "./card-template.js";
+import { popularFiltrosDinamicos } from "./filtros-dinamicos.js";
 
 export function construirConsultaFirebase(dbRef) {
   // Se não tem cursor anterior, pega as últimas X
@@ -22,7 +22,7 @@ export function construirConsultaFirebase(dbRef) {
       dbRef,
       orderByKey(),
       endBefore(bancoState.ultimoKeyCarregada),
-      limitToLast(TAMANHO_PAGINA)
+      limitToLast(TAMANHO_PAGINA),
     );
   }
 }
@@ -38,7 +38,7 @@ export function processarDadosSnapshot(data) {
   const questoesProcessadas = [];
 
   listaProvas.forEach(([nomeProva, mapQuestoes]) => {
-    if (mapQuestoes && typeof mapQuestoes === 'object') {
+    if (mapQuestoes && typeof mapQuestoes === "object") {
       Object.entries(mapQuestoes).forEach(([idQuestao, fullData]) => {
         // Validação básica
         if (!fullData.dados_questao) return;
@@ -46,12 +46,13 @@ export function processarDadosSnapshot(data) {
         // Injeta metadados (Nome da prova)
         if (!fullData.meta) fullData.meta = {};
         if (!fullData.meta.material_origem) {
-          fullData.meta.material_origem = nomeProva.replace(/_/g, ' ');
+          fullData.meta.material_origem = nomeProva.replace(/_/g, " ");
         }
 
         // Adiciona na lista plana
         questoesProcessadas.push({
           id: idQuestao,
+          prova: nomeProva, // Needed for review path
           fullData: fullData,
         });
       });
@@ -73,30 +74,30 @@ export function renderizarLoteQuestoes(listaQuestoes, container) {
     container.appendChild(card);
 
     // 3. Renderiza LaTeX (Matemática)
-    if (typeof renderLatexIn === 'function') {
+    if (typeof renderLatexIn === "function") {
       renderLatexIn(card);
     }
   });
 }
 
-export function atualizarStatusSentinela(status, mensagem = '') {
-  const s = document.getElementById('sentinelaScroll');
+// Helper para buscar status
+export function atualizarStatusSentinela(status, mensagem = "") {
+  const s = document.getElementById("sentinelaScroll");
   if (!s) return;
 
-  if (status === 'fim') {
+  if (status === "fim") {
     s.innerHTML =
       '<p style="color:var(--color-text-secondary);">Fim do banco de questões.</p>';
     if (bancoState.observadorScroll) bancoState.observadorScroll.disconnect();
-  } else if (status === 'erro') {
+  } else if (status === "erro") {
     s.innerHTML = `<p style="color:var(--color-error);">Erro: ${mensagem}</p>`;
   }
 }
 
 export function configurarObserverScroll() {
-  const sentinela = document.getElementById('sentinelaScroll');
+  const sentinela = document.getElementById("sentinelaScroll");
 
   // Cria o observer
-  // Nota: Certifique-se de que observadorScroll seja uma variável acessível onde você precisa
   bancoState.observadorScroll = new IntersectionObserver(
     (entries) => {
       if (entries[0].isIntersecting) {
@@ -104,11 +105,39 @@ export function configurarObserverScroll() {
         carregarBancoDados();
       }
     },
-    { rootMargin: '300px' }
+    { rootMargin: "300px" },
   );
 
   // Começa a observar
   if (sentinela) bancoState.observadorScroll.observe(sentinela);
+}
+
+// Helper para buscar status
+async function hidratarStatusRevisao(listaQuestoes) {
+  if (!listaQuestoes || listaQuestoes.length === 0) return;
+
+  const { get, ref, child } =
+    await import("https://www.gstatic.com/firebasejs/12.6.0/firebase-database.js");
+  const { db } = await import("../main.js");
+
+  const promises = listaQuestoes.map(async (item) => {
+    const path = `revisoes/${item.prova}/${item.id}/status`;
+    try {
+      const snap = await get(child(ref(db), path));
+      if (snap.exists()) {
+        item.fullData.reviewStatus = snap.val();
+
+        // Atualiza cache se ja foi inserido (race condition com render)
+        // O render acontece antes? Se sim, o objeto 'fullData' é referência?
+        // Sim, objetos JS são referência. Se eu mudo aqui, muda no cache.
+        // Mas não muda no DOM atributes. O filtro olha pro CACHE. entao ta safe.
+      }
+    } catch (e) {
+      console.warn("Erro ao buscar status revisão:", path, e);
+    }
+  });
+
+  await Promise.all(promises);
 }
 
 export async function carregarBancoDados() {
@@ -119,7 +148,7 @@ export async function carregarBancoDados() {
     await ensureLibsLoaded();
 
     // 1. Busca os dados
-    const dbRef = ref(db, 'questoes');
+    const dbRef = ref(db, "questoes");
     const consulta = construirConsultaFirebase(dbRef);
     const snapshot = await get(consulta);
 
@@ -132,21 +161,25 @@ export async function carregarBancoDados() {
       // Atualiza variavel global de paginação
       bancoState.ultimoKeyCarregada = novoCursor;
 
+      // 2.1 HIDRATAÇÃO DE STATUS (NOVO)
+      // Buscamos em paralelo os status das revisoes
+      await hidratarStatusRevisao(questoesProcessadas);
+
       // 3. Renderiza na tela
-      const container = document.getElementById('bankStream');
+      const container = document.getElementById("bankStream");
       renderizarLoteQuestoes(questoesProcessadas, container);
 
       // 4. Atualiza filtros
-      if (typeof popularFiltrosDinamicos === 'function') {
+      if (typeof popularFiltrosDinamicos === "function") {
         popularFiltrosDinamicos();
       }
     } else {
       // Não existem mais dados
-      atualizarStatusSentinela('fim');
+      atualizarStatusSentinela("fim");
     }
   } catch (e) {
-    console.error('Erro ao carregar banco:', e);
-    atualizarStatusSentinela('erro', e.message);
+    console.error("Erro ao carregar banco:", e);
+    atualizarStatusSentinela("erro", e.message);
   } finally {
     bancoState.carregandoMais = false;
   }

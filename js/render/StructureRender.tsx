@@ -6,8 +6,8 @@ import ReactDOMServer from 'react-dom/server';
 declare global {
   interface Window {
     __imagensLimpas?: {
-      questao_original?: string[];
-      gabarito_original?: string[];
+      questao_original?: any[];
+      gabarito_original?: any[];
       alternativas?: {
         questao?: Record<string, string[]>;
       };
@@ -23,8 +23,23 @@ declare global {
 export interface EstruturaBloco {
   tipo?: string;
   conteudo?: string | number;
-  imagem_base64?: string;
-  imagem_url?: string;
+  
+  // Sistema de Imagens via PDF Embed + PDF.js Fallback
+  pdf_url?: string | null;        // URL pública do PDF (do manifesto)
+  pdf_page?: number;              // Número da página
+  pdf_zoom?: number;              // Zoom para embed (100, 150, 200, etc)
+  pdf_left?: number;              // Coordenada X (pontos PDF)
+  pdf_top?: number;               // Coordenada Y (pontos PDF)
+  pdf_width?: string;             // Largura do container ("714px")
+  pdf_height?: string;            // Altura do container ("660px")
+  // Fallback PDF.js
+  pdfjs_source_w?: number;        // Largura do canvas fonte
+  pdfjs_source_h?: number;        // Altura do canvas fonte  
+  pdfjs_x?: number;               // X no canvas
+  pdfjs_y?: number;               // Y no canvas
+  pdfjs_crop_w?: number;          // Largura do crop
+  pdfjs_crop_h?: number;          // Altura do crop
+  
   url?: string;
 }
 
@@ -33,7 +48,17 @@ interface CommonProps {
   isReadOnly: boolean;
 }
 
+// Props de revisão para MainStructure
+interface ReviewProps {
+  isReviewMode?: boolean;
+  reviewState?: Record<string, 'approved' | 'rejected' | null>;
+  onApprove?: (fieldId: string) => void;
+  onReject?: (fieldId: string) => void;
+  blockPrefix?: string;
+}
+
 // Importar safeMarkdown
+import { useMathRender } from '../libs/loader';
 import { safeMarkdown } from '../normalize/primitives.js';
 
 // ... (imports existentes)
@@ -61,8 +86,13 @@ const StructureTextBlock: React.FC<{
   // Usamos safeMarkdown para renderizar o conteúdo, garantindo decode de entities e parse de markdown
   const conteudoRenderizado = safeMarkdown(conteudoRaw);
 
+  // Hook para renderizar LaTeX (MathJax/KaTeX)
+  // Re-executa sempre que o conteúdo renderizado mudar
+  const mathRef = useMathRender([conteudoRenderizado]);
+
   const criarMarkdown = (classeExtra: string) => (
     <div
+      ref={mathRef}
       className={`structure-block ${classeExtra} markdown-content ${className}`}
       data-raw={conteudoSafe}
       dangerouslySetInnerHTML={{ __html: conteudoRenderizado }}
@@ -86,9 +116,13 @@ const StructureTextBlock: React.FC<{
       // Para listas, garantimos que quebras de linha virem <br> se o markdown não pegar, 
       // mas safeMarkdown já deve tratar isso.
       return criarMarkdown('structure-lista');
-    case 'equacao': return (
-      <div className={`structure-block structure-equacao ${className}`}>{`\\[${conteudoRaw}\\]`}</div>
-    );
+    case 'equacao': 
+      // Equação explícita também precisa de render
+      // eslint-disable-next-line react-hooks/rules-of-hooks
+      const eqRef = useMathRender([conteudoRaw]);
+      return (
+        <div ref={eqRef} className={`structure-block structure-equacao ${className}`}>{`\\[${conteudoRaw}\\]`}</div>
+      );
     case 'codigo': return (
       <pre className={`structure-block structure-codigo ${className}`}>
         <code>{conteudoRaw}</code>
@@ -101,6 +135,7 @@ const StructureTextBlock: React.FC<{
 
 // --- COMPONENTE: BLOCO DE IMAGEM (QUESTÃO) ---
 import { ImageSlotCard } from '../ui/ImageSlotCard';
+import { PdfEmbedRenderer } from '../ui/PdfEmbedRenderer';
 
 const ImageBlock: React.FC<{
   bloco: EstruturaBloco;
@@ -110,23 +145,97 @@ const ImageBlock: React.FC<{
   isReadOnly: boolean;
   conteudoRaw: string;
   conteudoSafe: string;
-}> = ({ bloco, imgIndex, src, contexto, isReadOnly, conteudoRaw, conteudoSafe }) => {
+  disableInteraction?: boolean;
+  parentGroupId?: string | number;
+  // Props de revisão para a descrição
+  isReviewMode?: boolean;
+  descricaoFieldId?: string;
+  descricaoState?: 'approved' | 'rejected' | null;
+  onApprove?: (fieldId: string) => void;
+  onReject?: (fieldId: string) => void;
+}> = ({ bloco, imgIndex, src, contexto, isReadOnly, conteudoRaw, conteudoSafe, disableInteraction, parentGroupId, isReviewMode, descricaoFieldId, descricaoState, onApprove, onReject }) => {
 
   // Renderiza legenda se houver conteúdo
   const renderCaption = (prefixo = '') => {
     if (!conteudoRaw) return null;
+    
+    // Em modo de revisão, a descrição tem seus próprios botões de aprovação
+    if (isReviewMode && descricaoFieldId && onApprove && onReject) {
+      const stateClass = descricaoState === 'approved' ? 'block-approved' : descricaoState === 'rejected' ? 'block-rejected' : '';
+      
+      return (
+        <div className={`reviewable-block reviewable-caption ${stateClass}`} style={{ marginTop: '8px', padding: '8px', borderRadius: '6px' }}>
+          <div className="reviewable-block-header" style={{ marginBottom: '4px' }}>
+            <span className="reviewable-block-tipo" style={{ fontSize: '10px' }}>📝 Descrição da Imagem</span>
+            <div className="review-btn-group">
+              <button
+                type="button"
+                className={`review-btn review-btn--approve review-btn--xs ${descricaoState === 'approved' ? 'active' : ''}`}
+                onClick={() => onApprove(descricaoFieldId)}
+                title="Aprovar descrição"
+              >
+                ✓
+              </button>
+              <button
+                type="button"
+                className={`review-btn review-btn--reject review-btn--xs ${descricaoState === 'rejected' ? 'active' : ''}`}
+                onClick={() => onReject(descricaoFieldId)}
+                title="Rejeitar descrição"
+              >
+                ✗
+              </button>
+            </div>
+          </div>
+          <div
+            className="structure-caption markdown-content"
+            data-raw={conteudoSafe}
+            dangerouslySetInnerHTML={{ __html: safeMarkdown(`${prefixo}${conteudoRaw}`) }}
+          />
+        </div>
+      );
+    }
+    
     return (
       <div
         className="structure-caption markdown-content"
         data-raw={conteudoSafe}
-        dangerouslySetInnerHTML={{ __html: `${prefixo}${conteudoRaw}` }}
+        dangerouslySetInnerHTML={{ __html: safeMarkdown(`${prefixo}${conteudoRaw}`) }}
       />
     );
   };
 
-  // If in ReadOnly mode (Bank View), keep the simpler static rendering
+  // If in ReadOnly mode (Bank View) - usa PdfImageRenderer se tem dados de PDF
   if (isReadOnly) {
-      if (src) {
+      // Verifica se temos dados de PDF para renderizar via PdfImageRenderer
+      const hasPdfData = bloco.pdf_page || bloco.pdfjs_x !== undefined;
+      const pdfUrl = bloco.pdf_url || null;
+      
+      if (hasPdfData || pdfUrl) {
+        // Renderiza via PDF Embed ou PDF.js Fallback (COM ScaleToFit)
+        return (
+          <div className="structure-block structure-image-wrapper">
+            <PdfEmbedRenderer
+              pdfUrl={pdfUrl}
+              // downloadUrl não é prop explicita do Embed, mas ele deduz do window se precisar
+              pdf_page={bloco.pdf_page}
+              pdf_zoom={bloco.pdf_zoom}
+              pdf_left={bloco.pdf_left}
+              pdf_top={bloco.pdf_top}
+              pdf_width={bloco.pdf_width}
+              pdf_height={bloco.pdf_height}
+              pdfjs_source_w={bloco.pdfjs_source_w}
+              pdfjs_source_h={bloco.pdfjs_source_h}
+              pdfjs_x={bloco.pdfjs_x}
+              pdfjs_y={bloco.pdfjs_y}
+              pdfjs_crop_w={bloco.pdfjs_crop_w}
+              pdfjs_crop_h={bloco.pdfjs_crop_h}
+              scaleToFit={true}
+            />
+            {renderCaption('')}
+          </div>
+        );
+      } else if (src) {
+        // Fallback legado: imagem direta (para dados antigos)
         return (
           <div className="structure-block structure-image-wrapper">
             <img
@@ -153,17 +262,46 @@ const ImageBlock: React.FC<{
   // INTERACTIVE MODE (Creation/Editing)
   // We delegate everything to ImageSlotCard which handles Empty vs Filled vs Capturing internally.
   // Force column layout so caption is BELOW the card, and allow card to take full width.
+  const hasPdfData = bloco.pdf_page || bloco.pdfjs_x !== undefined;
+  
+  const captionRef = useMathRender([conteudoSafe]);
+
   return (
     <div className="structure-block" style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
         <ImageSlotCard
             slotId={String(imgIndex)}
             label="Imagem"
-            currentData={src ? { id: String(imgIndex), previewUrl: src } : null}
+          currentData={
+            (src || hasPdfData)
+              ? {
+                  id: String(imgIndex),
+                  previewUrl: src,
+                  // Pass PDF props explicitly to ensure they are available for PdfEmbedRenderer
+                  pdf_url: bloco.pdf_url,
+                  pdf_page: bloco.pdf_page,
+                  pdf_zoom: bloco.pdf_zoom,
+                  pdf_left: bloco.pdf_left,
+                  pdf_top: bloco.pdf_top,
+                  pdf_width: bloco.pdf_width,
+                  pdf_height: bloco.pdf_height,
+                  pdfjs_source_w: bloco.pdfjs_source_w,
+                  pdfjs_source_h: bloco.pdfjs_source_h,
+                  pdfjs_x: bloco.pdfjs_x,
+                  pdfjs_y: bloco.pdfjs_y,
+                  pdfjs_crop_w: bloco.pdfjs_crop_w,
+                  pdfjs_crop_h: bloco.pdfjs_crop_h,
+                }
+              : null
+          }
+            readOnly={disableInteraction}
+            parentGroupId={parentGroupId}
         />
         {/* Caption is separate, or should it be inside card? 
             The card has a header, but caption is usually below image. 
             Let's keep it below the card for now. */}
-        {renderCaption('IA: ')}
+        <div ref={captionRef}>
+           {renderCaption('IA: ')}
+        </div>
     </div>
   );
 };
@@ -173,13 +311,36 @@ export const MainStructure: React.FC<{
   estrutura: EstruturaBloco[];
   imagensExternas: string[];
   contexto: string;
-}> = ({ estrutura, imagensExternas, contexto }) => {
+  disableInteraction?: boolean;
+  isReadOnly?: boolean;
+  parentGroupId?: string | number;
+  // Props de revisão
+  isReviewMode?: boolean;
+  reviewState?: Record<string, 'approved' | 'rejected' | null>;
+  onApprove?: (fieldId: string) => void;
+  onReject?: (fieldId: string) => void;
+  blockPrefix?: string;
+}> = ({ estrutura, imagensExternas, contexto, disableInteraction, isReadOnly, parentGroupId, isReviewMode, reviewState, onApprove, onReject, blockPrefix = 'bloco' }) => {
+
   if (!estrutura || !Array.isArray(estrutura) || estrutura.length === 0) {
     return null;
   }
 
-  const isReadOnly = contexto === 'banco';
+  const isReadOnlyMode = disableInteraction || isReadOnly || contexto === 'banco';
   let globalImgCounter = 0; // Contador mutável para simular o imgIndex++ condicional
+
+  // Função para obter label do tipo de bloco
+  const getTipoLabel = (tipo: string) => {
+    const labels: Record<string, string> = {
+      'imagem': '🖼️ Imagem',
+      'texto': '📝 Texto',
+      'fonte': '📚 Fonte',
+      'lista': '📋 Lista',
+      'tabela': '📊 Tabela',
+      'equacao': '🔢 Equação',
+    };
+    return labels[tipo] || `📦 ${tipo}`;
+  };
 
   return (
     <div className="structure-container">
@@ -187,26 +348,75 @@ export const MainStructure: React.FC<{
         const tipo = (bloco?.tipo || 'imagem').toLowerCase();
         const conteudoRaw = bloco?.conteudo ? String(bloco.conteudo) : '';
         const conteudoSafe = sanitizeContent(conteudoRaw);
+        const fieldId = `${blockPrefix}_${idx}`;
+        const state = reviewState?.[fieldId] || null;
+
+        let blockContent: React.ReactNode;
 
         if (tipo === 'imagem' || !tipo) {
           const currentImgIndex = globalImgCounter++;
-          const src = bloco.imagem_base64 || bloco.imagem_url || bloco.url || imagensExternas?.[currentImgIndex];
+          const src = bloco.url || imagensExternas?.[currentImgIndex];
+          
+          // ID específico para a descrição da imagem
+          const descricaoFieldId = `${fieldId}_descricao`;
+          const descricaoState = reviewState?.[descricaoFieldId] || null;
 
-          return (
+          blockContent = (
             <ImageBlock
-              key={idx}
               bloco={bloco}
               imgIndex={currentImgIndex}
               src={src}
               contexto={contexto}
-              isReadOnly={isReadOnly}
+              isReadOnly={isReadOnlyMode}
               conteudoRaw={conteudoRaw}
               conteudoSafe={conteudoSafe}
+              disableInteraction={disableInteraction}
+              parentGroupId={parentGroupId}
+              // Props de revisão para a descrição
+              isReviewMode={isReviewMode}
+              descricaoFieldId={descricaoFieldId}
+              descricaoState={descricaoState}
+              onApprove={onApprove}
+              onReject={onReject}
             />
           );
         } else {
-          return <StructureTextBlock key={idx} bloco={bloco} />;
+          blockContent = <StructureTextBlock bloco={bloco} />;
         }
+
+        // Em modo review, envolve com botões
+        if (isReviewMode && onApprove && onReject) {
+          const stateClass = state === 'approved' ? 'block-approved' : state === 'rejected' ? 'block-rejected' : '';
+          
+          return (
+            <div key={idx} className={`reviewable-block ${stateClass}`}>
+              <div className="reviewable-block-header">
+                <span className="reviewable-block-tipo">{getTipoLabel(tipo)}</span>
+                <div className="review-btn-group">
+                  <button
+                    type="button"
+                    className={`review-btn review-btn--approve review-btn--xs ${state === 'approved' ? 'active' : ''}`}
+                    onClick={() => onApprove(fieldId)}
+                    title="Aprovar"
+                  >
+                    ✓
+                  </button>
+                  <button
+                    type="button"
+                    className={`review-btn review-btn--reject review-btn--xs ${state === 'rejected' ? 'active' : ''}`}
+                    onClick={() => onReject(fieldId)}
+                    title="Rejeitar"
+                  >
+                    ✗
+                  </button>
+                </div>
+              </div>
+              {blockContent}
+            </div>
+          );
+        }
+
+        return <React.Fragment key={idx}>{blockContent}</React.Fragment>;
       })}
     </div>
   );
@@ -222,7 +432,72 @@ const AlternativeImageBlock: React.FC<{
   conteudo: string;
   conteudoRawAttr: string;
   temConteudo: boolean;
-}> = ({ bloco, letra, imgIndex, src, isReadOnly, conteudo, conteudoRawAttr, temConteudo }) => {
+  // Props de revisão para a descrição
+  isReviewMode?: boolean;
+  descricaoFieldId?: string;
+  descricaoState?: 'approved' | 'rejected' | null;
+  onApprove?: (fieldId: string) => void;
+  onReject?: (fieldId: string) => void;
+}> = ({ bloco, letra, imgIndex, src, isReadOnly, conteudo, conteudoRawAttr, temConteudo, isReviewMode, descricaoFieldId, descricaoState, onApprove, onReject }) => {
+
+  // Renderiza a descrição com ou sem controles de revisão
+  const renderDescricao = () => {
+    if (!temConteudo) return null;
+
+    // Em modo de revisão, a descrição tem seus próprios botões de aprovação
+    if (isReviewMode && descricaoFieldId && onApprove && onReject) {
+      const stateClass = descricaoState === 'approved' ? 'block-approved' : descricaoState === 'rejected' ? 'block-rejected' : '';
+      
+      return (
+        <div className={`reviewable-block reviewable-caption ${stateClass}`} style={{ marginTop: '8px', padding: '8px', borderRadius: '6px' }}>
+          <div className="reviewable-block-header" style={{ marginBottom: '4px' }}>
+            <span className="reviewable-block-tipo" style={{ fontSize: '10px' }}>📝 Descrição da Imagem</span>
+            <div className="review-btn-group">
+              <button
+                type="button"
+                className={`review-btn review-btn--approve review-btn--xs ${descricaoState === 'approved' ? 'active' : ''}`}
+                onClick={(e) => { e.stopPropagation(); onApprove(descricaoFieldId); }}
+                title="Aprovar descrição"
+              >
+                ✓
+              </button>
+              <button
+                type="button"
+                className={`review-btn review-btn--reject review-btn--xs ${descricaoState === 'rejected' ? 'active' : ''}`}
+                onClick={(e) => { e.stopPropagation(); onReject(descricaoFieldId); }}
+                title="Rejeitar descrição"
+              >
+                ✗
+              </button>
+            </div>
+          </div>
+          <div
+            className="structure-caption markdown-content"
+            data-raw={conteudoRawAttr}
+            style={isReadOnly
+              ? { fontSize: '0.9em', marginTop: '5px', color: '#555' }
+              : { fontSize: '11px', marginTop: '4px', color: 'var(--color-text-secondary)' }
+            }
+          >
+            {isReadOnly ? conteudo : `IA: ${conteudo}`}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div
+        className="structure-caption markdown-content"
+        data-raw={conteudoRawAttr}
+        style={isReadOnly
+          ? { fontSize: '0.9em', marginTop: '5px', color: '#555' }
+          : { fontSize: '11px', marginTop: '4px', color: 'var(--color-text-secondary)' }
+        }
+      >
+        {isReadOnly ? conteudo : `IA: ${conteudo}`}
+      </div>
+    );
+  };
 
   if (src) {
     return (
@@ -235,18 +510,7 @@ const AlternativeImageBlock: React.FC<{
           style={isReadOnly ? { cursor: 'zoom-in' } : undefined}
           alt=""
         />
-        {temConteudo && (
-          <div
-            className="structure-caption markdown-content"
-            data-raw={conteudoRawAttr}
-            style={isReadOnly
-              ? { fontSize: '0.9em', marginTop: '5px', color: '#555' }
-              : { fontSize: '11px', marginTop: '4px', color: 'var(--color-text-secondary)' }
-            }
-          >
-            {isReadOnly ? conteudo : `IA: ${conteudo}`}
-          </div>
-        )}
+        {renderDescricao()}
         {!isReadOnly && (
           <button
             className="btn-trocar-img"
@@ -268,7 +532,7 @@ const AlternativeImageBlock: React.FC<{
         data-letter={letra}
       >
         <div className="icon">📷</div>
-        {temConteudo && (
+        {temConteudo && !isReviewMode && (
           <div
             className="markdown-content"
             data-raw={conteudoRawAttr}
@@ -277,6 +541,7 @@ const AlternativeImageBlock: React.FC<{
             IA: {conteudo}
           </div>
         )}
+        {isReviewMode && renderDescricao()}
       </div>
     );
   }
@@ -289,7 +554,13 @@ export const AlternativeStructure: React.FC<{
   letra: string;
   imagensExternas: string[];
   contexto: string;
-}> = ({ estrutura, letra, imagensExternas, contexto }) => {
+  // Props de revisão
+  isReviewMode?: boolean;
+  reviewState?: Record<string, 'approved' | 'rejected' | null>;
+  onApprove?: (fieldId: string) => void;
+  onReject?: (fieldId: string) => void;
+  blockPrefix?: string;
+}> = ({ estrutura, letra, imagensExternas, contexto, isReviewMode, reviewState, onApprove, onReject, blockPrefix }) => {
   if (!Array.isArray(estrutura) || estrutura.length === 0) return null;
 
   const isReadOnly = contexto === 'banco';
@@ -301,35 +572,97 @@ export const AlternativeStructure: React.FC<{
 
   let globalImgCounter = 0;
 
+  // Função helper para labels (duplicada de MainStructure para isolamento)
+  const getTipoLabel = (tipo: string) => {
+    const labels: Record<string, string> = {
+      'imagem': '🖼️ Imagem',
+      'texto': '📝 Texto',
+      'fonte': '📚 Fonte',
+      'lista': '📋 Lista',
+      'tabela': '📊 Tabela',
+      'equacao': '🔢 Equação',
+    };
+    return labels[tipo] || `📦 ${tipo}`;
+  };
+
   return (
     <div className="alt-estrutura">
       {estrutura.map((bloco, idx) => {
         const tipo = String(bloco?.tipo || 'texto').toLowerCase();
+        // Não sanitizamos aqui para preservar LaTeX, o componente filho sanitiza se precisar
+        const conteudoRawAttr = bloco?.conteudo ? String(bloco.conteudo).replace(/"/g, '&quot;') : ''; 
+        const conteudo = bloco?.conteudo ? String(bloco.conteudo) : '';
 
-        if (tipo !== 'imagem' && tipo !== '') {
-          return <StructureTextBlock key={idx} bloco={bloco} />;
+        // ID único para revisão deste bloco específico
+        const fieldId = blockPrefix ? `${blockPrefix}_${idx}` : `alt_${letra}_bloco_${idx}`;
+        const state = reviewState?.[fieldId] || null;
+
+        let blockContent: React.ReactNode;
+
+        if (tipo === 'imagem') {
+          const currentImgIndex = globalImgCounter++;
+          const src = bloco.url || imgsFallback?.[currentImgIndex];
+          
+          // ID específico para a descrição da imagem
+          const descricaoFieldId = `${fieldId}_descricao`;
+          const descricaoState = reviewState?.[descricaoFieldId] || null;
+
+          blockContent = (
+            <AlternativeImageBlock
+              key={idx}
+              bloco={bloco}
+              letra={letra}
+              imgIndex={currentImgIndex}
+              src={src}
+              isReadOnly={isReadOnly}
+              conteudo={conteudo}
+              conteudoRawAttr={conteudoRawAttr}
+              temConteudo={!!(conteudo && conteudo.trim().length > 0)}
+              // Props de revisão para a descrição
+              isReviewMode={isReviewMode}
+              descricaoFieldId={descricaoFieldId}
+              descricaoState={descricaoState}
+              onApprove={onApprove}
+              onReject={onReject}
+            />
+          );
+        } else {
+          blockContent = <StructureTextBlock key={idx} bloco={bloco} />;
         }
 
-        // Tipo Complexo (Imagem)
-        const currentImgIdx = globalImgCounter++;
-        const src = bloco.imagem_base64 || bloco.imagem_url || imgsFallback[currentImgIdx];
-        const conteudo = String(bloco?.conteudo || '');
-        const conteudoRawAttr = conteudo.replace(/"/g, '&quot;');
-        const temConteudo = !!(bloco?.conteudo && String(bloco.conteudo).trim().length > 0);
+        // Se estiver em modo review, envolve com a interface de botões
+        if (isReviewMode && onApprove && onReject) {
+          const stateClass = state === 'approved' ? 'block-approved' : state === 'rejected' ? 'block-rejected' : '';
 
-        return (
-          <AlternativeImageBlock
-            key={idx}
-            bloco={bloco}
-            letra={letra}
-            imgIndex={currentImgIdx}
-            src={src}
-            isReadOnly={isReadOnly}
-            conteudo={conteudo}
-            conteudoRawAttr={conteudoRawAttr}
-            temConteudo={temConteudo}
-          />
-        );
+          return (
+            <div key={idx} className={`reviewable-block ${stateClass}`} style={{ margin: '4px 0', padding: '8px' }}>
+              <div className="reviewable-block-header" style={{ marginBottom: '4px', paddingBottom: '4px' }}>
+                <span className="reviewable-block-tipo" style={{ fontSize: '10px' }}>{getTipoLabel(tipo)}</span>
+                <div className="review-btn-group">
+                  <button
+                    type="button"
+                    className={`review-btn review-btn--approve review-btn--xs ${state === 'approved' ? 'active' : ''}`}
+                    onClick={(e) => { e.stopPropagation(); onApprove(fieldId); }}
+                    title="Aprovar bloco"
+                  >
+                    ✓
+                  </button>
+                  <button
+                    type="button"
+                    className={`review-btn review-btn--reject review-btn--xs ${state === 'rejected' ? 'active' : ''}`}
+                    onClick={(e) => { e.stopPropagation(); onReject(fieldId); }}
+                    title="Rejeitar bloco"
+                  >
+                    ✗
+                  </button>
+                </div>
+              </div>
+              {blockContent}
+            </div>
+          );
+        }
+
+        return blockContent;
       })}
     </div>
   );
@@ -341,13 +674,15 @@ export const AlternativeStructure: React.FC<{
 export const generateHtmlString = (
   estrutura: EstruturaBloco[],
   imagensExternas: string[],
-  contexto: string
+  contexto: string,
+  isReadOnly: boolean = false
 ): string => {
   return ReactDOMServer.renderToStaticMarkup(
     <MainStructure
       estrutura={estrutura}
       imagensExternas={imagensExternas}
       contexto={contexto}
+      isReadOnly={isReadOnly}
     />
   );
 };

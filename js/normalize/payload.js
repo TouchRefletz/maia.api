@@ -41,7 +41,7 @@ export const _processarDadosPayload = (root, isGabaritoData) => {
 export const _processarGabarito = (root) => {
   // 1. Prepara a base da explicação
   const explicacaoBasica = normalizeExplicacao(
-    pick(root?.explicacao, root?.resolucao, [])
+    pick(root?.explicacao, root?.resolucao, []),
   );
 
   // 2. Injeta imagens nos passos
@@ -52,7 +52,7 @@ export const _processarGabarito = (root) => {
     // Usa o helper genérico para injetar imagens na estrutura deste passo
     const novaEstrutura = _injetarImagensEmEstrutura(
       passo.estrutura,
-      imgsDestePasso
+      imgsDestePasso,
     );
 
     return {
@@ -68,11 +68,11 @@ export const _processarGabarito = (root) => {
         root?.alternativa_correta,
         root?.resposta,
         root?.alternativacorreta,
-        ""
-      ) ?? ""
+        "",
+      ) ?? "",
     ),
     justificativa_curta: String(
-      pick(root?.justificativa_curta, root?.justificativacurta, "") ?? ""
+      pick(root?.justificativa_curta, root?.justificativacurta, "") ?? "",
     ),
     confianca: pick(root?.confianca, null),
 
@@ -88,7 +88,7 @@ export const _processarGabarito = (root) => {
 
     alternativas_analisadas: normalizeAlternativasAnalisadas(
       pick(root?.alternativas_analisadas, []),
-      String(pick(root?.alternativa_correta, root?.resposta, ""))
+      String(pick(root?.alternativa_correta, root?.resposta, "")),
     ),
     coerencia: root?.coerencia ?? {},
     fontes_externas: root?.fontes_externas || [],
@@ -112,7 +112,7 @@ export const _processarQuestao = (root) => {
         {
           tipo: "texto",
           conteudo: String(
-            pick(root?.enunciado, root?.texto, root?.statement, "") ?? ""
+            pick(root?.enunciado, root?.texto, root?.statement, "") ?? "",
           ),
         },
       ];
@@ -120,12 +120,12 @@ export const _processarQuestao = (root) => {
   // Injeta imagens no enunciado
   const estruturaEnunciado = _injetarImagensEmEstrutura(
     estruturaEnunciadoRaw,
-    imgsEnunciado
+    imgsEnunciado,
   );
 
   // Processa Alternativas
   const alternativasRaw = asArray(
-    pick(root?.alternativas, root?.alternatives, [])
+    pick(root?.alternativas, root?.alternatives, []),
   );
   const alternativasProcessadas = alternativasRaw.map((a) => {
     const letra = String(pick(a?.letra, a?.letter, "") ?? "")
@@ -145,7 +145,7 @@ export const _processarQuestao = (root) => {
     // Injeta imagens na alternativa
     const estrutura = _injetarImagensEmEstrutura(
       estruturaBruta,
-      imgsDestaLetra
+      imgsDestaLetra,
     ).filter((b) => ["texto", "equacao", "imagem"].includes(b.tipo));
 
     return { letra, estrutura };
@@ -153,17 +153,18 @@ export const _processarQuestao = (root) => {
 
   return {
     identificacao: String(
-      pick(root?.identificacao, root?.id, root?.codigo, "") ?? ""
+      pick(root?.identificacao, root?.id, root?.codigo, "") ?? "",
     ),
     foto_original: root?.scan_original || imgsEnunciado[0] || null,
     estrutura: estruturaEnunciado,
     materias_possiveis: asArray(
-      pick(root?.materias_possiveis, root?.materiaspossiveis, [])
+      pick(root?.materias_possiveis, root?.materiaspossiveis, []),
     ).map(String),
     palavras_chave: asArray(
-      pick(root?.palavras_chave, root?.palavraschave, [])
+      pick(root?.palavras_chave, root?.palavraschave, []),
     ).map(String),
     alternativas: alternativasProcessadas,
+    fotos_originais: asArray(pick(root?.fotos_originais, [])),
   };
 };
 
@@ -182,18 +183,30 @@ export const _injetarImagensEmEstrutura = (estrutura, imagensDisponiveis) => {
 
     if (tipo === "imagem") {
       // Pega da memória local OU mantém o que já estava salvo
-      const imgBase64 =
-        imagensDisponiveis[cursor] || bloco.imagem_base64 || null;
+      // [FIX] Preservar campos novos (imagem_url, pdf_url, etc) com ...bloco
+      const imagemLocal = imagensDisponiveis[cursor];
       cursor++;
 
+      if (imagemLocal) {
+        // Se temos uma imagem salva localmente (edição), ela tem prioridade total
+        // Misturamos com o bloco original apenas para manter campos que não mudaram (se houver)
+        // Mas garantimos que conteudo/url/etc venham do local
+        return {
+          ...bloco, // Base original
+          ...imagemLocal, // Sobrescreve com dados locais (pdf_url, coords, etc)
+          tipo: "imagem", // Garante tipo
+          conteudo: imagemLocal.conteudo || bloco.conteudo, // Mantém descrição se não houver nova
+        };
+      }
+
       return {
+        ...bloco, // Preserva outros campos (conteudo, metadados PDF, etc)
         tipo: "imagem",
         conteudo: conteudo,
-        imagem_base64: imgBase64,
       };
     }
 
-    return { tipo, conteudo };
+    return { ...bloco, tipo, conteudo };
   });
 };
 
@@ -264,21 +277,44 @@ export const _prepararInterfaceBasica = (dadosNorm) => {
 
 /**
  * Prepara o container principal de renderização e garante backups das imagens originais.
+ * [BATCH FIX] Agora respeita o elementoAlvo para criar containers únicos por aba.
  */
 export const _prepararContainerEBackups = (elementoAlvo, dados) => {
-  // 1. Busca ou cria o container
-  let container = document.getElementById("extractionResult");
+  let container;
 
-  if (!container) {
-    const legacy = document.getElementById("renderContainer");
-    if (legacy && legacy !== elementoAlvo) {
-      container = legacy;
+  // [BATCH FIX] Se temos um elementoAlvo específico (ex: container de aba),
+  // criamos um container filho NOVO em vez de reusar um global.
+  if (
+    elementoAlvo &&
+    elementoAlvo.id &&
+    elementoAlvo.id.startsWith("tab-content-")
+  ) {
+    // Container específico para esta aba
+    const uniqueId = `extractionResult-${elementoAlvo.id}`;
+    container = document.getElementById(uniqueId);
+
+    if (!container) {
+      container = document.createElement("div");
+      container.id = uniqueId;
     }
-  }
+  } else {
+    // Comportamento legado: busca ou cria container global
+    container = document.getElementById("extractionResult");
 
-  if (!container) {
-    container = document.createElement("div");
-    container.id = "renderContainer";
+    if (!container) {
+      const legacy = document.getElementById("renderContainer");
+      if (legacy && legacy !== elementoAlvo) {
+        container = legacy;
+      }
+    }
+
+    if (!container) {
+      container = document.createElement("div");
+      container.id = "renderContainer";
+    }
+
+    // Configuração final do container legado
+    container.id = "extractionResult";
   }
 
   // 2. Lógica de Backup (Questão)
@@ -287,8 +323,7 @@ export const _prepararContainerEBackups = (elementoAlvo, dados) => {
     if (imgsQ.length > 0) window.__BACKUP_IMG_Q = imgsQ[0];
   }
 
-  // 4. Configuração final do container
-  container.id = "extractionResult";
+  // Configuração de classe
   container.className = "extraction-result";
 
   return container;

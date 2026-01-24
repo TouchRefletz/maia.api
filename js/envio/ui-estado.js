@@ -3,6 +3,7 @@ import {
   gerarGabaritoComPesquisa,
 } from "../api/worker.js";
 import { obterConfiguracaoIA } from "../ia/config.js";
+import { DataNormalizer } from "../normalizer/data-normalizer.js";
 import { renderizarQuestaoFinal } from "../render/final/render-questao.js";
 import {
   prepararAreaDeResposta,
@@ -39,7 +40,7 @@ export function iniciarEstadoProcessamento() {
 
 export function setarEstadoLoadingModal() {
   const btnProcessar = document.querySelector(
-    "#cropConfirmModal .btn--primary"
+    "#cropConfirmModal .btn--primary",
   );
   const btnVoltar = document.querySelector("#cropConfirmModal .btn--secondary");
 
@@ -73,7 +74,7 @@ export async function inicializarEnvioCompleto() {
   // 3. Processa/Carimba as imagens (pode demorar um pouco)
   const listaImagens = await prepararImagensParaEnvio(
     imagensAtuais,
-    imagensSuporteQuestao
+    imagensSuporteQuestao,
   );
 
   // Se falhar no processamento, limpamos o passo 1
@@ -153,22 +154,35 @@ export function restaurarEstadoBotoes(uiState) {
   }
 }
 
-export function tratarErroEnvio(error, uiState, refsLoader) {
-  console.error("Erro no processamento:", error);
+export function tratarErroEnvio(error, uiState, refsLoader, tabId = null) {
+  let userMessage = "❌ Erro ao processar. Tente novamente.";
+
+  if (error.message === "EMPTY_RESPONSE_ERROR") {
+    console.warn("Aviso: A IA retornou vazio (provável sobrecarga).");
+    userMessage =
+      "⚠️ A IA não respondeu (possível sobrecarga). Por favor, tente novamente.";
+  } else {
+    // Só loga erro real se não for o caso do vazio
+    console.error("Erro no processamento:", error);
+  }
 
   // 1. Reset Global
   window.__isProcessing = false;
 
-  // 2. Remove o Loader (se ele existir)
+  // 2. Remove o Loader (se ele existir - legado)
   if (refsLoader && refsLoader.loadingContainer) {
     refsLoader.loadingContainer.remove();
   }
 
-  // 3. Feedback Visual e Reabertura do Modal
-  customAlert("❌ Erro ao processar. Tente novamente.", 3000);
+  // 3. Feedback Visual
+  customAlert(userMessage, 4000);
 
-  const modal = document.getElementById("cropConfirmModal");
-  if (modal) modal.classList.add("visible");
+  // 4. Se NÃO estiver em modo Tab (Aba), reabre o modal legado
+  // Isso evita que o modal "que não é mais utilizado visualmente" apareça em fluxos novos
+  if (!tabId) {
+    const modal = document.getElementById("cropConfirmModal");
+    if (modal) modal.classList.add("visible");
+  }
 
   // 4. Restaura os botões (Reutilizando a lógica)
   restaurarEstadoBotoes(uiState);
@@ -182,6 +196,15 @@ export async function confirmarEnvioIA(tabId = null) {
   const dadosIniciais = await inicializarEnvioCompleto();
   if (!dadosIniciais) return;
   const { styleviewerSidebar, listaImagens, uiState } = dadosIniciais;
+
+  // --- PASSO 1.5: CRIAR ABORT CONTROLLER PARA CANCELAMENTO ---
+  let abortController = null;
+  if (tabId) {
+    abortController = new AbortController();
+    // Registra o controller para que possa ser cancelado ao fechar a aba
+    const { registerAbortController } = await import("../ui/sidebar-tabs.js");
+    registerAbortController(tabId, abortController);
+  }
 
   // --- PASSO 2: PREPARAÇÃO VISUAL (SIDEBAR E LOADER) ---
   let setStatus;
@@ -219,13 +242,18 @@ export async function confirmarEnvioIA(tabId = null) {
         onStatus: (s) => setStatus(`📝 [QUESTÃO] ${s}`),
         onThought: (t) => pushThought(`📝 ${t}`, tabId),
         onAnswerDelta: () => setStatus("📝 [QUESTÃO] Gerando JSON..."),
-      }
+        signal: abortController?.signal, // Passa o signal para cancelamento
+      },
     );
 
     console.log("Resposta QUESTÃO recebida:", respostaQuestao);
 
     // Anexa imagens locais à questão
     enriquecerRespostaComImagensLocais(respostaQuestao);
+
+    // Prova -> Apenas bufferizar (não alterar valor)
+    // Assumindo que 'nome_prova' ou similar venha no objeto, ou que identificacao seja a inst.
+    // Se não tiver campo explícito de prova aqui, deixamos pro envio final lidar ou ignoramos.
 
     // Salva questão no global (mas não renderiza ainda!)
     window.__ultimaQuestaoExtraida = respostaQuestao;
@@ -251,9 +279,10 @@ export async function confirmarEnvioIA(tabId = null) {
         onStatus: (s) => setStatus(`🔍 [GABARITO] ${s}`),
         onThought: (t) => pushThought(`🔍 ${t}`, tabId),
         onAnswerDelta: () => setStatus("🔍 [GABARITO] Gerando JSON..."),
+        signal: abortController?.signal, // Passa o signal para cancelamento
       },
       listaImagens, // Usa as mesmas imagens para pesquisa
-      textoQuestao // Passa o texto da questão para ajudar na busca
+      textoQuestao, // Passa o texto da questão para ajudar na busca
     );
 
     console.log("Resposta GABARITO recebida:", respostaGabarito);
@@ -264,10 +293,90 @@ export async function confirmarEnvioIA(tabId = null) {
     // ============================================================
     // FASE 3: FINALIZAÇÃO E RENDERIZAÇÃO
     // ============================================================
+
+    // [MODIFICAÇÃO IMPORTANTE] Captura os pensamentos (HTML) antes de limpar a tela!
+    // O usuário quer ver o "raciocínio" na tela final.
+    // [FIX] Sanitização: Remove o skeleton (loading) que fica no final da lista
+    const captureAndSanitizeThoughts = (elementId) => {
+      const el = document.getElementById(elementId);
+      if (!el) return null;
+
+      // Clona para não afetar o visual atual antes da hora (opcional, mas seguro)
+      const clone = el.cloneNode(true);
+
+      // Remove elementos esqueletos
+      const skeletons = clone.querySelectorAll(".maia-thought-card--skeleton");
+      skeletons.forEach((sk) => sk.remove());
+
+      return clone.innerHTML;
+    };
+
+    const thoughtsElId = tabId ? `maiaThoughts-${tabId}` : "maiaThoughts";
+    const aiThoughtsHtml = captureAndSanitizeThoughts(thoughtsElId);
+
     finalizarProcessamentoVisual();
 
     // Limpa recortes temporários
     window.__recortesAcumulados = [];
+
+    // ============================================================
+    // NORMALIZAÇÃO FINAL (Instituição, Keywords e Prova)
+    // ============================================================
+    setStatus("🧠 [NORMALIZAÇÃO] Padronizando metadados...");
+
+    // 1. Tenta obter a Instituição do GABARITO (Créditos) ou Título do Material
+    const creditosGabarito = window.__ultimoGabaritoExtraido?.creditos;
+    const tituloMaterial = document.getElementById("tituloMaterial")?.innerText;
+
+    // Prioridade 1: 'autorouinstituicao' do Gabarito (ex: "INEP", "FUVEST")
+    let candidatoInstituicao =
+      creditosGabarito?.autorouinstituicao ||
+      creditosGabarito?.autor_ou_instituicao;
+
+    // Prioridade 2: Título do Material (se não tiver no gabarito)
+    if (!candidatoInstituicao && tituloMaterial) {
+      try {
+        const parts = tituloMaterial.split(" ");
+        candidatoInstituicao = parts[0];
+      } catch (e) {}
+    }
+
+    if (candidatoInstituicao) {
+      const instituicaoNormalizada = await DataNormalizer.normalize(
+        candidatoInstituicao,
+        "institution",
+      );
+      console.log(
+        `[Normalizer] Instituição: '${candidatoInstituicao}' -> '${instituicaoNormalizada}'`,
+      );
+
+      // Salva na questão para persistência
+      respostaQuestao.instituicao = instituicaoNormalizada;
+    }
+
+    // 2. Bufferiza Prova (Exam)
+    const candidatoProva =
+      creditosGabarito?.material || creditosGabarito?.ano || tituloMaterial;
+    if (candidatoProva) {
+      // Se vier do material (ex: "ENEM 2025"), usa ele.
+      DataNormalizer.bufferTerm(candidatoProva, "exam");
+    }
+
+    // 3. Normaliza Keywords
+    if (
+      respostaQuestao.palavras_chave &&
+      Array.isArray(respostaQuestao.palavras_chave)
+    ) {
+      respostaQuestao.palavras_chave = await Promise.all(
+        respostaQuestao.palavras_chave.map((k) =>
+          DataNormalizer.normalize(k, "keyword"),
+        ),
+      );
+    }
+
+    // Atualiza global
+    window.__ultimaQuestaoExtraida = respostaQuestao;
+    window.questaoAtual = respostaQuestao;
 
     // Renderiza o resultado FINAL (questão + gabarito)
     if (tabId) {
@@ -275,23 +384,104 @@ export async function confirmarEnvioIA(tabId = null) {
         updateTabStatus(tabId, {
           status: "complete",
           response: respostaQuestao, // Passa a questão, o render vai pegar o gabarito do global
+          gabaritoResponse: respostaGabarito, // [BATCH FIX] Também armazena gabarito por aba
+          aiThoughtsHtml: aiThoughtsHtml, // [NOVO] Passa o HTML limpo
         });
+
+        // [BATCH] Notifica BatchProcessor que a questão foi processada
+        // Verificar se há blocos de imagem que precisam de seleção manual
+        setTimeout(() => {
+          // Detectar blocos 'tipo: imagem' SEM dados de PDF anexados
+          // (significa que a imagem precisa ser selecionada manualmente)
+          const checkForEmptyImageBlocks = (estrutura) => {
+            if (!Array.isArray(estrutura)) return [];
+            const emptySlots = [];
+            let imgIdx = 0; // FIX: Conta apenas blocos de imagem
+            estrutura.forEach((bloco) => {
+              const tipo = (bloco?.tipo || "imagem").toLowerCase();
+              if (tipo === "imagem") {
+                // Se não tem pdf_page E não tem url, é um slot vazio
+                const hasPdfData =
+                  bloco.pdf_page || bloco.pdfjs_x !== undefined;
+                const hasUrl = bloco.url;
+                if (!hasPdfData && !hasUrl) {
+                  emptySlots.push(`questao_img_${imgIdx}`);
+                }
+                imgIdx++; // Incrementa contador de imagens
+              }
+            });
+            return emptySlots;
+          };
+
+          // Checa na questão
+          const questaoSlots = checkForEmptyImageBlocks(
+            respostaQuestao?.estrutura || [],
+          );
+
+          // Checa no gabarito
+          const gabaritoData = window.__ultimoGabaritoExtraido;
+          let gabaritoSlots = [];
+          if (gabaritoData?.passos) {
+            gabaritoData.passos.forEach((passo, passoIdx) => {
+              (passo.estrutura || []).forEach((bloco, blocoIdx) => {
+                const tipo = (bloco?.tipo || "imagem").toLowerCase();
+                if (tipo === "imagem") {
+                  const hasPdfData =
+                    bloco.pdf_page || bloco.pdfjs_x !== undefined;
+                  const hasUrl = bloco.url;
+                  if (!hasPdfData && !hasUrl) {
+                    gabaritoSlots.push(
+                      `gabarito_passo${passoIdx}_img_${blocoIdx}`,
+                    );
+                  }
+                }
+              });
+            });
+          }
+
+          const allSlots = [...questaoSlots, ...gabaritoSlots];
+          console.log(
+            `[BatchProcessor] Slots vazios detectados: ${allSlots.length}`,
+            allSlots,
+          );
+
+          window.dispatchEvent(
+            new CustomEvent("question-processing-complete", {
+              detail: {
+                tabId,
+                hasImageSlots: allSlots.length > 0,
+                slotIds: allSlots,
+              },
+            }),
+          );
+        }, 500);
       });
     } else {
-      renderizarQuestaoFinal(respostaQuestao);
+      // Passamos o HTML dos pensamentos como 3º argumento (extraOptions ou direto)
+      // A assinatura do renderizarQuestaoFinal é (dados, alvo, thoughtsHtml)
+      renderizarQuestaoFinal(respostaQuestao, null, aiThoughtsHtml);
     }
 
     // Limpa a bagunça e avisa o usuário
     finalizarInterfacePosSucesso(styleviewerSidebar, uiState);
   } catch (error) {
+    // Verifica se foi cancelado pelo usuário (fechou a aba)
+    if (error.name === "AbortError" || abortController?.signal?.aborted) {
+      console.log("[IA] Processamento cancelado pelo usuário");
+      window.__isProcessing = false;
+      if (styleviewerSidebar) styleviewerSidebar.remove();
+      restaurarEstadoBotoes(uiState);
+      return; // Sai silenciosamente, sem mostrar erro
+    }
+
     if (error.message === "RECITATION_ERROR") {
       handleRecitationError(
         uiState,
         refsLoader,
-        dadosIniciais.styleviewerSidebar
+        dadosIniciais.styleviewerSidebar,
       );
     } else {
-      tratarErroEnvio(error, uiState, refsLoader);
+      tratarErroEnvio(error, uiState, refsLoader, tabId);
     }
   }
 }
@@ -299,12 +489,26 @@ export async function confirmarEnvioIA(tabId = null) {
 export function enriquecerRespostaComImagensLocais(resposta) {
   const imagens = window.__imagensLimpas || {};
 
+  // Attach fotos_originais metadata if available (from batch save)
+  if (window.__tempFotosOriginais) {
+    resposta.fotos_originais = window.__tempFotosOriginais;
+    // Clear it to avoid contamination
+    window.__tempFotosOriginais = null;
+  }
+
   // Modo Questão: Anexa suporte e scan original
   resposta.imagens_suporte = imagens.questao_suporte || [];
 
   // Salva o scan original (a imagem grandona)
   if (imagens.questao_original && imagens.questao_original.length > 0) {
     resposta.scan_original = imagens.questao_original[0];
+
+    // [FIX] Garante que a lista fotos_originais seja preenchida a partir dos dados limpos
+    // Isso é crucial porque imagens.questao_original será limpo logo abaixo.
+    // Se já veio via __tempFotosOriginais, mantemos. Se não, usamos o array atual (flow SingleShot ou SlotMode).
+    if (!resposta.fotos_originais) {
+      resposta.fotos_originais = [...imagens.questao_original];
+    }
   }
 
   // Importante: Limpa a lista de originais para os próximos slots nascerem vazios
@@ -332,7 +536,7 @@ export function handleRecitationError(uiState, refsLoader, styleviewerSidebar) {
   // 2. Feedback
   customAlert(
     "⚠️ Conteúdo identificado, mas não estruturado (RECITAÇÃO). Por favor, edite manualmente.",
-    5000
+    5000,
   );
 
   // 3. Cria Skeleton

@@ -147,7 +147,7 @@ export const ScannerUI = {
         "Parar Extração?",
         "Tem certeza que deseja parar a extração completamente?",
         "Parar",
-        "Voltar"
+        "Voltar",
       );
       if (confirmed) {
         import("../services/ai-scanner.js").then((m) => m.AiScanner.stop());
@@ -190,7 +190,7 @@ export const ScannerUI = {
         if (m.AiScanner.lastPdfDoc) {
           m.AiScanner.start(m.AiScanner.lastPdfDoc, hasProgress);
         } else {
-          alert("Carregue um documento primeiro.");
+          customAlert("Carregue um documento primeiro.");
         }
       };
 
@@ -265,7 +265,7 @@ export const ScannerUI = {
         root: sidebarContainer,
         threshold: 0,
         rootMargin: "0px",
-      }
+      },
     );
 
     this._uiObserver.observe(mainHeader);
@@ -336,7 +336,7 @@ export const ScannerUI = {
           "Parar Extração?",
           "Tem certeza que deseja parar a extração completamente?",
           "Parar",
-          "Voltar"
+          "Voltar",
         );
         if (confirmed) {
           import("../services/ai-scanner.js").then((m) => m.AiScanner.stop());

@@ -13,7 +13,6 @@ html {
 
 body {
   margin: 0;
-  padding: var(--space-20);
   height: 100vh;
   /* Fixed height to constrain children */
   width: 100vw;

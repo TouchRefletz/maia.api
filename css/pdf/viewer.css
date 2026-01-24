@@ -172,7 +172,7 @@ body.manual-crop-active .pdf-page {
   border-radius: 4px;
   text-transform: uppercase;
   font-weight: bold;
-  background-color: var(--color-surface-hover, #f5f5f5); /* Default fallback */
+  background-color: var(--color-background, #f5f5f5); /* Default fallback */
   color: var(--color-text-secondary);
   border: 1px solid transparent;
 }

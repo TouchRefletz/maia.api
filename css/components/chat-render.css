@@ -1,0 +1,1148 @@
+/* --- Chat Render CSS --- */
+
+:root {
+    --chat-card-radius: 12px;
+    --chat-block-spacing: 16px;
+    --chat-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
+    --chat-shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+    --chat-hover-transform: translateY(-2px);
+}
+
+/* Base Layout Container */
+.chat-layout {
+    display: grid !important;
+    /* Force grid over any flex defaults */
+    gap: var(--chat-block-spacing);
+    width: 100%;
+    margin-top: 12px;
+    /* Default to single column mobile */
+    grid-template-columns: 1fr;
+    /* Allow slots to be defined */
+}
+
+/* Slot Containers (Generic) */
+.slot-container {
+    display: flex;
+    flex-direction: column;
+    gap: var(--chat-block-spacing);
+    min-width: 0;
+    /* CSS Grid overflow fix */
+    height: 100%;
+}
+
+/* Ensure contents inside slots can grow if needed */
+.slot-container>.chat-block {
+    flex-shrink: 0;
+}
+
+/* If a slot has only one block (like code), make it grow */
+.slot-container>.chat-block:only-child {
+    flex-grow: 1;
+}
+
+/* Specific: Code blocks should always grow if possible */
+.slot-container>.chat-codigo,
+.slot-container>.chat-tabela,
+.slot-container>.chat-block table {
+    flex-grow: 1;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* Linear Layout */
+.chat-layout--linear {
+    display: flex !important;
+    flex-direction: column;
+    gap: var(--chat-block-spacing);
+}
+
+.hljs {
+    background: #1d1e20 !important;
+}
+
+/* --- Layouts Specifics (Desktop) --- */
+@media (min-width: 768px) {
+
+    /* 1. Two Column: Sidebar Left (Fixed 240px), Slot mapping */
+    .chat-layout--two_column {
+        grid-template-columns: 240px 1fr;
+        grid-template-areas: "sidebar main";
+        align-items: stretch;
+    }
+
+    .slot-sidebar {
+        grid-area: sidebar;
+    }
+
+    .slot-main {
+        grid-area: main;
+    }
+
+    /* 2. Split Screen: 50/50 */
+    .chat-layout--split_screen {
+        grid-template-columns: 1fr 1fr;
+        grid-template-areas: "left right";
+        align-items: stretch;
+        /* Ensure both columns match height */
+    }
+
+    /* --- SHARED PANEL STYLE FOR MULTI-COLUMN LAYOUTS --- */
+    /* This ensures "sides" fill the height and look like unified panels */
+    .chat-layout--two_column .slot-container,
+    .chat-layout--split_screen .slot-container,
+    .chat-layout--three_column .slot-container,
+    .chat-layout--asymmetrical .slot-container,
+    .chat-layout--f_shape .slot-container,
+    .chat-layout--magazine .slot-container {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--chat-card-radius);
+        padding: 24px;
+        /* More padding for panels */
+        box-shadow: var(--chat-shadow-sm);
+    }
+
+    /* Children in Panels lose individual card styling (merge into panel) */
+    .chat-layout--two_column .slot-container>.chat-block,
+    .chat-layout--split_screen .slot-container>.chat-block,
+    .chat-layout--three_column .slot-container>.chat-block,
+    .chat-layout--asymmetrical .slot-container>.chat-block,
+    .chat-layout--f_shape .slot-container>.chat-block,
+    .chat-layout--magazine .slot-container>.chat-block {
+        flex-grow: 0;
+        height: auto;
+        box-shadow: none;
+        border: none;
+        background: transparent;
+        padding: 0;
+        margin-bottom: 16px;
+    }
+
+    /* Last item in panel shouldn't have margin unless it needs it */
+    .chat-layout--two_column .slot-container>.chat-block:last-child,
+    .chat-layout--split_screen .slot-container>.chat-block:last-child {
+        margin-bottom: 0;
+    }
+
+    /* EXCEPTIONS: Restore Styling for Specific Inner Blocks */
+
+    /* Code Blocks: Keep their dark box look */
+    .chat-layout--two_column .slot-container>.chat-codigo,
+    .chat-layout--split_screen .slot-container>.chat-codigo,
+    .chat-layout--three_column .slot-container>.chat-codigo,
+    .chat-layout--asymmetrical .slot-container>.chat-codigo {
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border-radius: 8px !important;
+        /* Code usually wants to fill space */
+    }
+
+    /* Callouts/Highlights: Keep their color box */
+    .chat-layout--two_column .slot-container>.chat-destaque,
+    .chat-layout--split_screen .slot-container>.chat-destaque,
+    .chat-layout--three_column .slot-container>.chat-destaque,
+    .chat-layout--asymmetrical .slot-container>.chat-destaque {
+        background: rgba(var(--color-primary-rgb), 0.1) !important;
+        border: 1px solid rgba(var(--color-primary-rgb), 0.2) !important;
+        padding: 16px !important;
+        border-radius: 8px !important;
+    }
+
+    /* Quotes: Keep left border style */
+    .chat-layout--two_column .slot-container>.chat-citacao,
+    .chat-layout--split_screen .slot-container>.chat-citacao {
+        padding: 16px 24px !important;
+        background: rgba(255, 255, 255, 0.03) !important;
+    }
+
+    .slot-left,
+    .slot-code {
+        grid-area: left;
+    }
+
+    .slot-right,
+    .slot-preview {
+        grid-area: right;
+    }
+
+    /* 3. Three Column */
+    .chat-layout--three_column {
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 16px;
+    }
+
+    /* FIX: Allow three column to collapse if container is too small (like inside a nested F-shape content) */
+    @container (max-width: 600px) {
+        .chat-layout--three_column {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* Global media query helper as fallback if container queries aren't fully supported via polyfill setup
+       or if the user resized the window */
+    @media (max-width: 1100px) {
+
+        /* When F-Shape is active, the content area is smaller, so nested 3-col should likely stack */
+        .chat-layout--f_shape .chat-layout--three_column {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .slot-col1 {
+        grid-column: 1;
+    }
+
+    .slot-col2 {
+        grid-column: 2;
+    }
+
+    .slot-col3 {
+        grid-column: 3;
+    }
+
+    /* 4. Asymmetrical (Main + Aside) */
+    .chat-layout--asymmetrical {
+        grid-template-columns: 2fr 1fr;
+        grid-template-areas: "main aside";
+        gap: 24px;
+        align-items: stretch;
+    }
+
+    .chat-layout--asymmetrical>.chat-block:nth-child(2) {
+        /* Support column styling */
+        background: rgba(var(--color-primary-rgb), 0.05);
+        border: 1px dashed var(--color-primary);
+        border-radius: var(--chat-card-radius);
+    }
+
+    /* 5. F-Shape: Header (Full), then Sidebar + Content */
+    /* Ideal for: Dashboard-like views, Report summary */
+    .chat-layout--f_shape {
+        grid-template-columns: 250px 1fr;
+        align-items: stretch;
+    }
+
+    /* FIX: Target .slot-container for layout placement, not .chat-block */
+    /* Assumes order: 1. Header, 2. Sidebar, 3. Content */
+
+    .chat-layout--f_shape>.slot-container:nth-child(1) {
+        grid-column: 1 / -1;
+        /* Header spans full width */
+        border-bottom: 1px solid var(--color-border);
+        margin-bottom: 8px;
+        flex-direction: row !important;
+        /* Header items horizontal */
+        align-items: center;
+        justify-content: space-between;
+        min-height: auto !important;
+        /* Don't force huge height on header */
+        padding: 16px !important;
+    }
+
+    /* Force linear flow inside header panel */
+    .chat-layout--f_shape>.slot-container:nth-child(1)>.chat-block {
+        margin: 0 !important;
+        background: transparent !important;
+        border: none !important;
+        padding: 0 16px 0 0 !important;
+        box-shadow: none !important;
+        flex-grow: 1;
+    }
+
+    .chat-layout--f_shape>.slot-container:nth-child(2) {
+        /* Sidebar items */
+        border-right: 1px solid var(--color-border);
+        grid-row: 2;
+        grid-column: 1;
+    }
+
+    .chat-layout--f_shape>.slot-container:nth-child(3) {
+        /* Main Content */
+        grid-row: 2;
+        grid-column: 2;
+    }
+
+    /* 5. Z-Shape: Zig-Zag Pattern */
+    /* Ideal for: Storytelling, Alternating heavy content */
+    /* 5. Z-Shape: Alternating Pattern */
+    .chat-layout--z_shape {
+        grid-template-columns: 1fr;
+        gap: 32px;
+    }
+
+    /* Alternating rows for desktop visual interest */
+    .chat-layout--z_shape>.chat-block:nth-child(odd) {
+        margin-right: 20%;
+        border-left: 4px solid var(--color-primary);
+    }
+
+    .chat-layout--z_shape>.chat-block:nth-child(even) {
+        margin-left: 20%;
+        border-right: 4px solid var(--color-accent);
+        text-align: right;
+    }
+
+    /* 6. Featured Media: Hero Image + Text below */
+    .chat-layout--featured_media {
+        grid-template-columns: 1fr;
+    }
+
+    .chat-layout--featured_media>.chat-block:first-child {
+        /* Assume first child is image/hero */
+        aspect-ratio: 21/9;
+        object-fit: cover;
+        width: 100%;
+        border-radius: var(--chat-card-radius);
+    }
+
+    /* 7. Masonry (Simulated with columns) */
+    .chat-layout--masonry {
+        column-count: 1;
+    }
+
+    /* 8. Magazine (Complex Grid) */
+    .chat-layout--magazine {
+        grid-template-columns: 1.5fr 1.2fr 1fr;
+        grid-template-areas:
+            "headline headline sidebar"
+            "featured feed sidebar";
+        align-items: stretch;
+        gap: 16px;
+    }
+
+    .chat-layout--magazine .slot-headline {
+        grid-area: headline;
+    }
+
+    .chat-layout--magazine .slot-featured {
+        grid-area: featured;
+    }
+
+    .chat-layout--magazine .slot-feed {
+        grid-area: feed;
+    }
+
+    .chat-layout--magazine .slot-sidebar {
+        grid-area: sidebar;
+        background: rgba(var(--color-primary-rgb), 0.05);
+        /* Slight tint for sidebar */
+    }
+}
+
+/* Ends the main media query from line 23 */
+
+/* Additional specific overrides that don't need media query nesting or need their own */
+@media (min-width: 768px) {
+    .chat-layout--masonry {
+        display: block !important;
+        column-count: 3;
+        column-gap: 16px;
+    }
+
+    .chat-layout--masonry>.chat-block {
+        break-inside: avoid;
+        margin-bottom: 16px;
+    }
+
+    .chat-layout--masonry>.chat-block {
+        break-inside: avoid;
+        margin-bottom: 16px;
+    }
+}
+
+/* --- QUESTION BLOCK ISOLATION --- */
+/* Forces the question block to break out of columns and take full width */
+.chat-question-placeholder,
+.chat-embedded-card {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+    margin-top: 24px !important;
+    margin-bottom: 24px !important;
+    max-width: 100% !important;
+}
+
+/* --- Block Styles --- */
+/* --- Block Styles (Premium Redesign) --- */
+.chat-block {
+    position: relative;
+    overflow-wrap: break-word;
+
+    /* Deep "Dark Glass" Feel */
+    background: linear-gradient(180deg,
+            rgba(30, 30, 35, 0.7) 0%,
+            rgba(20, 20, 25, 0.4) 100%);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+
+    /* Subtle Border */
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-top-color: rgba(255, 255, 255, 0.1);
+    /* Top lighting effect */
+
+    border-radius: var(--chat-card-radius);
+    padding: 20px;
+    /* More breathing room */
+
+    /* Smooth Shadows */
+    box-shadow:
+        0 4px 6px -1px rgba(0, 0, 0, 0.1),
+        0 2px 4px -1px rgba(0, 0, 0, 0.06),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    /* Inner highlight */
+
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+        box-shadow 0.3s ease,
+        border-color 0.3s ease,
+        background 0.3s ease;
+}
+
+/* Reduced motion/glitch safe hover */
+.chat-block:not(.chat-titulo):not(.chat-subtitulo):not(.chat-separador):hover {
+    transform: translateY(-2px);
+    box-shadow:
+        0 8px 12px -2px rgba(0, 0, 0, 0.2),
+        0 4px 6px -2px rgba(0, 0, 0, 0.1),
+        0 0 0 1px rgba(var(--color-primary-rgb), 0.2);
+
+    border-color: rgba(var(--color-primary-rgb), 0.4);
+    /* Slightly lighter background mix */
+    background: linear-gradient(180deg,
+            rgba(40, 40, 45, 0.8) 0%,
+            rgba(30, 30, 35, 0.5) 100%);
+}
+
+/* Reduced motion/glitch safe hover */
+.slot-container>.chat-block:not(.chat-titulo):not(.chat-subtitulo):not(.chat-separador):hover {
+    box-shadow: none !important;
+    border-color: none !important;
+    /* Slightly lighter background mix */
+    background: transparent !important;
+}
+
+.slot-container>.chat-block:not(.chat-titulo):not(.chat-subtitulo):not(.chat-separador):hover::after {
+    opacity: 0 !important;
+}
+
+/* Shine effect - Safe version */
+.chat-block:not(.chat-titulo):not(.chat-subtitulo):not(.chat-separador)::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg,
+            transparent 0%,
+            rgba(var(--color-primary-rgb), 0.6) 50%,
+            transparent 100%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    /* Prevent interference */
+}
+
+/* Ensure ::after only shows on hover for valid blocks */
+.chat-block:not(.chat-titulo):not(.chat-subtitulo):not(.chat-separador):hover::after {
+    opacity: 1;
+}
+
+/* Removing card style for Titles/Subtitles to decouple them from boxes if desired, 
+   or keep them boxed. Let's make titles transparent to reduce boxing fatigue. */
+/* Removing card style for Titles/Subtitles to decouple them from boxes */
+.chat-block.chat-titulo,
+.chat-block.chat-subtitulo {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    /* Increased padding to safely contain glow */
+    margin: 24px 0 12px 0 !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    pointer-events: none;
+    /* Disable hover interactions on text */
+    transform: none !important;
+    /* Reset any transform */
+    overflow: visible !important;
+    /* Ensure glows can bleed out */
+}
+
+
+.chat-block.chat-subtitulo {
+    padding: 0 0 0 8px !important;
+}
+
+/* Typography Upgrades */
+.chat-titulo {
+    font-family: var(--font-family-base);
+    /* Ensure consistent font */
+    font-size: 1.1em;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-secondary);
+    /* More subtle, like a label */
+    margin-bottom: 8px;
+    opacity: 0.9;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Optional decorative line for Titles */
+.chat-titulo::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.1) 0%, transparent 100%);
+    margin-top: 2px;
+}
+
+.chat-subtitulo {
+    font-family: var(--font-family-base);
+    font-size: 1.1em;
+    /* Slightly larger than normal text */
+    font-weight: 600;
+    color: var(--color-primary);
+    /* Use primary color for hierarchy */
+    margin-top: 16px;
+    margin-bottom: 12px;
+    padding-left: 0 !important;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: none;
+}
+
+/* Premium styled subtitle marker */
+.chat-subtitulo::before {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-primary);
+    box-shadow: 0 0 8px var(--color-primary);
+    /* Glow */
+}
+
+.chat-citacao {
+    border: none;
+    border-left: 3px solid var(--color-accent, #FFD700);
+    /* Fallback to Gold/Accent */
+    background: rgba(255, 255, 255, 0.03);
+    /* Subtle glass */
+    padding: 20px 24px;
+    font-style: italic;
+    color: var(--color-text-secondary);
+    border-radius: 0 8px 8px 0;
+    margin-top: 16px;
+    margin-bottom: 16px;
+    position: relative;
+}
+
+.chat-citacao::before {
+    content: '"';
+    position: absolute;
+    top: 5px;
+    left: 10px;
+    font-size: 2em;
+    opacity: 0.1;
+    font-family: serif;
+}
+
+.chat-destaque {
+    background: rgba(var(--color-primary-rgb), 0.1);
+    border: 1px solid rgba(var(--color-primary-rgb), 0.2);
+    box-shadow: 0 0 15px rgba(var(--color-primary-rgb), 0.05);
+}
+
+.chat-codigo {
+    /* Darker than card */
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    overflow-x: auto;
+    font-family: 'Fira Code', monospace;
+    font-size: 0.9em;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+    /* Inset shadow for depth */
+}
+
+.chat-equacao {
+    display: flex;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.2);
+    /* Darker inset */
+    border-radius: 8px;
+    margin: 16px 0;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.chat-separador {
+    height: 1px;
+    padding: 0 !important;
+    background: linear-gradient(90deg, transparent, var(--color-border), transparent);
+    width: 100%;
+    border: 1px dashed var(--color-primary) !important;
+}
+
+.chat-image-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+    border: 1px dashed var(--color-border);
+    border-radius: 8px;
+    background: var(--color-surface);
+}
+
+.chat-image-icon {
+    font-size: 2em;
+    margin-bottom: 8px;
+}
+
+.chat-image-desc {
+    font-size: 0.9em;
+    color: var(--color-text-secondary);
+    text-align: center;
+}
+
+/* --- Table Styles --- */
+.chat-tabela {
+    overflow-x: auto;
+    width: 100%;
+    display: block;
+    border-radius: 8px;
+    /* Ensure scrollbar doesn't look weird near corners */
+}
+
+.chat-block table {
+    width: 100%;
+    /* Ensure table creates scrollable width if content demands it */
+    min-width: 600px;
+    /* Force minimum width to trigger scroll on small screens */
+    border-collapse: separate;
+    border-spacing: 0;
+    margin: 16px 0;
+    font-size: 0.95em;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    overflow: hidden;
+    /* Para respeitar o border-radius */
+    background: var(--color-surface);
+}
+
+.chat-block th {
+    background: rgba(var(--color-primary-rgb), 0.1);
+    color: var(--color-text-primary);
+    font-weight: 600;
+    text-align: left;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.chat-block td {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-text);
+    vertical-align: top;
+}
+
+.chat-block tr:last-child td {
+    border-bottom: none;
+}
+
+.chat-block tr:hover td {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+/* Card Block specific children styles */
+/* Card Block specific children styles */
+.chat-layout--card_block .slot-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    height: auto !important;
+    /* Prevent huge vertical stretch */
+}
+
+.chat-layout--card_block .chat-block {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    padding: 24px;
+    border-radius: 8px;
+    height: auto;
+    min-height: 120px;
+    /* Consistent card size */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    transition: all 0.2s ease;
+}
+
+.chat-layout--card_block .chat-block:hover {
+    background: rgba(var(--color-primary-rgb), 0.1);
+    border-color: var(--color-primary);
+    transform: translateY(-2px);
+    cursor: pointer;
+}
+
+/* --- New Chat UI Styles (Timeline Thoughts & Card Responses) --- */
+
+/* 1. Response Cards (Split Chat) */
+/* Override default chat-block to always look like a card in the new design */
+/* 1. Response Cards (Split Chat) - Inherit Premium Styles from .chat-block */
+.chat-message--ai .chat-block {
+    margin-bottom: 16px;
+    /* Inherits all premium styles from .chat-block definition above */
+}
+
+/* Specific overrides if needed, e.g. slightly different color for AI vs User? */
+/* For now, let's keep them consistent with the new premium look */
+
+/* Remove giant wrapper styling if any */
+.chat-layout {
+    /* Restore Grid capability */
+    margin-top: 12px;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    /* Ensure grid is respected */
+    display: grid !important;
+    gap: 16px;
+}
+
+/* 2. Timeline Thoughts (Custom Div Implementation) */
+.chat-thought-container {
+    margin-bottom: 8px;
+    background: transparent;
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    /* Alinha o chip a esquerda */
+}
+
+/* Header/Trigger Styles */
+.chat-thought-header {
+    cursor: pointer;
+    font-family: var(--font-family-mono);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    display: flex;
+    align-items: center;
+    user-select: none;
+    width: fit-content;
+    /* O chip ocupa só o tamanho necessário */
+    z-index: 2;
+    /* Fica acima do container de conteúdo se sobrepor */
+    position: relative;
+}
+
+/* Wrapper interno do summary para alinhar logo e texto (O CHIP AZUL) */
+.summary-content-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(30, 30, 35, 0.6);
+    /* Default dark styling */
+    padding: 8px 16px;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.chat-thought-container.open .summary-content-wrapper {
+    /* Quando aberto, o chip ganha destaque ou conecta com o box de baixo? */
+    /* User pediu "Blue Chip" - vamos deixar azulado quando aberto ou sempre? 
+       O 'azul' do design system geralmente vem do primary ou surface active. 
+    */
+    background: rgba(var(--color-primary-rgb), 0.15);
+    border-color: rgba(var(--color-primary-rgb), 0.3);
+    color: var(--color-primary);
+    border-bottom-left-radius: 4px;
+    /* Conecta com o box */
+    border-bottom-right-radius: 4px;
+}
+
+/* Hover effect */
+.summary-content-wrapper:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.chat-thought-container.open .summary-content-wrapper:hover {
+    background: rgba(var(--color-primary-rgb), 0.2);
+}
+
+/* Logo Girando */
+.summary-logo-spinner {
+    width: 18px;
+    height: 18px;
+    object-fit: contain;
+    opacity: 0.8;
+    animation: spin-slow 3s linear infinite;
+}
+
+.summary-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 300px;
+}
+
+/* Seta discreta */
+.summary-content-wrapper::after {
+    content: '▼';
+    font-size: 8px;
+    margin-left: 8px;
+    opacity: 0.5;
+    transition: transform 0.2s;
+}
+
+.chat-thought-container.open .summary-content-wrapper::after {
+    transform: rotate(180deg);
+}
+
+/* Container Interno dos Cards (O "DARK THING") */
+.chat-thoughts-inner {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    /* Hide scrollbar when closed */
+    margin-top: 0;
+    /* Styles for the "box" */
+    background: rgba(10, 10, 15, 0.4);
+    border-radius: 0 12px 12px 12px;
+    /* Top-left connects with chip */
+    border: 1px solid transparent;
+
+    transition: max-height 0.4s ease-out, opacity 0.3s ease, margin-top 0.3s ease, padding 0.3s ease;
+    padding: 0;
+    /* Ocupa largura da mensagem */
+}
+
+.chat-thought-container.open .chat-thoughts-inner {
+    max-height: 500px;
+    /* Altura máxima arbitrária para animar */
+    opacity: 1;
+    margin-top: 4px;
+    /* Espaçamento interno */
+    border-color: rgba(var(--color-primary-rgb), 0.1);
+
+    /* Scroll only when open */
+    overflow-y: auto;
+}
+
+/* Custom Scrollbar */
+.chat-thoughts-inner::-webkit-scrollbar {
+    width: 4px;
+}
+
+.chat-thoughts-inner::-webkit-scrollbar-thumb {
+    background-color: var(--color-border);
+    border-radius: 4px;
+}
+
+/* --- Timeline Overrides for Reused Components --- */
+
+/* Esconde o loader wrapper border top que vem do construirSkeletonLoader */
+.chat-thoughts-inner .skeleton-wrapper {
+    border-top: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+.chat-thoughts-inner .maia-thought-card:last-child .maia-thought-logo {
+    opacity: 1;
+    filter: drop-shadow(0 0 5px rgba(var(--color-primary-rgb), 0.5));
+}
+
+.chat-thoughts-inner .maia-thought-card .maia-thought-content {
+    text-align: left;
+}
+
+/* PAST CARDS: Esconde Logo, Mostra Dot */
+.chat-thoughts-inner .maia-thought-card:not(:last-child) .maia-thought-logo {
+    opacity: 0;
+}
+
+/* Dot replacement for past cards */
+.chat-thoughts-inner .maia-thought-card:not(:last-child) .maia-thought-logo-wrap::before {
+    content: '';
+    position: absolute;
+    top: 5px;
+    width: 8px;
+    height: 8px;
+    background: var(--color-text-secondary);
+    border-radius: 50%;
+    z-index: 1;
+    opacity: 0.5;
+}
+
+.chat-thoughts-inner .maia-thought-card:not(:last-child) .maia-thought-logo-wrap::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 10px;
+    transform: translateX(-50%);
+    width: 2px;
+    height: calc(100% + var(--thought-gap) + 20px - 20px);
+    background: rgba(33, 128, 141, 0.35);
+    border-radius: 2px;
+}
+
+.chat-thoughts-inner .maia-thought-card .maia-thought-logo-wrap {
+    width: 24px;
+    /* Garante largura fixa */
+    display: flex;
+    justify-content: center;
+}
+
+/* Título e Texto dos Cards */
+.chat-thoughts-inner .maia-thought-card {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+    animation: fadeIn 0.3s ease;
+}
+
+.chat-thoughts-inner .maia-thought-title {
+    font-size: 13px;
+    color: var(--color-text-primary);
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.chat-thoughts-inner .maia-thought-body {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+}
+
+/* Skeleton overrides inside chat */
+.chat-thoughts-inner .skeleton-wrapper {
+    border-top: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+.chat-thoughts-inner .maia-thoughts {
+    margin: 0 !important;
+}
+
+.chat-thoughts-inner .loading-status-area {
+    display: none !important;
+}
+
+/* Keyframes */
+@keyframes spin-slow {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* --- Interactive Carousel --- */
+/* --- Interactive Carousel --- */
+.carousel-root {
+    position: relative;
+    width: 100%;
+    background: transparent;
+    margin-top: 16px;
+    box-sizing: border-box;
+}
+
+/* Wrapper para centralizar botões verticalmente com o conteúdo (excluindo dots) e reservar espaço lateral */
+.carousel-content-wrapper {
+    position: relative;
+    width: 100%;
+    padding: 0 40px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+}
+
+.carousel-slider-container {
+    overflow: hidden;
+    width: 100%;
+    position: relative;
+    border-radius: var(--chat-card-radius);
+    /* Move border radius here */
+    box-shadow: var(--chat-shadow-sm);
+    /* Optional shadow for the track container */
+}
+
+.carousel-track {
+    display: flex;
+    transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+    /* Smooth slide */
+    width: 100%;
+    /* Will hold flex items */
+}
+
+.carousel-slide {
+    min-width: 100%;
+    box-sizing: border-box;
+    padding: 0 4px;
+    /* Optional padding */
+}
+
+/* Fix for inner content height */
+.carousel-slide>.chat-block {
+    height: 100%;
+    min-height: auto;
+    /* Let content dictate height, avoid forced whitespace */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    width: 100%;
+    /* Ensure full width */
+}
+
+/* Controls */
+.carousel-prev,
+.carousel-next {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(var(--color-surface-rgb, 20, 20, 25), 0.8);
+    /* Solid background for visibility outside */
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--color-icon, #fff);
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    z-index: 10;
+    transition: all 0.2s;
+    opacity: 1;
+    /* Always visible if outside */
+}
+
+.carousel-root:hover .carousel-prev,
+.carousel-root:hover .carousel-next {
+    opacity: 1;
+}
+
+.carousel-prev:hover,
+.carousel-next:hover {
+    background: var(--color-primary);
+    transform: translateY(-50%) scale(1.1);
+}
+
+.carousel-prev {
+    left: 0px;
+    /* Aligned with left edge of root padding */
+}
+
+.carousel-next {
+    right: 0px;
+    /* Aligned with right edge of root padding */
+}
+
+/* Dots */
+.carousel-dots {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding-bottom: 8px;
+}
+
+.carousel-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    transition: all 0.3s;
+}
+
+.carousel-dot.active {
+    background: var(--color-primary);
+    transform: scale(1.2);
+}
+
+/* User requested fix for hover on slides */
+/* "reduced motion/glitch safe hover" */
+.carousel-slide>.chat-block:not(.chat-titulo):not(.chat-subtitulo):not(.chat-separador):hover {
+    box-shadow: none !important;
+    border-color: transparent !important;
+    background: transparent !important;
+    transform: none !important;
+}
+
+.carousel-slide>.chat-block:not(.chat-titulo):not(.chat-subtitulo):not(.chat-separador):hover::after {
+    opacity: 0 !important;
+}
+
+/* --- Floating Chat Header --- */
+#chatFloatingHeader {
+    position: fixed;
+    top: 0;
+    left: 50%;
+    width: 100%;
+    height: 120px;
+    /* Gradient height */
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding-top: 24px;
+
+    /* Gradient Background */
+    background: linear-gradient(to bottom, var(--color-background) 20%, rgba(0, 0, 0, 0) 100%);
+
+    /* Remove card styles */
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+
+    /* Interaction */
+    pointer-events: none;
+
+    z-index: 100;
+    font-size: 0.9rem;
+    font-weight: 500;
+    gap: 8px;
+
+    opacity: 0;
+    animation: fadeInFloatingHeader 0.5s forwards;
+}
+
+#chatFloatingHeader>strong {
+    max-width: 400px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+@keyframes fadeInFloatingHeader {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+    }
+}

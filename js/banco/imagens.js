@@ -3,12 +3,14 @@ export function normalizarArrayImagens(obj) {
     return obj.fotos_originais;
   } else if (obj.foto_original) {
     return [obj.foto_original];
+  } else if (obj.scan_original) {
+    return [obj.scan_original];
   }
   return [];
 }
 
 export function serializarParaAtributo(arr) {
-  return JSON.stringify(arr).replace(/"/g, '&quot;');
+  return JSON.stringify(arr).replace(/"/g, "&quot;");
 }
 
 export function gerarHtmlImagensSuporte(fullData, q) {
@@ -21,7 +23,7 @@ export function gerarHtmlImagensSuporte(fullData, q) {
   // Remove duplicatas (opcional, mas boa prática) e gera HTML
   return [...new Set(lista)]
     .map((url) => `<img src="${url}" class="q-support-img">`)
-    .join('');
+    .join("");
 }
 
 export function prepararImagensVisualizacao(fullData) {

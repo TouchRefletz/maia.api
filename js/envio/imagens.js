@@ -59,6 +59,19 @@ export function coletarESalvarImagensParaEnvio() {
     }
   }
 
+  // 2.1 Fallback (Crucial para Slot Mode/PDF Coordinates):
+  // Se ainda estiver vazio, verifica se JÁ existem dados validados em __imagensLimpas
+  // (Isso evita que o coletor limpe os dados de coordenadas PDF que não estão no DOM/recortesAcumulados)
+  if (
+    imagensAtuais.length === 0 &&
+    window.__imagensLimpas?.questao_original?.length > 0
+  ) {
+    console.log(
+      "[Coletor] Usando imagens já existentes em __imagensLimpas (SlotMode detected)"
+    );
+    imagensAtuais = [...window.__imagensLimpas.questao_original];
+  }
+
   // 3. Pega imagens de suporte já existentes (se houver)
   const questaoRef =
     window.ultimaQuestaoExtraida ?? window.__ultimaQuestaoExtraida ?? null;
@@ -67,6 +80,10 @@ export function coletarESalvarImagensParaEnvio() {
     : [];
 
   // 4. Salva no estado global (somente questão agora)
+  // [FIX] Só sobrescreve se tivermos algo novo ou se a intenção for atualizar.
+  // Se imagensAtuais veio do próprio __imagensLimpas, isso é redundante mas seguro.
+  // Se veio vazio, mas __imagensLimpas tinha coisa, o passo 2.1 já recuperou.
+  // Se ambos vazios, ok zerar.
   window.__imagensLimpas.questao_original = [...imagensAtuais];
 
   if (

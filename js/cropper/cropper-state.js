@@ -255,6 +255,16 @@ export const CropperState = {
     }
   },
 
+  clearActiveGroupCrops() {
+    if (!this.activeGroupId) return;
+    const group = this.groups.find((g) => g.id === this.activeGroupId);
+    if (group && group.crops.length > 0) {
+      this.saveHistory(); // Salva estado para undo
+      group.crops = [];
+      this.notify();
+    }
+  },
+
   addCropToGroup(groupId, cropData) {
     const group = this.groups.find((g) => g.id === groupId);
     if (group) {
@@ -349,5 +359,25 @@ export const CropperState = {
     this.pageConstraint = pageNum ? { pageNum } : null;
     // Não necessariamente notifica, pois isso afeta a lógica de interação (pointer logic), não o render dos crops existentes.
     // Mas se quisermos limpar crops fora da página, seria aqui. Por enquanto, só restrição de NOVA criação.
+  },
+
+  getQuestaoContextCrops(pageNum) {
+    // Retorna todos os crops que podem servir de "pai" (contexto) naquela página.
+    // Geralmente crops de grupos que NÃO são slot-mode e são do tipo 'questao_completa'.
+    return this.groups.flatMap((g) => {
+      // Ignora o póprio grupo de slot ou grupos irrelevantes
+      if (g.tags && g.tags.includes("slot-mode")) return [];
+
+      // Filtra crops na página solicitada
+      const pageCrops = g.crops.filter(
+        (c) => c.anchorData.anchorPageNum === pageNum
+      );
+
+      // Inject groupId so consumers can filter by parent question
+      return pageCrops.map((c) => ({
+        ...c,
+        groupId: g.id,
+      }));
+    });
   },
 };

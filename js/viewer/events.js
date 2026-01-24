@@ -211,7 +211,7 @@ export async function fecharVisualizador() {
     "Voltar ao início?",
     msg,
     "Sair",
-    "Cancelar"
+    "Cancelar",
   );
 
   if (!confirmou) {
@@ -222,8 +222,11 @@ export async function fecharVisualizador() {
   realizarLimpezaCompleta();
 
   // 3. Redireciona/Recarrega a Interface de Upload
-  if (typeof generatePDFUploadInterface === "function") {
-    generatePDFUploadInterface(null); // Null garante form limpo
+  // 3. Redireciona/Recarrega a Interface de Upload (Guia Manual)
+  if (typeof window.iniciarFluxoUploadManual === "function") {
+    window.iniciarFluxoUploadManual();
+  } else if (typeof generatePDFUploadInterface === "function") {
+    generatePDFUploadInterface(null); // Fallback
   }
 }
 
@@ -231,8 +234,8 @@ export async function fecharVisualizador() {
  * Renderiza a interface de visualização de PDF e anexa os eventos.
  */
 export async function gerarVisualizadorPDF(args) {
-  // FASE 1: Preparação
-  const urlProva = inicializarContextoViewer(args);
+  // FASE 1: Preparação (async para buscar manifesto)
+  const urlProva = await inicializarContextoViewer(args);
 
   // FASE 2: Injeção do HTML no DOM
   const viewerHTML = montarTemplateViewer(args);
@@ -267,7 +270,7 @@ export async function gerarVisualizadorPDF(args) {
 
     // Também fecha o toaster de processamento se houver
     const toasterContainer = document.getElementById(
-      "search-toaster-container"
+      "search-toaster-container",
     );
     if (toasterContainer) toasterContainer.innerHTML = "";
 

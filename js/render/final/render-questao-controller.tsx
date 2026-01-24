@@ -26,16 +26,33 @@ interface IDadosPayload {
  */
 export function renderizarQuestaoController(
   dados: IDadosPayload, 
-  elementoAlvo: HTMLElement | null = null
+  elementoAlvo: HTMLElement | null = null,
+  aiThoughtsHtml: string | null = null
 ): void {
   
   // 0. AUTO-DETECÇÃO DE ABA (Hack para sistema legado que não passa alvo)
+  // [FIX] Precisamos buscar o container da ABA ATIVA, não o container geral das abas
   if (!elementoAlvo) {
     const tabsContent = document.getElementById("sidebar-tabs-content");
-    // Só usamos a aba como alvo se ela estiver visível/ativa no DOM
     if (tabsContent && tabsContent.offsetParent !== null) {
-      elementoAlvo = tabsContent;
-      console.log("Renderizando questão dentro da aba ativa.");
+      // Busca o container da aba ativa especificamente
+      // Abas de questão têm containers com id "tab-content-question-X"
+      const activeTabContainer = tabsContent.querySelector('.tab-content-container[style*="visibility: visible"]') as HTMLElement | null;
+      
+      if (activeTabContainer) {
+        elementoAlvo = activeTabContainer;
+        console.log("Renderizando questão dentro da aba ativa:", activeTabContainer.id);
+      } else {
+        // Fallback: busca pelo primeiro container de questão visível
+        const questionContainer = tabsContent.querySelector('[id^="tab-content-question-"]') as HTMLElement | null;
+        if (questionContainer) {
+          elementoAlvo = questionContainer;
+          console.log("Fallback: Renderizando em container de questão:", questionContainer.id);
+        } else {
+          // Último recurso: usa o tabsContent mas NÃO limpa innerHTML
+          console.warn("Nenhum container de aba encontrado, criando novo.");
+        }
+      }
     }
   }
 
@@ -92,13 +109,15 @@ export function renderizarQuestaoController(
 
   // 7. Mount React Component
   // Chama a função legada que inicia o React (ReactDOM.render ou createRoot)
-  mountQuestaoTabs(container, questao, gabarito);
+  // Passamos o aiThoughtsHtml dentro do options (quarto argumento)
+  mountQuestaoTabs(container, questao, gabarito, { aiThoughtsHtml });
 
   // 8. PERSISTÊNCIA NA ABA (NOVO)
   // Se renderizamos dentro de uma aba, precisamos salvar os dados nela
   // para que, se o usuário trocar de aba e voltar, o conteúdo seja restaurado.
+  // [FIX] Verifica se é um container de aba pelo prefixo do ID
   // @ts-ignore
-  if (elementoAlvo && elementoAlvo.id === 'sidebar-tabs-content') {
+  if (elementoAlvo && elementoAlvo.id && elementoAlvo.id.startsWith('tab-content-')) {
        // @ts-ignore
        const activeTab = getActiveTab();
        if (activeTab) {

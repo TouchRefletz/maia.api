@@ -1,21 +1,25 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { renderLatexIn } from '../../libs/loader'; // Assumindo paths relativos
+import { renderLatexIn } from '../../libs/loader.js';
 import { safe } from '../../normalize/primitives.js';
 import { customAlert } from '../../ui/GlobalAlertsLogic';
+// @ts-ignore - JS module
+import { showConfirmModalWithCheckbox } from '../../ui/modal-confirm.js';
+import { PainelGabarito, PainelQuestao } from './RenderComponents';
 
 // Declaração de tipos para globais e módulos legados
 declare global {
   interface Window {
     __BACKUP_IMGS_G?: string[];
     __imagensLimpas?: {
-      gabarito_original?: string[];
-      questao_original?: string[];
+      gabarito_original?: any[];
+      questao_original?: any[];
       alternativas?: { questao?: Record<string, string[]> };
     };
-    __BACKUP_IMGS_Q?: string[];
+    __BACKUP_IMGS_Q?: any[];
     __ultimaQuestaoExtraida: any;
     __ultimoGabaritoExtraido: any;
+    __pdfOriginalUrl?: string;
   }
 }
 
@@ -24,8 +28,10 @@ interface JsonReviewModalProps {
   q: any;
   g: any;
   tituloMaterial: string;
-  htmlQuestaoSide: string;
-  htmlGabaritoSide: string;
+  imagensFinais: any; // Adicionado
+  explicacaoArray: any[]; // Adicionado
+  htmlQuestaoSide?: string; // Tornado opcional (deprecated)
+  htmlGabaritoSide?: string; // Tornado opcional (deprecated)
   onClose: () => void;
   onConfirm: (payload: string) => void;
 }
@@ -60,10 +66,19 @@ function prepararObjetoGabarito(g: any) {
 function prepararObjetoQuestao(q: any) {
   const questaoFinal = JSON.parse(JSON.stringify(q));
 
-  const imgsReais = resolverImagensPrioritarias(
-    window.__BACKUP_IMGS_Q,
-    window.__imagensLimpas?.questao_original
-  );
+  // Tenta pegar do novo sistema (PDF/Green Box)
+  const questaoGlobal = window.__ultimaQuestaoExtraida;
+  let imgsReais: any[] = [];
+
+  if (questaoGlobal && Array.isArray(questaoGlobal.fotos_originais) && questaoGlobal.fotos_originais.length > 0) {
+      imgsReais = questaoGlobal.fotos_originais;
+  } else {
+      // Fallback para sistema antigo
+      imgsReais = resolverImagensPrioritarias(
+        window.__BACKUP_IMGS_Q,
+        window.__imagensLimpas?.questao_original
+      );
+  }
 
   if (imgsReais.length > 0) {
     questaoFinal.fotos_originais = imgsReais;
@@ -84,7 +99,10 @@ function gerarJsonFinalLogic(q: any, g: any, tituloMaterial: string) {
   const payloadFinal = {
     [chaveProva]: {
       [chaveQuestao]: {
-        meta: { timestamp: new Date().toISOString() },
+        meta: { 
+          timestamp: new Date().toISOString(),
+          source_url: window.__pdfOriginalUrl || undefined
+        },
         dados_questao: questaoFinal,
         dados_gabarito: gabaritoLimpo,
       },
@@ -100,6 +118,8 @@ const JsonReviewModal: React.FC<JsonReviewModalProps> = ({
   q,
   g,
   tituloMaterial,
+  imagensFinais,
+  explicacaoArray,
   htmlQuestaoSide,
   htmlGabaritoSide,
   onClose,
@@ -113,13 +133,14 @@ const JsonReviewModal: React.FC<JsonReviewModalProps> = ({
     return gerarJsonFinalLogic(q, g, tituloMaterial);
   }, [q, g, tituloMaterial]);
 
-  // Renderiza LaTeX após montar o componente
+  // Renderiza LaTeX após montar o componente e quando os dados mudam
   useEffect(() => {
     const modalEl = document.getElementById('finalModalReactRoot');
     if (modalEl && typeof renderLatexIn === 'function') {
-      renderLatexIn(modalEl);
+      // Pequeno delay para garantir que o React renderizou o DOM
+      setTimeout(() => renderLatexIn(modalEl), 100);
     }
-  }, []);
+  }, [q, g]);
 
   const handleCopyJson = () => {
     navigator.clipboard.writeText(jsonString);
@@ -127,11 +148,26 @@ const JsonReviewModal: React.FC<JsonReviewModalProps> = ({
     setTimeout(() => setIsCopying(false), 1500);
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!q || !g) {
       customAlert('❌ Erro: Dados incompletos. Processe a questão e o gabarito.');
       return;
     }
+
+    // Modal de confirmação com checkbox de responsabilidade legal
+    const confirmed = await showConfirmModalWithCheckbox(
+      '⚠️ Confirmar Envio',
+      'Atenção: Esta ação é irreversível. Após o envio, os dados serão salvos permanentemente no banco de dados e não poderão ser alterados ou removidos.',
+      'Declaro que possuo os direitos autorais ou autorização para compartilhar este conteúdo, e assumo total responsabilidade legal sobre o material enviado.',
+      '🚀 Confirmar Envio',
+      'Cancelar',
+      true // isPositiveAction
+    );
+
+    if (!confirmed) {
+      return; // Usuário cancelou ou não marcou o checkbox
+    }
+
     setIsSending(true);
     onConfirm(jsonString);
   };
@@ -186,19 +222,24 @@ const JsonReviewModal: React.FC<JsonReviewModalProps> = ({
 
         {/* BODY */}
         <div className="modal-body" style={{ background: 'var(--color-background)', padding: '25px', overflowY: 'auto', flex: 1 }}>
-          <div className="review-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px', height: '100%' }}>
+          <div className="review-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '30px', height: '100%' }}>
             {/* Coluna Questão */}
             <div
               className="review-col"
               style={{ background: 'var(--color-surface)', padding: '20px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', overflowY: 'auto', maxHeight: '100%' }}
-              dangerouslySetInnerHTML={{ __html: htmlQuestaoSide }}
-            />
+            >
+                {/* Renderização Direta do Componente React (Alive) */}
+                <PainelQuestao q={q} tituloMaterial={tituloMaterial} imagensFinais={imagensFinais} />
+            </div>
+            
             {/* Coluna Gabarito */}
             <div
               className="review-col"
               style={{ background: 'var(--color-surface)', padding: '20px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', overflowY: 'auto', maxHeight: '100%' }}
-              dangerouslySetInnerHTML={{ __html: htmlGabaritoSide }}
-            />
+            >
+                {/* Renderização Direta do Componente React (Alive) */}
+                <PainelGabarito g={g} imagensFinais={imagensFinais} explicacaoArray={explicacaoArray} />
+            </div>
           </div>
 
           {/* JSON Debug Area */}
@@ -232,7 +273,7 @@ const JsonReviewModal: React.FC<JsonReviewModalProps> = ({
           <button className="btn btn--secondary" onClick={onClose}>Cancelar</button>
           <button
             id="btnConfirmarEnvioFinal"
-            className="btn btn--primary js-confirmar-envio"
+            className="btn btn--primary"
             onClick={handleConfirm}
             disabled={isSending}
           >
@@ -252,8 +293,10 @@ export function mountJsonReviewModal(
     q: any,
     g: any,
     tituloMaterial: string,
-    htmlQuestaoSide: string,
-    htmlGabaritoSide: string,
+    imagensFinais: any,
+    explicacaoArray: any[],
+    htmlQuestaoSide?: string, // Depreciado
+    htmlGabaritoSide?: string, // Depreciado
     // Callback para disparar o evento original caso exista algum listener global
     onConfirmCallback?: () => void
   }
@@ -261,13 +304,17 @@ export function mountJsonReviewModal(
   const root = createRoot(container);
 
   const handleClose = () => {
+    // Timeout para garantir animação de saída se houver (opcional)
     root.unmount();
     container.remove();
   };
 
-  const handleConfirm = (payload: string) => {
-    // Se houver lógica adicional de envio, ela pode ser injetada aqui.
-    // Para manter compatibilidade com o JS antigo que procurava pelo botão e classe:
+  const handleConfirm = async (payload: string) => {
+    // Chama a função de envio para Firebase
+    const { enviarDadosParaFirebase } = await import('../../firebase/envio.js');
+    enviarDadosParaFirebase();
+    
+    // Callback opcional
     if (data.onConfirmCallback) data.onConfirmCallback();
   };
 
@@ -276,6 +323,8 @@ export function mountJsonReviewModal(
       q={data.q}
       g={data.g}
       tituloMaterial={data.tituloMaterial}
+      imagensFinais={data.imagensFinais}
+      explicacaoArray={data.explicacaoArray}
       htmlQuestaoSide={data.htmlQuestaoSide}
       htmlGabaritoSide={data.htmlGabaritoSide}
       onClose={handleClose}

@@ -277,3 +277,35 @@
 .agent-status-row {
     animation: slideDown 0.2s ease-out;
 }
+
+/* AI Image Slot Extraction Header */
+.ai-slot-extraction-header.countdown-active::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 2px;
+    width: 0%;
+    background: linear-gradient(90deg, #6366F1, #8B5CF6);
+    animation: ai-countdown-bar 5s linear forwards;
+}
+
+@keyframes ai-countdown-bar {
+    from { width: 0%; }
+    to { width: 100%; }
+}
+
+@keyframes ai-thinking-pulse {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+@keyframes ai-logo-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.1); }
+}
+
+/* Success state glow */
+.ai-slot-extraction-header.success-active {
+    box-shadow: 0 0 20px rgba(34, 197, 94, 0.3);
+}

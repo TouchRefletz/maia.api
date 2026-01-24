@@ -1,6 +1,9 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { processarSalvamentoGabarito } from '../editor/gabarito-save.js';
 
+// Componente de revisão
+import { ReviewableTags, ReviewButtons } from './ReviewButtons';
+
 // Importações originais mantidas para garantir a mesma lógica de negócio e templates
 import { configurarEventosAlternativa, configurarEventosNovaAlternativa, gerarHtmlTemplateAlternativa } from '../editor/alternativas.js';
 import { initBotaoAdicionarPasso, setupImageToggle } from '../editor/passos.js';
@@ -43,20 +46,70 @@ interface Props {
   questao: QuestaoData;
   gabarito: any; // Tipo do gabarito
   containerRef: HTMLElement; // Referência do container pai para LaTeX
+  isReadOnly?: boolean; // Modo somente leitura (desativa edição de imagens)
+  isReviewMode?: boolean; // Modo de revisão (adiciona botões ✅❌)
+  onReviewSubmit?: (reviewState: Record<string, 'approved' | 'rejected'>) => void;
+  onReviewChange?: (hasChanges: boolean) => void;
+  aiThoughtsHtml?: string | null; // [NOVO] HTML pré-renderizado dos pensamentos
 }
 
-const QuestaoTabs: React.FC<Props> = ({ questao, gabarito, containerRef }) => {
+const QuestaoTabs: React.FC<Props> = ({ questao, gabarito, containerRef, isReadOnly = false, isReviewMode = false, onReviewSubmit, onReviewChange, aiThoughtsHtml }) => {
   // Estado para controlar as abas
   const [activeTab, setActiveTab] = useState<'questao' | 'gabarito'>('questao');
 
   // Estado para controlar modo de edição da questão
-  const [isEditing, setIsEditing] = useState(!!questao.isRecitation);
+  const [isEditing, setIsEditing] = useState(!!questao.isRecitation && !isReviewMode);
 
   // Estado para controlar modo de edição do gabarito
   const [isGabaritoEditing, setIsGabaritoEditing] = useState(false);
 
+  // Estado para revisões (modo review)
+  const [reviewState, setReviewState] = useState<Record<string, 'approved' | 'rejected' | null>>({});
+  
+  // Total de campos revisáveis (contados do DOM)
+  const [totalReviewFields, setTotalReviewFields] = useState(0);
+
   // Referência para verificar se é a primeira renderização
   const isFirstRender = useRef(true);
+  
+  // Referência para o container do componente
+  const tabsContainerRef = useRef<HTMLDivElement>(null);
+
+  // Handlers para revisão
+  const handleApprove = (fieldId: string) => {
+    setReviewState(prev => ({ ...prev, [fieldId]: prev[fieldId] === 'approved' ? null : 'approved' }));
+  };
+
+  const handleReject = (fieldId: string) => {
+    setReviewState(prev => ({ ...prev, [fieldId]: prev[fieldId] === 'rejected' ? null : 'rejected' }));
+  };
+  
+  // Efeito para contar o total de campos revisáveis no DOM
+  useEffect(() => {
+    if (!isReviewMode) return;
+    
+    // Esperar o DOM renderizar completamente
+    const countReviewFields = () => {
+      const container = tabsContainerRef.current;
+      if (container) {
+        const reviewGroups = container.querySelectorAll('.review-btn-group, .review-btn-group-vertical');
+        setTotalReviewFields(reviewGroups.length);
+      }
+    };
+    
+    // Pequeno delay para garantir que o DOM está completo
+    const timer = setTimeout(countReviewFields, 100);
+    return () => clearTimeout(timer);
+  }, [isReviewMode, activeTab, gabarito, questao]);
+
+  // --- EFEITO: Notificar mudanças no reviewState para o pai (Controle de Unsaved Changes) ---
+  useEffect(() => {
+    if (onReviewChange) {
+      // Verifica se há alguma chave com valor !== null
+      const hasChanges = Object.values(reviewState).some(v => v !== null);
+      onReviewChange(hasChanges);
+    }
+  }, [reviewState, onReviewChange]);
 
   // --- EFEITO: Renderizar LaTeX ao mudar abas ou modo ---
   useEffect(() => {
@@ -65,7 +118,7 @@ const QuestaoTabs: React.FC<Props> = ({ questao, gabarito, containerRef }) => {
         renderLatexIn(containerRef);
       }
     }, 50); // Pequeno delay igual ao original
-  }, [activeTab, isEditing, isGabaritoEditing, containerRef]);
+  }, [activeTab, isEditing, isGabaritoEditing, containerRef, questao, gabarito]);
 
   // --- EFEITO: Inicializar Scripts Legados do Editor (Drag & Drop, etc) ---
   useLayoutEffect(() => {
@@ -128,7 +181,7 @@ const QuestaoTabs: React.FC<Props> = ({ questao, gabarito, containerRef }) => {
   // --- HELPERS (Lógica Original) ---
 
   const handleFinalizarTudo = async () => {
-    const tudoCerto = await validarProgressoImagens('gabarito');
+    const tudoCerto = await validarProgressoImagens('tudo');
     if (tudoCerto) {
       renderizarTelaFinal();
     }
@@ -171,10 +224,15 @@ const QuestaoTabs: React.FC<Props> = ({ questao, gabarito, containerRef }) => {
     const form = document.getElementById('questaoEdit');
     if (form) {
       processarSalvamentoQuestao(form);
+      setIsEditing(false);
     }
   };
 
   const handleConfirmarQuestao = async () => {
+    // Valida imagens antes de confirmar
+    const ok = await validarProgressoImagens('questao');
+    if (!ok) return;
+    
     // Questão confirmada - agora o usuário pode editar ou finalizar
     setActiveTab('gabarito');
   };
@@ -207,10 +265,24 @@ const QuestaoTabs: React.FC<Props> = ({ questao, gabarito, containerRef }) => {
   };
 
   return (
-    <div className="questao-tabs-react-root">
+    <div className="questao-tabs-react-root" ref={tabsContainerRef}>
 
       {/* HEADER MOBILE (Drag Handle) - Só aparece via CSS no mobile */}
       <MobileInteractableHeader />
+
+      {/* [NOVO] Raciocínio da IA (Se disponível e não estiver em modo Review) */}
+      {aiThoughtsHtml && !isReviewMode && (
+        <details className="ai-thoughts-reveal" style={{ marginBottom: '15px', border: '1px solid var(--color-border)', borderRadius: '6px', backgroundColor: 'var(--color-surface)' }}>
+          <summary style={{ padding: '10px', cursor: 'pointer', fontWeight: '500', color: 'var(--color-text-secondary)', userSelect: 'none' }}>
+            🧠 Mostrar Raciocínio da IA
+          </summary>
+          <div 
+            className="ai-thoughts-content-injected maia-thoughts"
+            style={{ padding: '0 15px 15px 15px', maxHeight: '400px', overflowY: 'auto' }}
+            dangerouslySetInnerHTML={{ __html: aiThoughtsHtml }} 
+          />
+        </details>
+      )}
 
       {/* TABS HEADER */}
       {/* ... (Header mantido igual, não precisa alterar aqui, apenas no final) ... */}
@@ -244,7 +316,11 @@ const QuestaoTabs: React.FC<Props> = ({ questao, gabarito, containerRef }) => {
             color: activeTab === 'gabarito' ? 'var(--color-primary)' : 'var(--color-text)',
             opacity: (dadosGabarito || activeTab === 'gabarito') ? 1 : 0.6
           }}
-          onClick={() => setActiveTab('gabarito')}
+          onClick={async () => {
+            if (activeTab === 'gabarito') return;
+            const ok = await validarProgressoImagens('questao');
+            if (ok) setActiveTab('gabarito');
+          }}
         >
           Gabarito
         </button>
@@ -267,40 +343,128 @@ const QuestaoTabs: React.FC<Props> = ({ questao, gabarito, containerRef }) => {
         {/* ... (Resto do conteúdo da Questão - abreviado para focar na mudança do Gabarito) ... */}
         {/* MODO LEITURA */}
         <div id="questaoView" className={isEditing ? 'hidden' : ''}>
-          <div className="field-group">
-            <span className="field-label">Identificação</span>
-            <div className="data-box">{questao.identificacao}</div>
-          </div>
-
-          <div className="field-group">
-            <span className="field-label">Conteúdo da Questão</span>
-            <div className="data-box scrollable" style={{ padding: '15px' }}>
-              <MainStructure
-                estrutura={questao.estrutura}
-                imagensExternas={imagensLocaisQuestao}
-                contexto="questao"
-              />
+          {isReviewMode ? (
+            <div className="field-group">
+              <div className="reviewable-field-header">
+                <span className="field-label">Identificação</span>
+                <ReviewButtons
+                  fieldId="identificacao"
+                  state={reviewState['identificacao'] || null}
+                  onApprove={handleApprove}
+                  onReject={handleReject}
+                />
+              </div>
+              <div className={`data-box ${reviewState['identificacao'] === 'approved' ? 'field-approved' : reviewState['identificacao'] === 'rejected' ? 'field-rejected' : ''}`}>
+                {questao.identificacao}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="field-group">
+              <span className="field-label">Identificação</span>
+              <div className="data-box">{questao.identificacao}</div>
+            </div>
+          )}
 
+          {/* Conteúdo da Questão */}
+          {isReviewMode ? (
+            <div className="field-group">
+              <span className="field-label">Conteúdo da Questão</span>
+              <div className="data-box scrollable" style={{ padding: '15px' }}>
+                <MainStructure
+                  estrutura={questao.estrutura}
+                  imagensExternas={imagensLocaisQuestao}
+                  contexto="questao"
+                  isReadOnly={isReadOnly}
+                  isReviewMode={true}
+                  reviewState={reviewState}
+                  onApprove={handleApprove}
+                  onReject={handleReject}
+                  blockPrefix="estrutura"
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="field-group">
+              <span className="field-label">Conteúdo da Questão</span>
+              <div className="data-box scrollable" style={{ padding: '15px' }}>
+                <MainStructure
+                  estrutura={questao.estrutura}
+                  imagensExternas={imagensLocaisQuestao}
+                  contexto="questao"
+                  isReadOnly={isReadOnly}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Matérias */}
           <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-            <div className="field-group" style={{ flex: 1 }}>
-              <span className="field-label">Matéria</span>
-              <div className="data-box" dangerouslySetInnerHTML={{ __html: renderTags(questao.materias_possiveis, 'tag-subject') }} />
-            </div>
+            {isReviewMode ? (
+              <div className="field-group" style={{ flex: 1 }}>
+                <span className="field-label">Matéria</span>
+                <div className="data-box">
+                  <ReviewableTags
+                    items={questao.materias_possiveis || []}
+                    fieldPrefix="materia"
+                    tagClass="tag-subject"
+                    reviewState={reviewState}
+                    onApprove={handleApprove}
+                    onReject={handleReject}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="field-group" style={{ flex: 1 }}>
+                <span className="field-label">Matéria</span>
+                <div className="data-box" dangerouslySetInnerHTML={{ __html: renderTags(questao.materias_possiveis, 'tag-subject') }} />
+              </div>
+            )}
           </div>
 
-          <div className="field-group">
-            <span className="field-label">Palavras-Chave</span>
-            <div className="tags-wrapper" dangerouslySetInnerHTML={{ __html: renderTags(questao.palavras_chave, 'tag-keyword') }} />
-          </div>
-
-          <div className="field-group">
-            <span className="field-label">Alternativas ({questao.alternativas?.length || 0})</span>
-            <div className="alts-list">
-              <Alternativas alts={questao.alternativas} />
+          {/* Palavras-Chave */}
+          {isReviewMode ? (
+            <div className="field-group">
+              <span className="field-label">Palavras-Chave</span>
+              <div className="tags-wrapper">
+                <ReviewableTags
+                  items={questao.palavras_chave || []}
+                  fieldPrefix="palavra_chave"
+                  tagClass="tag-keyword"
+                  reviewState={reviewState}
+                  onApprove={handleApprove}
+                  onReject={handleReject}
+                />
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="field-group">
+              <span className="field-label">Palavras-Chave</span>
+              <div className="tags-wrapper" dangerouslySetInnerHTML={{ __html: renderTags(questao.palavras_chave, 'tag-keyword') }} />
+            </div>
+          )}
+
+          {/* Alternativas */}
+          {isReviewMode ? (
+            <div className="field-group">
+              <span className="field-label">Alternativas ({questao.alternativas?.length || 0})</span>
+              <div className="alts-list">
+                <Alternativas 
+                  alts={questao.alternativas} 
+                  isReviewMode={true}
+                  reviewState={reviewState}
+                  onApprove={handleApprove}
+                  onReject={handleReject}
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="field-group">
+              <span className="field-label">Alternativas ({questao.alternativas?.length || 0})</span>
+              <div className="alts-list">
+                <Alternativas alts={questao.alternativas} />
+              </div>
+            </div>
+          )}
         </div>
 
 
@@ -425,33 +589,35 @@ const QuestaoTabs: React.FC<Props> = ({ questao, gabarito, containerRef }) => {
           </form>
         )}
 
-        {/* Barra de Ações da Questão */}
-        <div className="result-actions" id="actionsLeitura" style={{ marginTop: '15px' }}>
-          {!isEditing ? (
-            <button type="button" className="btn btn--secondary btn--full-width" id="btnEditar" onClick={() => setIsEditing(true)}>
-              {questao.isRecitation ? '✏️ Transcrever Manualmente' : '✏️ Editar Conteúdo'}
-            </button>
-          ) : (
-            <div id="questaoEditActions">
-              <button type="button" className="btn btn--secondary btn--full-width" id="btnCancelarEdicao" onClick={() => setIsEditing(false)}>
-                Cancelar
+        {/* Barra de Ações da Questão - Oculta no modo review */}
+        {!isReviewMode && (
+          <div className="result-actions" id="actionsLeitura" style={{ marginTop: '15px' }}>
+            {!isEditing ? (
+              <button type="button" className="btn btn--secondary btn--full-width" id="btnEditar" onClick={() => setIsEditing(true)}>
+                {questao.isRecitation ? '✏️ Transcrever Manualmente' : '✏️ Editar Conteúdo'}
               </button>
-            </div>
-          )}
+            ) : (
+              <div id="questaoEditActions">
+                <button type="button" className="btn btn--secondary btn--full-width" id="btnCancelarEdicao" onClick={() => setIsEditing(false)}>
+                  Cancelar
+                </button>
+              </div>
+            )}
 
-          {/* Botão Confirmar (Só aparece se não tiver gabarito, lógica original) */}
-          {!gabarito && !isEditing && (
-            <button
-              type="button"
-              className="btn btn--primary btn--full-width"
-              id="btnConfirmarQuestao"
-              style={{ marginTop: '5px' }}
-              onClick={handleConfirmarQuestao}
-            >
-              Confirmar e Extrair Gabarito ➡️
-            </button>
-          )}
-        </div>
+            {/* Botão Confirmar (Só aparece se não tiver gabarito, lógica original) */}
+            {!gabarito && !isEditing && (
+              <button
+                type="button"
+                className="btn btn--primary btn--full-width"
+                id="btnConfirmarQuestao"
+                style={{ marginTop: '5px' }}
+                onClick={handleConfirmarQuestao}
+              >
+                Confirmar e Extrair Gabarito ➡️
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* 3. Conteúdo da Aba Gabarito */}
@@ -459,22 +625,34 @@ const QuestaoTabs: React.FC<Props> = ({ questao, gabarito, containerRef }) => {
         {dadosGabarito ? (
           <>
             <div id="gabaritoView" className={isGabaritoEditing ? 'hidden' : ''}>
-              <GabaritoCardView dados={dadosGabarito} />
-              <AcoesGabaritoView
-                onEdit={() => setIsGabaritoEditing(true)}
-                onFinish={handleFinalizarTudo}
+              {/* Gabarito com revisão granular - passa props diretamente */}
+              <GabaritoCardView
+                dados={dadosGabarito}
+                isReviewMode={isReviewMode}
+                reviewState={reviewState}
+                onApprove={handleApprove}
+                onReject={handleReject}
               />
+              {/* Oculta ações de editar/finalizar no modo review */}
+              {!isReviewMode && (
+                <AcoesGabaritoView
+                  onEdit={() => setIsGabaritoEditing(true)}
+                  onFinish={handleFinalizarTudo}
+                />
+              )}
             </div>
 
             {/* O formulário do editor do gabarito é complexo e gerado externamente. 
                   Injetamos HTML e deixamos os scripts de steps-ui.js assumirem o controle. */}
-            <div className={!isGabaritoEditing ? 'hidden' : ''}>
-              <GabaritoEditorView
-                dados={dadosGabarito}
-                onSave={handleSalvarGabarito}
-                onCancel={handleCancelarGabarito}
-              />
-            </div>
+            {!isReviewMode && (
+              <div className={!isGabaritoEditing ? 'hidden' : ''}>
+                <GabaritoEditorView
+                  dados={dadosGabarito}
+                  onSave={handleSalvarGabarito}
+                  onCancel={handleCancelarGabarito}
+                />
+              </div>
+            )}
           </>
         ) : (
           <div className="empty-state" style={{ padding: '20px', textAlign: 'center', color: '#666' }}>
@@ -483,6 +661,69 @@ const QuestaoTabs: React.FC<Props> = ({ questao, gabarito, containerRef }) => {
           </div>
         )}
       </div>
+
+      {/* Botão Enviar Revisão (só aparece no modo review) */}
+      {isReviewMode && (() => {
+        // Contar aprovados e rejeitados baseado no estado
+        const totalMarcados = Object.values(reviewState).filter(v => v !== null).length;
+        const totalAprovados = Object.values(reviewState).filter(v => v === 'approved').length;
+        const totalRejeitados = Object.values(reviewState).filter(v => v === 'rejected').length;
+        
+        // Usar o total contado do DOM
+        const totalCampos = totalReviewFields;
+        const totalPendentes = totalCampos - totalMarcados;
+        
+        // Botão só habilitado se TODOS os campos foram marcados
+        const todosPreenchidos = totalCampos > 0 && totalMarcados >= totalCampos;
+        
+        return (
+          <div style={{ padding: '15px 0' }}>
+            <div className="review-progress">
+              <span className="review-progress-item review-progress-item--approved">
+                ✓ {totalAprovados} aprovados
+              </span>
+              <span className="review-progress-item review-progress-item--rejected">
+                ✗ {totalRejeitados} rejeitados
+              </span>
+              <span className="review-progress-item review-progress-item--pending">
+                ○ {totalCampos === 0 ? '—' : totalPendentes > 0 ? totalPendentes : 0} pendentes
+              </span>
+              <span className="review-progress-item" style={{ marginLeft: 'auto', color: 'var(--color-text-secondary)', fontSize: '11px' }}>
+                Total: {totalMarcados}/{totalCampos}
+              </span>
+            </div>
+            
+            {!todosPreenchidos && totalCampos > 0 && (
+              <div className="review-warning" style={{ 
+                margin: '8px 0', 
+                padding: '8px 12px', 
+                background: 'rgba(251, 146, 60, 0.1)', 
+                border: '1px solid rgba(251, 146, 60, 0.3)', 
+                borderRadius: '6px',
+                fontSize: '12px',
+                color: '#fb923c'
+              }}>
+                ⚠️ Marque todos os {totalPendentes > 0 ? totalPendentes : 0} campos pendentes antes de enviar
+              </div>
+            )}
+            
+            <button
+              type="button"
+              className={`btn-enviar-revisao ${!todosPreenchidos ? 'btn-enviar-revisao--disabled' : ''}`}
+              onClick={() => {
+                const finalReview = Object.fromEntries(
+                  Object.entries(reviewState).filter(([_, v]) => v !== null)
+                ) as Record<string, 'approved' | 'rejected'>;
+                onReviewSubmit?.(finalReview);
+              }}
+              disabled={!todosPreenchidos}
+              title={!todosPreenchidos ? `Faltam ${totalPendentes > 0 ? totalPendentes : 0} campos para revisar` : 'Enviar revisão completa'}
+            >
+              📤 Enviar Revisão {todosPreenchidos ? '✓' : `(${totalPendentes > 0 ? totalPendentes : 0} pendentes)`}
+            </button>
+          </div>
+        );
+      })()}
 
     </div>
   );

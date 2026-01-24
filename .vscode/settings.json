@@ -1,6 +1,2 @@
 {
-    "editor.codeActionsOnSave": {
-        "source.addMissingImports": "explicit",
-        "source.organizeImports": "explicit"
-    }
 }

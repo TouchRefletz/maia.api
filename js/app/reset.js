@@ -1,6 +1,5 @@
 import { cancelarRecorte } from "../cropper/cropper-core.js";
 import { customAlert } from "../ui/GlobalAlertsLogic.tsx";
-import { esconderPainel } from "../viewer/sidebar.js";
 
 export function limparElementosVisuais() {
   // 1. Remove o Modal Final
@@ -30,8 +29,10 @@ export function resetarBuffersImagem() {
 }
 
 export function gerenciarEstadoInterface() {
-  // Recolhe a sidebar (se existir a função)
-  if (typeof esconderPainel === "function") esconderPainel(false);
+  // [FIX] NÃO esconde mais a sidebar após salvar
+  // O usuário quer continuar no Hub para processar mais questões
+  // A linha abaixo foi removida pois causava a sidebar desaparecer:
+  // if (typeof esconderPainel === "function") esconderPainel(false);
 
   // Cancela modo de recorte
   if (typeof cancelarRecorte === "function") cancelarRecorte();

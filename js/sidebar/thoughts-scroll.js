@@ -67,7 +67,7 @@ export function pushThought(t, tabId = null) {
 
         // Se a aba estiver ativa, podemos fazer extras (scroll etc)
         // Mas o addLogToQuestionTab já manipula o DOM se ele existir.
-      }
+      },
     );
     return; // Se estamos usando abas, não usamos a lógica legada de DOM direto
   }
@@ -146,7 +146,7 @@ export function anexarListenerDeScroll(scrollTarget) {
         if (btnResume) btnResume.classList.add("visible");
       }
     },
-    { passive: true }
+    { passive: true },
   );
 }
 

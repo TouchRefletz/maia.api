@@ -50,7 +50,7 @@
 .structure-image-wrapper {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: center !important;
   margin: 10px 0;
   background: rgba(0, 0, 0, 0.02);
   padding: 10px;
@@ -294,9 +294,9 @@
   flex-direction: column;
 }
 
-.structure-lista > ul,
-.structure-lista > li,
-.structure-lista > strong {
+.structure-lista>ul,
+.structure-lista>li,
+.structure-lista>strong {
   text-align: left;
 }
 
@@ -453,6 +453,9 @@
   overflow-wrap: break-word;
   white-space: normal;
   max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
 }
 
 /* --- TABELAS (MARKDOWN) --- */
@@ -469,7 +472,8 @@
 }
 
 .structure-tabela th {
-  background-color: var(--color-background); /* Ou uma cor de destaque leve */
+  background-color: var(--color-background);
+  /* Ou uma cor de destaque leve */
   color: var(--color-text);
   font-weight: 700;
   text-align: left;
@@ -498,7 +502,8 @@
 }
 
 .structure-tabela tr:nth-child(even) {
-  background-color: rgba(var(--color-primary-rgb), 0.03); /* Leve listrado */
+  background-color: rgba(var(--color-primary-rgb), 0.03);
+  /* Leve listrado */
 }
 
 .structure-tabela tr:hover {

@@ -7,7 +7,7 @@ console.log(
   "DEBUG ENV:",
   import.meta.env?.VITE_WORKER_URL,
   "FINAL URL:",
-  WORKER_URL
+  WORKER_URL,
 );
 
 /**
@@ -51,8 +51,8 @@ export async function callWorker(endpoint, body) {
       },
       signal: body.signal, // Adicionado suporte a signal
       body: JSON.stringify({
-        ...body,
         apiKey: sessionStorage.getItem("GOOGLE_GENAI_API_KEY") || undefined,
+        ...body,
         signal: undefined, // Não enviar signal no corpo JSON
       }),
     });
@@ -86,7 +86,7 @@ export async function gerarConteudoEmJSONComImagem(
   texto,
   schema = null,
   listaImagensBase64 = [],
-  mimeType = "image/jpeg"
+  mimeType = "image/jpeg",
 ) {
   return await callWorker("/generate", {
     texto,
@@ -99,110 +99,189 @@ export async function gerarConteudoEmJSONComImagem(
 export async function gerarConteudoEmJSONComImagemStream(
   texto,
   schema = null,
-  listaImagensBase64 = [],
+  attachments = [], // Renamed from listaImagensBase64 to support generic files
   mimeType = "image/jpeg",
-  handlers = {}
+  handlers = {},
+  options = {},
 ) {
-  handlers?.onStatus?.("Conectando ao Worker...");
+  const MAX_RETRIES = 3;
+  let attempt = 0;
 
-  try {
-    const response = await fetch(`${WORKER_URL}/generate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      signal: handlers.signal, // Passar signal via handlers ou arguments extra seria melhor, mas vamos usar o que tem
-      body: JSON.stringify({
-        texto,
-        schema,
-        listaImagensBase64,
-        mimeType,
-        apiKey: sessionStorage.getItem("GOOGLE_GENAI_API_KEY") || undefined,
-      }),
-    });
+  // Prepare payload based on attachment type
+  let payloadImages = [];
+  let payloadFiles = [];
 
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      throw new Error(err.error || `Erro HTTP ${response.status}`);
+  if (Array.isArray(attachments) && attachments.length > 0) {
+    if (typeof attachments[0] === "string") {
+      // Legacy behavior: Array of Base64 strings (Images only)
+      payloadImages = attachments;
+    } else if (typeof attachments[0] === "object") {
+      // New behavior: Array of { data, mimeType } objects
+      payloadFiles = attachments;
     }
+  }
 
-    if (!response.body) throw new Error("Resposta sem corpo (stream)");
+  while (attempt < MAX_RETRIES) {
+    attempt++;
+    const isRetry = attempt > 1;
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder("utf-8");
-    let buffer = "";
-    let answerText = "";
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      // Decode current chunk e add to buffer
-      buffer += decoder.decode(value, { stream: true });
-
-      // Process lines individually
-      let parts = buffer.split("\n");
-      // Last part might be incomplete, keep it in buffer
-      buffer = parts.pop() || "";
-
-      for (const line of parts) {
-        if (!line.trim()) continue;
-        try {
-          const msg = JSON.parse(line);
-          console.log(msg);
-          if (msg.type === "thought") {
-            handlers?.onThought?.(msg.text);
-          } else if (msg.type === "answer") {
-            handlers?.onAnswerDelta?.(msg.text);
-            answerText += msg.text;
-          } else if (msg.type === "debug") {
-            console.log("🛠️ WORKER DEBUG:", msg.text);
-          } else if (msg.type === "error") {
-            if (msg.code === "RECITATION") {
-              console.warn(
-                "⚠️ Não foi possível responder por conta de recitação."
-              );
-              throw new Error("RECITATION_ERROR");
-            }
-            console.error("Erro do worker stream:", msg.text);
-            handlers?.onStatus?.(`Erro: ${msg.text}`);
-          } else if (msg.type === "status") {
-            handlers?.onStatus?.(msg.text);
-          } else if (msg.type === "reset") {
-            console.log(
-              "♻️ Tentativa falhou com RECITATION. Reiniciando buffer..."
-            );
-            answerText = "";
-            handlers?.onStatus?.("Recitation detectado. Tentando novamente...");
-          }
-        } catch (e) {
-          if (e.message === "RECITATION_ERROR") throw e;
-          console.warn("Erro ao parsear chunk do worker:", line, e);
-        }
+    // Atualiza status na UI
+    if (handlers?.onStatus) {
+      if (isRetry) {
+        handlers.onStatus(
+          `Re-tentando conexão com IA (${attempt}/${MAX_RETRIES})...`,
+        );
+      } else {
+        handlers.onStatus("Conectando ao Worker (1/3)...");
       }
     }
 
-    // Final buffer processing
-    if (buffer.trim()) {
-      try {
-        const msg = JSON.parse(buffer);
-        if (msg.type === "answer") answerText += msg.text;
-      } catch (e) {}
-    }
-
-    // Apenas garantimos que não está vazio antes de parsear
-    if (!answerText || !answerText.trim()) {
-      throw new Error(
-        "A API retornou vazio. Verifique se o modelo está sobrecarregado."
+    try {
+      // [DEBUG] Log API key status
+      const customApiKey = sessionStorage.getItem("GOOGLE_GENAI_API_KEY");
+      console.log(
+        `[Worker] Attempt ${attempt}/${MAX_RETRIES} - API Key present:`,
+        !!customApiKey,
       );
+
+      const response = await fetch(`${WORKER_URL}/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: handlers.signal, // Passar signal via handlers ou arguments extra seria melhor, mas vamos usar o que tem
+        body: JSON.stringify({
+          apiKey: customApiKey || undefined,
+          texto,
+          schema,
+          listaImagensBase64:
+            payloadImages.length > 0 ? payloadImages : undefined,
+          files: payloadFiles.length > 0 ? payloadFiles : undefined,
+          mimeType,
+          model: options.model,
+          generationConfig: options.generationConfig,
+          chatMode: options.chatMode,
+          history: options.history,
+          systemInstruction: options.systemInstruction,
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || `Erro HTTP ${response.status}`);
+      }
+
+      if (!response.body) throw new Error("Resposta sem corpo (stream)");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+      let answerText = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        // Decode current chunk e add to buffer
+        buffer += decoder.decode(value, { stream: true });
+
+        // Process lines individually
+        let parts = buffer.split("\n");
+        // Last part might be incomplete, keep it in buffer
+        buffer = parts.pop() || "";
+
+        for (const line of parts) {
+          if (!line.trim()) continue;
+          try {
+            const msg = JSON.parse(line);
+            console.log(msg);
+            if (msg.type === "thought") {
+              try {
+                handlers?.onThought?.(msg.text);
+              } catch (err) {
+                console.error("Error in onThought handler:", err);
+              }
+            } else if (msg.type === "answer") {
+              // Accumulate FIRST to ensure data integrity
+              answerText += msg.text;
+              try {
+                handlers?.onAnswerDelta?.(msg.text);
+              } catch (err) {
+                console.error("Error in onAnswerDelta handler:", err);
+              }
+            } else if (msg.type === "debug") {
+              console.log("🛠️ WORKER DEBUG:", msg.text);
+            } else if (msg.type === "error") {
+              if (msg.code === "RECITATION") {
+                console.warn(
+                  "⚠️ Não foi possível responder por conta de recitação.",
+                );
+                throw new Error("RECITATION_ERROR");
+              }
+
+              // Tratamento de Rate Limit / Sobrecarga
+              if (
+                msg.code === "ALL_MODELS_FAILED" ||
+                msg.status === 429 ||
+                msg.status === 503
+              ) {
+                console.warn("⚠️ Rate Limit / Sobrecarga detectado.");
+                throw new Error("RATE_LIMIT_ERROR");
+              }
+
+              console.error("Erro do worker stream:", msg.text);
+              handlers?.onStatus?.(`Erro: ${msg.text}`);
+            } else if (msg.type === "status") {
+              handlers?.onStatus?.(msg.text);
+            } else if (msg.type === "reset") {
+              console.log(
+                "♻️ Tentativa falhou com RECITATION. Reiniciando buffer...",
+              );
+              answerText = "";
+              handlers?.onStatus?.(
+                "Recitation detectado. Tentando novamente...",
+              );
+            }
+          } catch (e) {
+            if (e.message === "RECITATION_ERROR") throw e;
+            console.warn("Erro ao parsear chunk do worker:", line, e);
+          }
+        }
+      }
+
+      // Final buffer processing
+      if (buffer.trim()) {
+        try {
+          const msg = JSON.parse(buffer);
+          if (msg.type === "answer") answerText += msg.text;
+        } catch (e) {}
+      }
+
+      // Apenas garantimos que não está vazio antes de parsear
+      if (!answerText || !answerText.trim()) {
+        throw new Error("EMPTY_RESPONSE_ERROR");
+      }
+
+      console.log(answerText);
+
+      return JSON.parse(answerText);
+    } catch (error) {
+      if (error.name === "AbortError") throw error;
+      if (error.message === "RECITATION_ERROR") throw error;
+
+      if (error.message === "EMPTY_RESPONSE_ERROR") {
+        if (attempt < MAX_RETRIES) {
+          console.warn(
+            `[Worker] EMPTY_RESPONSE_ERROR detectado (Tentativa ${attempt}/${MAX_RETRIES}). Ignorando resultado e tentando novamente...`,
+          );
+          continue; // Tenta novamente
+        }
+      }
+
+      // Se esgotou tentativas ou é outro erro irrelevante para retry automático
+      if (error.message === "EMPTY_RESPONSE_ERROR") throw error; // Re-throw para o caller lidar se falhar 3x
+
+      console.error("Erro no Worker stream:", error);
+      throw new Error(`Falha no Worker: ${error.message}`);
     }
-
-    console.log(answerText);
-
-    return JSON.parse(answerText);
-  } catch (error) {
-    if (error.name === "AbortError") throw error;
-    if (error.message === "RECITATION_ERROR") throw error;
-    console.error("Erro no Worker stream:", error);
-    throw new Error(`Falha no Worker: ${error.message}`);
   }
 }
 
@@ -230,10 +309,40 @@ export async function uploadImagemWorker(imageBase64) {
  * Envia vetores para o Pinecone via Worker
  * @param {Array} vectors - Lista de vetores {id, values, metadata}
  * @param {string} namespace - Namespace opcional
+ * @param {string} target - 'default' (main/deep-search) ou 'filter' (maia-filter)
  * @returns {Promise<any>}
  */
-export async function upsertPineconeWorker(vectors, namespace = "") {
-  return await callWorker("/pinecone-upsert", { vectors, namespace });
+export async function upsertPineconeWorker(
+  vectors,
+  namespace = "",
+  target = "default",
+) {
+  return await callWorker("/pinecone-upsert", { vectors, namespace, target });
+}
+
+/**
+ * Consulta Pinecone via Worker
+ * @param {Array} vector - Vetor de consulta
+ * @param {number} topK - Número de resultados
+ * @param {Object} filter - Filtros de metadados
+ * @param {string} target - 'default' ou 'filter'
+ * @param {string} namespace - Namespace opcional
+ * @returns {Promise<any>}
+ */
+export async function queryPineconeWorker(
+  vector,
+  topK = 1,
+  filter = {},
+  target = "default",
+  namespace = "",
+) {
+  return await callWorker("/pinecone-query", {
+    vector,
+    topK,
+    filter,
+    target,
+    namespace,
+  });
 }
 
 /**
@@ -245,7 +354,7 @@ export async function realizarPesquisa(
   texto,
   listaImagensBase64 = [],
   handlers = {},
-  schema = null
+  schema = null,
 ) {
   handlers?.onStatus?.("Conectando ao Researcher...");
 
@@ -255,13 +364,13 @@ export async function realizarPesquisa(
       headers: { "Content-Type": "application/json" },
       signal: handlers?.signal,
       body: JSON.stringify({
-        texto,
-        listaImagensBase64,
-        schema,
         apiKey:
           typeof sessionStorage !== "undefined"
             ? sessionStorage.getItem("GOOGLE_GENAI_API_KEY")
             : undefined,
+        texto,
+        listaImagensBase64,
+        schema,
       }),
     });
 
@@ -305,7 +414,7 @@ export async function realizarPesquisa(
             // Limpa relatório se houver reset (recitation)
             reportText = "";
             handlers?.onStatus?.(
-              "Recitation detectado na pesquisa. Tentando novo modelo..."
+              "Recitation detectado na pesquisa. Tentando novo modelo...",
             );
           }
         } catch (e) {
@@ -359,11 +468,11 @@ export async function gerarGabaritoComPesquisa(
   mimeType,
   handlers,
   imagensPesquisa = [], // Argumento opcional para imagens limpas/originais
-  textoQuestao = "" // Contexto específico da questão (JSON/Texto) para a pesquisa
+  textoQuestao = "", // Contexto específico da questão (JSON/Texto) para a pesquisa
 ) {
   // 1. Etapa de Pesquisa
   handlers?.onStatus?.(
-    "🕵️ Analisando imagem e pesquisando resoluções (Step 1/2)..."
+    "🕵️ Analisando imagem e pesquisando resoluções (Step 1/2)...",
   );
 
   let relatorioPesquisa = "";
@@ -392,7 +501,7 @@ export async function gerarGabaritoComPesquisa(
       {
         onStatus: handlers?.onStatus,
         onThought: handlers?.onThought, // Thoughts do pesquisador!
-      }
+      },
     );
 
     relatorioPesquisa = searchResult.report;
@@ -403,16 +512,16 @@ export async function gerarGabaritoComPesquisa(
   } catch (err) {
     console.warn(
       "Falha na etapa de pesquisa (prosseguindo sem contexto extra):",
-      err
+      err,
     );
     handlers?.onStatus?.(
-      "⚠️ Pesquisa falhou, gerando com conhecimento interno..."
+      "⚠️ Pesquisa falhou, gerando com conhecimento interno...",
     );
   }
 
   // 2. Etapa de Geração Final
   handlers?.onStatus?.(
-    "✍️ Escrevendo gabarito detalhado com base na pesquisa (Step 2/2)..."
+    "✍️ Escrevendo gabarito detalhado com base na pesquisa (Step 2/2)...",
   );
 
   // Enriquece o prompt original com o relatório
@@ -429,7 +538,7 @@ export async function gerarGabaritoComPesquisa(
     JSONEsperado,
     listaImagens,
     mimeType,
-    handlers
+    handlers,
   );
 
   // 3. Injeção HARDCODED das fontes e relatório no JSON final

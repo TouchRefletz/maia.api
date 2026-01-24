@@ -205,7 +205,7 @@ export class AiScanner {
       async () => {
         // Finalizado, inicia processo real
         await this.runScannerLoop(pdfDoc, resume);
-      }
+      },
     );
   }
 
@@ -214,7 +214,7 @@ export class AiScanner {
     if (this.isRunning) {
       customAlert(
         "Já existe uma análise em andamento. Aguarde ou cancele-a primeiro.",
-        3000
+        3000,
       );
       return;
     }
@@ -244,7 +244,7 @@ export class AiScanner {
         ScannerUI.updateAgentStatus(
           pageNum,
           "default",
-          "Análise interrompida."
+          "Análise interrompida.",
         );
       } else {
         console.error("Erro ao processar página:", e);
@@ -309,6 +309,8 @@ export class AiScanner {
     // Inicia observador de UI (float header etc)
     ScannerUI.startUiObserver();
 
+    let completedSuccessfully = false;
+
     try {
       const numPages = pdfDoc.numPages;
 
@@ -323,7 +325,7 @@ export class AiScanner {
           ScannerUI.updateAgentStatus(
             i,
             "default",
-            "Página já verificada. Pulando."
+            "Página já verificada. Pulando.",
           );
           continue;
         }
@@ -345,7 +347,7 @@ export class AiScanner {
           ScannerUI.updateAgentStatus(
             i,
             "default",
-            "Análise interrompida pelo usuário."
+            "Análise interrompida pelo usuário.",
           );
           break;
         }
@@ -370,6 +372,11 @@ export class AiScanner {
           ScannerUI.onScannerPaused(true);
         }
       }
+
+      // Se chegou aqui sem break, completou todas as páginas com sucesso
+      if (!this.shouldStop) {
+        completedSuccessfully = true;
+      }
     } catch (e) {
       if (e.name === "AbortError") {
         console.log("Scanner abortado.");
@@ -380,11 +387,29 @@ export class AiScanner {
           ScannerUI.updateAgentStatus(
             ScannerUI.activePage,
             "default",
-            `Falha fatal: ${e.message}`
+            `Falha fatal: ${e.message}`,
           );
         }
       }
-    } finally {
+      // Em caso de erro/abort, finaliza aqui
+      this.finish();
+    }
+
+    // Se completou com sucesso, inicia o batch processing (que chamará finish() quando terminar)
+    if (completedSuccessfully) {
+      import("./batch-processor.js")
+        .then(({ BatchProcessor }) => {
+          BatchProcessor.start();
+        })
+        .catch((err) => {
+          console.error("[AiScanner] Erro ao iniciar BatchProcessor:", err);
+          this.finish(); // Se batch falhar, finaliza aqui
+        });
+    } else if (!this.shouldStop) {
+      // Não completou mas também não foi parado - algum edge case, finaliza
+      this.finish();
+    } else {
+      // Foi parado pelo usuário
       this.finish();
     }
   }
@@ -395,6 +420,14 @@ export class AiScanner {
     if (this.abortController) {
       this.abortController.abort();
     }
+
+    // [BATCH SYNC] Também cancela o BatchProcessor se estiver rodando
+    import("./batch-processor.js")
+      .then(({ BatchProcessor }) => {
+        BatchProcessor.cancel();
+      })
+      .catch(() => {}); // Ignora erro se módulo não carregar
+
     // NOTE: Não atualiza status aqui pois o loop já cuida disso quando detecta shouldStop
   }
 
@@ -437,7 +470,7 @@ export class AiScanner {
         ScannerUI.updateAgentStatus(
           pageNum,
           "analysis",
-          `Resumindo da etapa: ${startStep}`
+          `Resumindo da etapa: ${startStep}`,
         );
       }
 
@@ -469,19 +502,19 @@ export class AiScanner {
               ScannerUI.updateAgentStatus(
                 pageNum,
                 "analysis",
-                `Pensando: ${text}`
+                `Pensando: ${text}`,
               ),
             onStatus: (text) =>
               ScannerUI.updateAgentStatus(pageNum, "analysis", text),
             signal: this.abortController.signal,
-          }
+          },
         );
 
         if (!currentJson || !currentJson.regions) {
           ScannerUI.updateAgentStatus(
             pageNum,
             "analysis",
-            "Falha na detecção. Pulando."
+            "Falha na detecção. Pulando.",
           );
           this.pageState = {
             pageNum: 0,
@@ -495,7 +528,7 @@ export class AiScanner {
         ScannerUI.updateAgentStatus(
           pageNum,
           "analysis",
-          `Detectadas ${currentJson.regions.length} regiões.`
+          `Detectadas ${currentJson.regions.length} regiões.`,
         );
 
         if (currentJson.regions.length === 0) {
@@ -542,7 +575,7 @@ export class AiScanner {
         ScannerUI.updateAgentStatus(
           pageNum,
           "auditor",
-          "Iniciando auditoria..."
+          "Iniciando auditoria...",
         );
 
         const reviewResult = await gerarConteudoEmJSONComImagemStream(
@@ -555,10 +588,10 @@ export class AiScanner {
               ScannerUI.updateAgentStatus(
                 pageNum,
                 "auditor",
-                `Pensando: ${text}`
+                `Pensando: ${text}`,
               ),
             signal: this.abortController.signal,
-          }
+          },
         );
 
         if (reviewResult.ok) {
@@ -593,7 +626,7 @@ export class AiScanner {
         ScannerUI.updateAgentStatus(
           pageNum,
           "auditor",
-          `Reprovado: ${reviewResult.feedback.substring(0, 60)}...`
+          `Reprovado: ${reviewResult.feedback.substring(0, 60)}...`,
         );
       }
 
@@ -616,7 +649,7 @@ export class AiScanner {
         ScannerUI.updateAgentStatus(
           pageNum,
           "correction",
-          "Iniciando correções..."
+          "Iniciando correções...",
         );
 
         const correctedJson = await gerarConteudoEmJSONComImagemStream(
@@ -629,10 +662,10 @@ export class AiScanner {
               ScannerUI.updateAgentStatus(
                 pageNum,
                 "correction",
-                `Pensando: ${text}`
+                `Pensando: ${text}`,
               ),
             signal: this.abortController.signal,
-          }
+          },
         );
 
         this.clearDrafts(pageNum); // Clear previous drafts
@@ -641,18 +674,18 @@ export class AiScanner {
           ScannerUI.updateAgentStatus(
             pageNum,
             "correction",
-            `Corrigido (${correctedJson.regions.length} regiões).`
+            `Corrigido (${correctedJson.regions.length} regiões).`,
           );
           this.applyResults(correctedJson, pageNum, "verified");
           await this.waitAfterVerification(
             pageNum,
-            correctedJson.regions.length
+            correctedJson.regions.length,
           );
         } else {
           ScannerUI.updateAgentStatus(
             pageNum,
             "correction",
-            "Falha na correção. Mantendo original."
+            "Falha na correção. Mantendo original.",
           );
           this.applyResults(currentJson, pageNum, "verified");
           await this.waitAfterVerification(pageNum, currentJson.regions.length);
@@ -668,6 +701,27 @@ export class AiScanner {
       };
     } catch (e) {
       if (e.name === "AbortError") return;
+
+      // [FIX] Handle EMPTY_RESPONSE_ERROR gracefully - skip page instead of crashing
+      if (e.message === "EMPTY_RESPONSE_ERROR") {
+        console.warn(
+          `[AiScanner] Página ${pageNum}: IA retornou resposta vazia (possível sobrecarga). Pulando página.`,
+        );
+        ScannerUI.updateAgentStatus(
+          pageNum,
+          "default",
+          "⚠️ Resposta vazia da IA. Página pulada.",
+        );
+        // Clear partial state and continue
+        this.pageState = {
+          pageNum: 0,
+          step: null,
+          imageBase64: null,
+          extractedJson: null,
+        };
+        return; // Continue to next page instead of breaking
+      }
+
       console.error(`Erro pg ${pageNum}:`, e);
       ScannerUI.updateAgentStatus(pageNum, "default", `Erro: ${e.message}`);
     }

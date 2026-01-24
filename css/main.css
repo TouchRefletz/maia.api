@@ -17,9 +17,16 @@
 @import url('components/gabarito.css');
 @import url('components/modal.css');
 @import url('components/modal-confirm.css');
+@import url('components/login-modal.css');
 @import url('components/passo-explicacao.css');
 @import url('components/question.css');
 @import url('components/sidebar.css');
+@import url('components/nav-sidebar.css');
+@import url('components/chat-input.css');
+@import url('components/logout-alert.css');
+@import url('components/chat-render.css');
+@import url('components/scaffolding.css');
+@import url('components/add-questions-modal.css');
 @import url('components/status.css');
 @import url('components/tags.css');
 @import url('components/terminal.css');
@@ -75,5 +82,7 @@
 @import url('result/questao.css');
 @import url('result/resolucao.css');
 @import url('result/relatorio.css');
+@import url('result/revisar.css');
+@import url('result/review-buttons.css');
 
 @import url('wrappers/input.css');

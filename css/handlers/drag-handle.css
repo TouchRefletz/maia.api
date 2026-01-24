@@ -19,7 +19,7 @@
 
 /* Classe que será adicionada via JS quando estiver arrastando */
 .drag-over {
-  background-color: var(--color-surface-hover, #e0e0e0) !important;
+  background-color: var(--color-bg-1) !important;
   border: 2px dashed var(--color-primary) !important;
   transform: scale(1.02);
   transition: all 0.2s ease;
