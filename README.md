@@ -9,20 +9,14 @@
   </tr>
 </table>
 
-<div align="center">
+<div>
   <img src="https://img.shields.io/badge/Google%20Gemini-3%20Flash%20(Preview)-4285F4?style=for-the-badge&logo=google&logoColor=white" alt="Gemini 3 Flash">
   <img src="https://img.shields.io/badge/System-Router%20Complexity%20Aware-21808D?style=for-the-badge&logo=googlegemini&logoColor=white" alt="Router Complexity">
   <img src="https://img.shields.io/badge/Feature-Google%20Grounding%20(Search)-34A853?style=for-the-badge&logo=google&logoColor=white" alt="Google Grounding">
   <img src="https://img.shields.io/badge/Feature-Google%20Structured%20Output-34a0a8?style=for-the-badge&logo=google&logoColor=white" alt="Google Structured Output">
-</div>
-
-<div align="center">
   <img src="https://img.shields.io/badge/Cloudflare-Workers-F38020?style=for-the-badge&logo=cloudflare&logoColor=white" alt="Cloudflare Workers">
   <img src="https://img.shields.io/badge/Pinecone-Vector_DB-000000?style=for-the-badge&logo=pinecone&logoColor=white" alt="Pinecone">
   <img src="https://img.shields.io/badge/Frontend-React%20%2B%20Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white" alt="Vite">
-</div>
-
-<div align="center">
   <img src="https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black" alt="JavaScript">
   <img src="https://img.shields.io/badge/HTML5-E34F26?style=for-the-badge&logo=html5&logoColor=white" alt="HTML5">
