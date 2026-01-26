@@ -52,13 +52,14 @@ O projeto opera sobre uma arquitetura moderna e escalável, dividida em microsse
 
 O coração do Maia.edu é um sistema roteável que entende a intenção do estudante para fornecer a resposta pedagógica ideal.
 
+```mermaid
 graph TD
-%% Estilo dos nós
-classDef user fill:#21808D,stroke:#fff,stroke-width:2px,color:#fff;
-classDef ai fill:#4285F4,stroke:#fff,stroke-width:2px,color:#fff;
-classDef worker fill:#F38020,stroke:#fff,stroke-width:2px,color:#fff;
-classDef db fill:#000,stroke:#fff,stroke-width:2px,color:#fff;
-classDef front fill:#61DAFB,stroke:#333,stroke-width:2px,color:#000;
+    %% Estilo dos nós
+    classDef user fill:#21808D,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef ai fill:#4285F4,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef worker fill:#F38020,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef db fill:#000,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef front fill:#61DAFB,stroke:#333,stroke-width:2px,color:#000;
 
     UserInput([👤 Mensagem do Estudante]):::user --> Router{🧠 Router Inteligente<br>Gemini 3 Flash}:::ai
 
@@ -78,12 +79,17 @@ classDef front fill:#61DAFB,stroke:#333,stroke-width:2px,color:#000;
 
     subgraph "Frontend (Client-Side Rendering)"
         Frontend --> Parser{⚙️ Parser de Blocos}:::front
-        Parser -- "type: 'texto'" --> ComponentText[Renderizador Markdown]:::front
+
+        %% Generalização dos blocos de conteúdo visual
+        Parser -- "Types: texto, imagem, codigo,<br>tabela, equacao, lista..." --> ComponentRich[📦 Renderizadores Visuais<br>Markdown, KaTeX]:::front
+
+        %% Blocos de Lógica de Negócio (Complexos)
         Parser -- "type: 'questao'" --> ComponentQuestion[Hydrate: <QuestaoCard /><br>Fetch Dados do DB]:::front
-        Parser -- "type: 'scaffolding'" --> ComponentScaffolding[Hydrate: <ScaffoldUI /><br>Interativo]:::front
+        Parser -- "type: 'scaffolding'" --> ComponentScaffolding[Hydrate: <ScaffoldUI /><br>Interativo / State]:::front
     end
 
-    ComponentText & ComponentQuestion & ComponentScaffolding --> Output([✨ Interface Final]):::user
+    ComponentRich & ComponentQuestion & ComponentScaffolding --> Output([✨ Interface Final]):::user
+```
 
 ### 1. Núcleo de Processamento (API & IA)
 
