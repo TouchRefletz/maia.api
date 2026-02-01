@@ -84,6 +84,10 @@ export function configurarEventosViewer() {
     let isPinching = false;
     let lastPinchDist = 0;
 
+    // Cache de dimensões para cálculo rápido no touchmove
+    let startPageWidth = 0;
+    let startPageHeight = 0;
+
     // PINCH START
     container.addEventListener(
       "touchstart",
@@ -103,6 +107,13 @@ export function configurarEventosViewer() {
           );
           pinchStartScale = viewerState.pdfScale;
           lastPinchDist = pinchStartDist;
+
+          // Captura dimensões atuais da primeira página para referência
+          const firstPage = container.querySelector(".pdf-page");
+          if (firstPage) {
+            startPageWidth = firstPage.clientWidth;
+            startPageHeight = firstPage.clientHeight;
+          }
         }
       },
       { passive: false },
@@ -119,6 +130,20 @@ export function configurarEventosViewer() {
             e.touches[0].clientY - e.touches[1].clientY,
           );
           lastPinchDist = dist;
+
+          // Feedback Visual em Tempo Real
+          if (pinchStartDist > 0 && startPageWidth > 0) {
+            const ratio = dist / pinchStartDist;
+            const newW = startPageWidth * ratio;
+            const newH = startPageHeight * ratio;
+
+            // Aplica largura/altura forçada nas páginas (estica o canvas existente)
+            const pages = container.querySelectorAll(".pdf-page");
+            pages.forEach((p) => {
+              p.style.width = `${newW}px`;
+              p.style.height = `${newH}px`;
+            });
+          }
         }
       },
       { passive: false },
@@ -131,12 +156,23 @@ export function configurarEventosViewer() {
 
         if (pinchStartDist > 0 && lastPinchDist > 0) {
           const ratio = lastPinchDist / pinchStartDist;
-          // Apply changes if significant
+
+          // Aplica mudança definitiva
+          // A função mudarZoom recalcula e renderiza tudo limpo
+          // Se o ratio for muito pequeno (tremor), ignoramos
           if (Math.abs(ratio - 1) > 0.05) {
             const newScale = pinchStartScale * ratio;
             const delta = newScale - pinchStartScale;
             // Use mudarZoom to ensure consistency with "ZOOM" controls
             mudarZoom(delta);
+          } else {
+            // Se cancelou/não mudou muito, restaura o tamanho original visualmente
+            // (renderPage resetaria, mas vamos garantir)
+            const pages = container.querySelectorAll(".pdf-page");
+            pages.forEach((p) => {
+              p.style.width = `${startPageWidth}px`;
+              p.style.height = `${startPageHeight}px`;
+            });
           }
         }
       }

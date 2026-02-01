@@ -202,7 +202,6 @@
     #viewerSidebar>div:not(#header-mobile-toggle),
     #maia-scroll-wrapper {
         flex: 1;
-        overflow-y: auto !important;
         padding-bottom: var(--space-32);
         overscroll-behavior: contain;
         min-height: 0;
