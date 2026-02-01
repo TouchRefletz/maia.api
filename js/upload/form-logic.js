@@ -143,21 +143,21 @@ export function setupFormLogic(elements, initialData) {
 
             <!-- Log Terminal -->
             <div id="upload-log-terminal" style="
-                background: #1e1e1e; 
+                background: var(--color-surface, #1e1e1e); 
                 border-radius:8px; 
                 padding:15px; 
                 height:160px; 
                 overflow-y:auto; 
                 font-family: 'Fira Code', monospace; 
                 font-size:0.75rem; 
-                color:#d4d4d4; 
-                border:1px solid rgba(255,255,255,0.1);
+                color: var(--color-text, #d4d4d4); 
+                border:1px solid var(--color-border, rgba(255,255,255,0.1));
                 display:flex; 
                 flex-direction:column; 
                 gap:4px;
                 scroll-behavior: smooth;
             ">
-                <div style="color:#6a9955;">// Log de processamento em tempo real</div>
+                <div style="color: var(--color-success, #6a9955);">// Log de processamento em tempo real</div>
                 <div class="log-line">> ${initialStatus}</div>
             </div>
 
@@ -211,7 +211,9 @@ export function setupFormLogic(elements, initialData) {
           if (!terminal) return;
           const line = document.createElement("div");
           line.className = "log-line";
-          line.style.color = isSystem ? "#569cd6" : "#d4d4d4";
+          line.style.color = isSystem
+            ? "var(--color-primary, #569cd6)"
+            : "inherit";
           line.textContent = `> ${text}`;
           terminal.appendChild(line);
           terminal.scrollTop = terminal.scrollHeight;
